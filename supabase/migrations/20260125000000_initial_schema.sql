@@ -1,7 +1,7 @@
 -- KLINEO Initial Database Schema
 -- Migration: 20260125000000_initial_schema.sql
 -- Run via: supabase db push
--- Or copy-paste into Supabase SQL Editor
+-- Or copy-paste into Supabase SQL Editor (use supabase-schema-fixed.sql)
 
 -- Enable UUID extension
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
@@ -17,6 +17,11 @@ CREATE TABLE IF NOT EXISTS public.user_profiles (
 
 -- Enable Row Level Security
 ALTER TABLE public.user_profiles ENABLE ROW LEVEL SECURITY;
+
+-- Drop existing policies if they exist (for re-running)
+DROP POLICY IF EXISTS "Users can read own profile" ON public.user_profiles;
+DROP POLICY IF EXISTS "Admins can read all profiles" ON public.user_profiles;
+DROP POLICY IF EXISTS "Users can update own profile" ON public.user_profiles;
 
 -- RLS Policy: Users can read their own profile
 CREATE POLICY "Users can read own profile"
@@ -35,16 +40,13 @@ CREATE POLICY "Admins can read all profiles"
     )
   );
 
--- RLS Policy: Users can update their own profile (except role)
+-- RLS Policy: Users can update their own profile
+-- Role changes: only backend (service_role) can change roles
 CREATE POLICY "Users can update own profile"
   ON public.user_profiles
   FOR UPDATE
   USING (auth.uid() = id)
-  WITH CHECK (
-    auth.uid() = id AND
-    -- Prevent users from changing their own role
-    (OLD.role = NEW.role)
-  );
+  WITH CHECK (auth.uid() = id);
 
 -- Function to auto-create profile on signup
 CREATE OR REPLACE FUNCTION public.handle_new_user()

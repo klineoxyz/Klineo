@@ -5,7 +5,10 @@
   "type": "module",
   "scripts": {
     "build": "pnpm exec vite build",
-    "dev": "pnpm exec vite"
+    "dev": "pnpm exec vite",
+    "supabase:login": "pnpm dlx supabase login",
+    "supabase:link": "pnpm dlx supabase link --project-ref oyfeadnxwuazidfbjjfo",
+    "supabase:push": "pnpm dlx supabase db push"
   },
   "dependencies": {
     "@emotion/react": "11.14.0",
@@ -67,6 +70,7 @@
   "devDependencies": {
     "@tailwindcss/vite": "4.1.12",
     "@vitejs/plugin-react": "4.7.0",
+    "supabase": "^2.19.0",
     "tailwindcss": "4.1.12",
     "vite": "6.3.5"
   },

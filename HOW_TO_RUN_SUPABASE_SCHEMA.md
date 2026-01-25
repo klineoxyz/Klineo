@@ -15,7 +15,7 @@
 
 ### Step 2: Copy & Run Schema
 
-1. **Open:** `supabase-schema.sql` in this repo
+1. **Open:** `supabase-schema-fixed.sql` in this repo (use this one; the fixed schema)
 2. **Select all** (Ctrl+A / Cmd+A)
 3. **Copy** (Ctrl+C / Cmd+C)
 4. **Paste** into Supabase SQL Editor
@@ -61,7 +61,7 @@ cd c:\Users\Muaz\Desktop\KLINEO
 supabase db push
 ```
 
-This will run the migration file in `supabase/migrations/20260125000000_initial_schema.sql`
+This will run the migration in `supabase/migrations/20260125000000_initial_schema.sql` (same content as `supabase-schema-fixed.sql`).
 
 ---
 
