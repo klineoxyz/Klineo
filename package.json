@@ -7,6 +7,8 @@
     "build": "pnpm exec vite build",
     "dev": "pnpm exec vite",
     "db:push": "node scripts/push-db-to-supabase.mjs",
+    "db:migrate": "node scripts/migrate-all-to-supabase.mjs",
+    "db:migrate:bundle": "node scripts/bundle-migrations.mjs",
     "supabase:login": "pnpm dlx supabase login",
     "supabase:link": "pnpm dlx supabase link --project-ref oyfeadnxwuazidfbjjfo",
     "supabase:push": "pnpm dlx supabase db push"
