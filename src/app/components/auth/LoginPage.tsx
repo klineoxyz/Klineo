@@ -37,13 +37,17 @@ export function LoginPage({ onNavigate }: LoginPageProps) {
     }
   };
 
+  const devEmail = import.meta.env.VITE_DEV_LOGIN_EMAIL ?? "";
+  const devPassword = import.meta.env.VITE_DEV_LOGIN_PASSWORD ?? "";
+  const showQuickDevLogin = !import.meta.env.PROD && !!devEmail && !!devPassword;
+
   const handleDevLogin = () => {
-    if (import.meta.env.PROD) return;
+    if (!showQuickDevLogin) return;
     setLoading(true);
     setError("");
-    login("dev@klineo.com", "dev123")
+    login(devEmail, devPassword)
       .then(() => onNavigate("dashboard"))
-      .catch((err) => setError(err?.message ?? "Login failed"))
+      .catch((err) => setError(err?.message ?? "Quick Dev Login failed"))
       .finally(() => setLoading(false));
   };
 
@@ -133,7 +137,7 @@ export function LoginPage({ onNavigate }: LoginPageProps) {
               {loading ? "Logging in..." : "Log In"}
             </Button>
 
-            {!import.meta.env.PROD && (
+            {showQuickDevLogin && (
               <Button
                 type="button"
                 variant="outline"
