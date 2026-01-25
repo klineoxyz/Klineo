@@ -6,6 +6,7 @@
   "scripts": {
     "build": "pnpm exec vite build",
     "dev": "pnpm exec vite",
+    "db:push": "node scripts/push-db-to-supabase.mjs",
     "supabase:login": "pnpm dlx supabase login",
     "supabase:link": "pnpm dlx supabase link --project-ref oyfeadnxwuazidfbjjfo",
     "supabase:push": "pnpm dlx supabase db push"
@@ -70,6 +71,8 @@
   "devDependencies": {
     "@tailwindcss/vite": "4.1.12",
     "@vitejs/plugin-react": "4.7.0",
+    "dotenv": "^16.4.5",
+    "pg": "^8.13.0",
     "supabase": "^2.19.0",
     "tailwindcss": "4.1.12",
     "vite": "6.3.5"

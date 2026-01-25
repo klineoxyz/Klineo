@@ -4,6 +4,39 @@
 
 ---
 
+## Push from Cursor (always)
+
+You can **always push the database to Supabase from Cursor** using the terminal.
+
+### 1. One-time setup
+
+1. **Get your DB connection string**  
+   Supabase Dashboard → **Project Settings** → **Database** → **Connection string** → **URI**  
+   (Use the pooler URI, e.g. `postgresql://postgres.[ref]:[PASSWORD]@...pooler.supabase.com:6543/postgres`)
+
+2. **Add to `.env.local`** (create from `.env.example` if needed):
+   ```bash
+   SUPABASE_DB_URL=postgresql://postgres.oyfeadnxwuazidfbjjfo:YOUR_PASSWORD@aws-0-xx.pooler.supabase.com:6543/postgres
+   ```
+   Replace `YOUR_PASSWORD` with your **database password** (Project Settings → Database).
+
+3. **Install deps** (if you haven’t):
+   ```bash
+   pnpm install
+   ```
+
+### 2. Push from Cursor
+
+Open the **terminal in Cursor** (`` Ctrl+` ``) and run:
+
+```bash
+pnpm db:push
+```
+
+This runs **`supabase-sync-all.sql`** against your Supabase database. You can run it whenever you change the schema.
+
+---
+
 ## What gets synced
 
 | Item | Description |
@@ -15,7 +48,9 @@
 
 ---
 
-## How to sync
+## Alternative: Supabase Dashboard (manual)
+
+If `pnpm db:push` fails (e.g. network or env), use the Dashboard:
 
 ### 1. Open Supabase
 
