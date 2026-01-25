@@ -5,6 +5,9 @@ node_modules
 .env.*
 !.env.example
 
+# Credential guides (contain real secrets - never publish)
+VERCEL_CREDENTIALS_QUICK_GUIDE.md
+
 # Build output
 dist/
 
