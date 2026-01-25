@@ -22,6 +22,7 @@ import {
 
 interface TopBarProps {
   onNavigate: (view: string) => void;
+  onLogout?: () => void;
   sidebarCollapsed?: boolean;
   connectionStatus?: "connected" | "connecting" | "disconnected" | "error";
   activeCopies?: number;
@@ -30,6 +31,7 @@ interface TopBarProps {
 
 export function TopBar({ 
   onNavigate, 
+  onLogout,
   sidebarCollapsed = false,
   connectionStatus = "connected",
   activeCopies = 3,
@@ -142,7 +144,7 @@ export function TopBar({
                 Support
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem>
+              <DropdownMenuItem onClick={onLogout}>
                 <LogOut className="size-4 mr-2" />
                 Logout
               </DropdownMenuItem>

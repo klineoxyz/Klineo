@@ -4,13 +4,14 @@ import { Card } from "@/app/components/ui/card";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import { Mail, Lock, Eye, EyeOff, ArrowLeft } from "lucide-react";
+import { useAuth } from "@/app/contexts/AuthContext";
 
 interface LoginPageProps {
   onNavigate: (view: string) => void;
-  onLogin: (email: string, password: string) => void;
 }
 
-export function LoginPage({ onNavigate, onLogin }: LoginPageProps) {
+export function LoginPage({ onNavigate }: LoginPageProps) {
+  const { login } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -21,34 +22,34 @@ export function LoginPage({ onNavigate, onLogin }: LoginPageProps) {
     e.preventDefault();
     setError("");
     setLoading(true);
-
-    // Basic validation
     if (!email || !password) {
       setError("Please fill in all fields");
       setLoading(false);
       return;
     }
-
-    // Simulate API call
-    setTimeout(() => {
-      // Mock successful login
-      onLogin(email, password);
+    try {
+      await login(email, password);
+      onNavigate("dashboard");
+    } catch (err: any) {
+      setError(err?.message ?? "Login failed");
+    } finally {
       setLoading(false);
-    }, 1000);
+    }
   };
 
-  // Quick dev login handler
   const handleDevLogin = () => {
+    if (import.meta.env.PROD) return;
     setLoading(true);
     setError("");
-    // Instantly login without API simulation
-    onLogin("dev@klineo.com", "dev123");
+    login("dev@klineo.com", "dev123")
+      .then(() => onNavigate("dashboard"))
+      .catch((err) => setError(err?.message ?? "Login failed"))
+      .finally(() => setLoading(false));
   };
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-6">
       <div className="w-full max-w-md">
-        {/* Back to home */}
         <button
           onClick={() => onNavigate("landing")}
           className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-8 transition"
@@ -58,7 +59,6 @@ export function LoginPage({ onNavigate, onLogin }: LoginPageProps) {
         </button>
 
         <Card className="p-8">
-          {/* Logo */}
           <div className="flex items-center justify-center mb-8">
             <div className="size-12 bg-gradient-to-br from-accent to-amber-600 rounded flex items-center justify-center font-bold text-xl text-background shadow-lg">
               K
@@ -67,9 +67,7 @@ export function LoginPage({ onNavigate, onLogin }: LoginPageProps) {
 
           <div className="text-center mb-8">
             <h1 className="text-2xl font-bold mb-2">Welcome Back</h1>
-            <p className="text-sm text-muted-foreground">
-              Log in to your KLINEO terminal
-            </p>
+            <p className="text-sm text-muted-foreground">Log in to your KLINEO terminal</p>
           </div>
 
           {error && (
@@ -122,11 +120,7 @@ export function LoginPage({ onNavigate, onLogin }: LoginPageProps) {
                   onClick={() => setShowPassword(!showPassword)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                 >
-                  {showPassword ? (
-                    <EyeOff className="size-4" />
-                  ) : (
-                    <Eye className="size-4" />
-                  )}
+                  {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
                 </button>
               </div>
             </div>
@@ -139,7 +133,6 @@ export function LoginPage({ onNavigate, onLogin }: LoginPageProps) {
               {loading ? "Logging in..." : "Log In"}
             </Button>
 
-            {/* Developer Quick Login - ONLY in development */}
             {!import.meta.env.PROD && (
               <Button
                 type="button"
@@ -148,26 +141,21 @@ export function LoginPage({ onNavigate, onLogin }: LoginPageProps) {
                 onClick={handleDevLogin}
                 disabled={loading}
               >
-                🚀 Quick Dev Login
+                Quick Dev Login
               </Button>
             )}
           </form>
 
           <div className="mt-6 text-center text-sm text-muted-foreground">
             Don't have an account?{" "}
-            <button
-              onClick={() => onNavigate("signup")}
-              className="text-accent hover:underline font-medium"
-            >
+            <button onClick={() => onNavigate("signup")} className="text-accent hover:underline font-medium">
               Sign up
             </button>
           </div>
         </Card>
 
-        {/* Risk warning */}
         <p className="mt-6 text-xs text-center text-muted-foreground">
-          Trading cryptocurrencies involves substantial risk of loss. 
-          Only invest what you can afford to lose.
+          Trading cryptocurrencies involves substantial risk of loss. Only invest what you can afford to lose.
         </p>
       </div>
     </div>

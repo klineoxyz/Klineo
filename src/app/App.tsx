@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Toaster } from "@/app/components/ui/sonner";
 import { TopBar } from "@/app/components/layout/TopBar";
 import { Sidebar } from "@/app/components/layout/Sidebar";
@@ -26,7 +26,6 @@ import { NotificationsCenter } from "@/app/components/screens/NotificationsCente
 import { UIStatesDemo } from "@/app/components/screens/UIStatesDemo";
 import { OnboardingWizard } from "@/app/components/screens/OnboardingWizard";
 
-// Public pages
 import { LandingPage } from "@/app/components/public/LandingPage";
 import { PricingPage } from "@/app/components/public/PricingPage";
 import { HowItWorksPage } from "@/app/components/public/HowItWorksPage";
@@ -40,79 +39,46 @@ import { PrivacyPolicy } from "@/app/components/public/PrivacyPolicy";
 import { RiskDisclosure } from "@/app/components/public/RiskDisclosure";
 import { LoginPage } from "@/app/components/auth/LoginPage";
 import { SignUpPage } from "@/app/components/auth/SignUpPage";
+import { useAuth } from "@/app/contexts/AuthContext";
+import { TerminalLoader } from "@/app/components/ui/spinner";
 
 export default function App() {
+  const { isAuthenticated, isAdmin, loading, logout } = useAuth();
   const [activeView, setActiveView] = useState("landing");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [viewData, setViewData] = useState<any>(null);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [devMode, setDevMode] = useState(false);
 
-  // Admin status - in production this comes from auth/JWT
-  // For local dev only: set VITE_DEV_ADMIN=true (does NOT work in production)
-  const isAdmin = import.meta.env.PROD 
-    ? false 
-    : (import.meta.env.VITE_DEV_ADMIN === 'true');
+  const publicViews = useMemo(
+    () =>
+      new Set([
+        "landing", "pricing", "how-it-works", "about", "faq", "contact", "blog", "changelog",
+        "terms-of-service", "privacy-policy", "risk-disclosure", "login", "signup",
+      ]),
+    []
+  );
 
-  // Developer bypass: Press Ctrl+Shift+D to toggle dev mode
-  // SECURITY: Only works in development, NEVER in production builds
   useEffect(() => {
-    // Dev bypass ONLY works in development
-    if (import.meta.env.PROD) return;
+    if (isAuthenticated && activeView === "admin" && !isAdmin) {
+      setActiveView("dashboard");
+    }
+  }, [isAuthenticated, activeView, isAdmin]);
 
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.ctrlKey && e.shiftKey && e.key === 'D') {
-        e.preventDefault();
-        setDevMode(!devMode);
-        if (!devMode) {
-          console.log('🔧 Developer Mode: Activated');
-          console.log('💡 You can now bypass login with Ctrl+Shift+L');
-        } else {
-          console.log('🔧 Developer Mode: Deactivated');
-        }
-      }
-      
-      // Ctrl+Shift+L to bypass login when in dev mode
-      if (devMode && e.ctrlKey && e.shiftKey && e.key === 'L') {
-        e.preventDefault();
-        console.log('🚀 Bypassing login...');
-        setIsAuthenticated(true);
-        setActiveView("dashboard");
-      }
-      
-      // Ctrl+Shift+O to logout
-      if (devMode && e.ctrlKey && e.shiftKey && e.key === 'O') {
-        e.preventDefault();
-        console.log('👋 Logging out...');
-        setIsAuthenticated(false);
-        setActiveView("landing");
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [devMode]);
+  useEffect(() => {
+    if (!loading && !isAuthenticated && !publicViews.has(activeView)) {
+      setActiveView("login");
+    }
+  }, [loading, isAuthenticated, activeView, publicViews]);
 
   const handleNavigate = (view: string, data?: any) => {
     setActiveView(view);
     setViewData(data);
   };
 
-  const handleLogin = (email: string, password: string) => {
-    // Mock login - in production this would call an API
-    console.log("Login:", email, password);
-    setIsAuthenticated(true);
-    setActiveView("dashboard");
+  const handleLogout = async () => {
+    await logout();
+    setActiveView("landing");
   };
 
-  const handleSignUp = (email: string, password: string) => {
-    // Mock signup - in production this would call an API
-    console.log("Sign up:", email, password);
-    setIsAuthenticated(true);
-    setActiveView("dashboard");
-  };
-
-  // Public routes (non-authenticated)
   const renderPublicContent = () => {
     switch (activeView) {
       case "landing":
@@ -138,16 +104,16 @@ export default function App() {
       case "risk-disclosure":
         return <RiskDisclosure onNavigate={handleNavigate} />;
       case "login":
-        return <LoginPage onNavigate={handleNavigate} onLogin={handleLogin} />;
+        return <LoginPage onNavigate={handleNavigate} />;
       case "signup":
-        return <SignUpPage onNavigate={handleNavigate} onSignUp={handleSignUp} />;
+        return <SignUpPage onNavigate={handleNavigate} />;
       default:
         return <LandingPage onNavigate={handleNavigate} />;
     }
   };
 
-  // Authenticated routes
   const renderContent = () => {
+    if (activeView === "admin" && !isAdmin) return <Dashboard />;
     switch (activeView) {
       case "dashboard":
         return <Dashboard />;
@@ -192,6 +158,7 @@ export default function App() {
       case "notifications-center":
         return <NotificationsCenter onNavigate={handleNavigate} />;
       case "ui-states-demo":
+        if (import.meta.env.PROD) return <Dashboard />;
         return <UIStatesDemo onNavigate={handleNavigate} />;
       case "onboarding-wizard":
         return (
@@ -205,22 +172,19 @@ export default function App() {
     }
   };
 
+  if (loading) {
+    return (
+      <div className="h-screen w-screen flex items-center justify-center bg-background">
+        <TerminalLoader />
+      </div>
+    );
+  }
+
   return (
     <div className="h-screen w-screen flex flex-col bg-background text-foreground overflow-hidden dark">
-      {/* Developer Mode Indicator - ONLY in development */}
-      {!import.meta.env.PROD && devMode && (
-        <div className="fixed top-4 right-4 z-50 bg-accent text-background px-4 py-2 rounded-lg shadow-lg font-mono text-sm flex items-center gap-2">
-          <div className="size-2 rounded-full bg-background animate-pulse" />
-          <div>
-            <div className="font-bold">DEV MODE</div>
-            <div className="text-xs opacity-80">Ctrl+Shift+L = Login | Ctrl+Shift+O = Logout</div>
-          </div>
-        </div>
-      )}
-
       {isAuthenticated ? (
         <>
-          <TopBar onNavigate={handleNavigate} sidebarCollapsed={sidebarCollapsed} />
+          <TopBar onNavigate={handleNavigate} onLogout={handleLogout} sidebarCollapsed={sidebarCollapsed} />
           <div className="flex-1 flex overflow-hidden">
             <Sidebar
               activeView={activeView}

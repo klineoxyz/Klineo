@@ -64,10 +64,19 @@ export async function verifySupabaseJWT(
       return res.status(500).json({ error: 'Failed to fetch user profile' });
     }
 
+    let role: 'user' | 'admin' = (profile?.role as 'user' | 'admin') || 'user';
+    const adminEmails = (process.env.ADMIN_EMAILS ?? '')
+      .split(',')
+      .map((e) => e.trim().toLowerCase())
+      .filter(Boolean);
+    if (role !== 'admin' && adminEmails.includes((user.email ?? '').toLowerCase())) {
+      role = 'admin';
+    }
+
     req.user = {
       id: user.id,
       email: user.email!,
-      role: (profile?.role as 'user' | 'admin') || 'user',
+      role,
     };
 
     next();
