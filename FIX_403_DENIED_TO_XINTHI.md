@@ -4,15 +4,25 @@
 Git is using **xinthi**’s cached credentials to push to **klineoxyz/Klineo**.  
 The repo belongs to **klineoxyz**, so GitHub returns **403** because **xinthi** doesn’t have access.
 
+## Already done for this project
+- **User:** `user.name` = `klineoxyz`, `user.email` = `klineoxyz@users.noreply.github.com` (repo-local)
+- **Remote:** `origin` = `https://klineoxyz@github.com/klineoxyz/Klineo.git`
+
 ## Fix: Push as **klineoxyz**
 
 ### Step 1: Clear cached GitHub credentials
 
 Git must stop using **xinthi**’s stored login. Do **one** of the following.
 
-**Option A – Git credential reject (quick)**  
-In PowerShell:
+**Option A – Run the project script (quick)**  
+In PowerShell **outside Cursor**:
 
+```powershell
+cd c:\Users\Muaz\Desktop\KLINEO
+.\clear-git-credential.ps1
+```
+
+Or manually:
 ```powershell
 echo "protocol=https`nhost=github.com" | git credential reject
 ```
