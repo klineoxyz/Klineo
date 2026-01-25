@@ -62,15 +62,18 @@ export function Portfolio() {
           <LineChart data={equityData}>
             <CartesianGrid strokeDasharray="3 3" stroke="#2A2D35" />
             <XAxis dataKey="date" stroke="#8B8B8B" />
-            <YAxis stroke="#8B8B8B" />
-            <Tooltip 
-              contentStyle={{ 
-                backgroundColor: "#12151A", 
+            <YAxis stroke="#8B8B8B" tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
+            <Tooltip
+              contentStyle={{
+                backgroundColor: "#12151A",
                 border: "1px solid #2A2D35",
-                borderRadius: "4px"
+                borderRadius: "8px",
               }}
+              labelStyle={{ color: "#8B8B8B" }}
+              formatter={(value: number) => [`$${value?.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, "Equity"]}
+              cursor={{ stroke: "#374151", strokeWidth: 1, strokeDasharray: "3 3" }}
             />
-            <Line type="monotone" dataKey="value" stroke="#10B981" strokeWidth={2} dot={false} />
+            <Line type="monotone" dataKey="value" stroke="#10B981" strokeWidth={2} dot={false} activeDot={{ r: 4, fill: "#10B981", stroke: "#12151A", strokeWidth: 2 }} />
           </LineChart>
         </ResponsiveContainer>
       </Card>

@@ -125,6 +125,7 @@ export function EquityCurveChart({
               `$${value.toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
               "Value",
             ]}
+            cursor={{ stroke: COLORS.border, strokeWidth: 1, strokeDasharray: "3 3" }}
           />
           <Area
             type="monotone"
@@ -271,6 +272,7 @@ export function WinRateChart({
             outerRadius={100}
             paddingAngle={5}
             dataKey="value"
+            activeShape={{ outerRadius: 108, stroke: COLORS.accent, strokeWidth: 2 }}
           >
             {data.map((entry, index) => (
               <Cell key={`cell-${index}`} fill={entry.color} />
@@ -283,6 +285,7 @@ export function WinRateChart({
               borderRadius: "8px",
             }}
             formatter={(value: number) => [value, "Trades"]}
+            cursor={{ fill: "transparent" }}
           />
         </PieChart>
       </ResponsiveContainer>
@@ -345,6 +348,7 @@ export function PortfolioAllocationChart({
             outerRadius={100}
             fill={COLORS.accent}
             dataKey="value"
+            activeShape={{ outerRadius: 108, stroke: COLORS.accent, strokeWidth: 2 }}
           >
             {data.map((entry, index) => (
               <Cell
@@ -363,6 +367,7 @@ export function PortfolioAllocationChart({
               `$${value.toLocaleString()}`,
               "Value",
             ]}
+            cursor={{ fill: "transparent" }}
           />
         </PieChart>
       </ResponsiveContainer>
@@ -434,6 +439,7 @@ export function PerformanceComparisonChart({
             }}
             labelStyle={{ color: COLORS.muted }}
             formatter={(value: number) => [`${value.toFixed(2)}%`, ""]}
+            cursor={{ stroke: COLORS.border, strokeWidth: 1, strokeDasharray: "3 3" }}
           />
           <Legend
             wrapperStyle={{ color: COLORS.muted }}

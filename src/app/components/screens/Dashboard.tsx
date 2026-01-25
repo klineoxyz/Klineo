@@ -58,7 +58,13 @@ export function Dashboard() {
           <Card className="p-4 space-y-3">
             <div className="text-xs text-muted-foreground uppercase tracking-wide">Total Equity (30d)</div>
             <div className="text-2xl font-mono font-bold">$24,567.82</div>
-            <Sparkline data={portfolioData} width={180} height={40} color="#10B981" />
+            <Sparkline
+              data={portfolioData}
+              width={180}
+              height={40}
+              color="#10B981"
+              valueFormatter={(v) => `$${v.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
+            />
             <div className="text-xs text-muted-foreground">USDT</div>
           </Card>
 
@@ -68,7 +74,13 @@ export function Dashboard() {
               <TrendingUp className="size-5" />
               +$342.18
             </div>
-            <Sparkline data={dailyPnLData} width={180} height={40} color="#10B981" />
+            <Sparkline
+              data={dailyPnLData}
+              width={180}
+              height={40}
+              color="#10B981"
+              valueFormatter={(v) => `${v >= 0 ? "+" : ""}$${v.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
+            />
             <div className="text-xs font-mono text-muted-foreground">+1.42%</div>
           </Card>
 

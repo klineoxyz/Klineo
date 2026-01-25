@@ -531,12 +531,13 @@ export function TradingViewChart({
                   if (active && payload && payload[0]) {
                     return (
                       <div className="bg-background/95 border border-border p-2 rounded text-xs">
-                        Volume: {payload[0].value?.toFixed(2)}
+                        Volume: {payload[0].value?.toLocaleString(undefined, { maximumFractionDigits: 0 })}
                       </div>
                     );
                   }
                   return null;
                 }}
+                cursor={{ stroke: "#6b7280", strokeWidth: 1, strokeDasharray: "3 3" }}
               />
               
               <Bar
@@ -842,12 +843,13 @@ export function TradingViewChart({
                             if (active && payload && payload[0]) {
                               return (
                                 <div className="bg-background/95 border border-border p-2 rounded text-xs">
-                                  Volume: {payload[0].value?.toFixed(2)}
+                                  Volume: {payload[0].value?.toLocaleString(undefined, { maximumFractionDigits: 0 })}
                                 </div>
                               );
                             }
                             return null;
                           }}
+                          cursor={{ stroke: "#6b7280", strokeWidth: 1, strokeDasharray: "3 3" }}
                         />
                         
                         <Bar

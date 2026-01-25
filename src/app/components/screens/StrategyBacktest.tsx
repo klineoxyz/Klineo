@@ -635,6 +635,7 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
                           `$${parseFloat(value).toLocaleString()}`,
                           name.toUpperCase()
                         ]}
+                        cursor={{ stroke: "#6b7280", strokeWidth: 1, strokeDasharray: "3 3" }}
                       />
                       
                       {/* Candlesticks */}
