@@ -1,11 +1,19 @@
 import { Request, Response, NextFunction } from 'express';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-// Initialize Supabase client with service role key (backend only)
-const supabase = createClient(
-  process.env.SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY! // Backend only, never expose to frontend
-);
+let supabase: SupabaseClient | null = null;
+
+function getSupabase(): SupabaseClient | null {
+  if (supabase) return supabase;
+  const url = process.env.SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) {
+    console.warn('Supabase not configured: SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY missing');
+    return null;
+  }
+  supabase = createClient(url, key);
+  return supabase;
+}
 
 export interface AuthenticatedRequest extends Request {
   user?: {
@@ -24,21 +32,28 @@ export async function verifySupabaseJWT(
   res: Response,
   next: NextFunction
 ) {
+  const client = getSupabase();
+  if (!client) {
+    return res.status(503).json({
+      error: 'Auth service unavailable',
+      message: 'Supabase not configured. Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.',
+    });
+  }
+
   const token = req.headers.authorization?.replace('Bearer ', '');
-  
+
   if (!token) {
     return res.status(401).json({ error: 'No token provided' });
   }
 
   try {
-    const { data: { user }, error } = await supabase.auth.getUser(token);
-    
+    const { data: { user }, error } = await client.auth.getUser(token);
+
     if (error || !user) {
       return res.status(401).json({ error: 'Invalid token' });
     }
 
-    // Get user role from database
-    const { data: profile, error: profileError } = await supabase
+    const { data: profile, error: profileError } = await client
       .from('user_profiles')
       .select('role')
       .eq('id', user.id)
@@ -52,12 +67,12 @@ export async function verifySupabaseJWT(
     req.user = {
       id: user.id,
       email: user.email!,
-      role: (profile?.role as 'user' | 'admin') || 'user'
+      role: (profile?.role as 'user' | 'admin') || 'user',
     };
 
     next();
-  } catch (error) {
-    console.error('JWT verification error:', error);
+  } catch (err) {
+    console.error('JWT verification error:', err);
     return res.status(401).json({ error: 'Token verification failed' });
   }
 }

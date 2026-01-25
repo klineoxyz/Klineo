@@ -2,7 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import { healthRouter } from './routes/health.js';
-import { authRouter } from './routes/auth.js';
+import { authRouter } from './routes/auth-with-supabase.js';
 
 dotenv.config();
 
