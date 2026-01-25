@@ -8,13 +8,15 @@
 | **Start** | `pnpm install` then `pnpm dev` |
 | **Port** | 5173 (Vite default) |
 
+**Run in your terminal** (Cursor’s terminal or PowerShell):
+
 ```powershell
 cd c:\Users\Muaz\Desktop\KLINEO
 pnpm install
 pnpm dev
 ```
 
-Then open **http://localhost:5173** in your browser (Vite may open it automatically).
+Then open **http://localhost:5173** in your browser (Vite may open it automatically with `open: true`).
 
 ---
 
