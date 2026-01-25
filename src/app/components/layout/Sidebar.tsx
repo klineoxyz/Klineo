@@ -172,29 +172,32 @@ export function Sidebar({ activeView, onNavigate, isCollapsed, onToggleCollapse,
               )}
             </button>
 
-            <button
-              onClick={() => onNavigate("ui-states-demo")}
-              className={cn(
-                "w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors hover:bg-secondary/50 relative",
-                activeView === "ui-states-demo" && "bg-secondary text-primary",
-                isCollapsed && "justify-center px-2"
-              )}
-              title={isCollapsed ? "UI States" : undefined}
-            >
-              {activeView === "ui-states-demo" && <div className="absolute left-0 top-0 bottom-0 w-1 bg-accent" />}
-              <Sparkles className={cn(
-                "size-4 shrink-0 text-accent",
-                activeView === "ui-states-demo" && "text-accent"
-              )} />
-              {!isCollapsed && (
-                <span className={cn("flex items-center gap-2", activeView === "ui-states-demo" && "font-medium")}>
-                  UI States
-                  <span className="text-[10px] px-1.5 py-0.5 bg-accent/20 text-accent rounded-full font-medium">
-                    DEV
+            {/* UI States Demo - ONLY in development */}
+            {!import.meta.env.PROD && (
+              <button
+                onClick={() => onNavigate("ui-states-demo")}
+                className={cn(
+                  "w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors hover:bg-secondary/50 relative",
+                  activeView === "ui-states-demo" && "bg-secondary text-primary",
+                  isCollapsed && "justify-center px-2"
+                )}
+                title={isCollapsed ? "UI States" : undefined}
+              >
+                {activeView === "ui-states-demo" && <div className="absolute left-0 top-0 bottom-0 w-1 bg-accent" />}
+                <Sparkles className={cn(
+                  "size-4 shrink-0 text-accent",
+                  activeView === "ui-states-demo" && "text-accent"
+                )} />
+                {!isCollapsed && (
+                  <span className={cn("flex items-center gap-2", activeView === "ui-states-demo" && "font-medium")}>
+                    UI States
+                    <span className="text-[10px] px-1.5 py-0.5 bg-accent/20 text-accent rounded-full font-medium">
+                      DEV
+                    </span>
                   </span>
-                </span>
-              )}
-            </button>
+                )}
+              </button>
+            )}
           </>
         )}
       </div>

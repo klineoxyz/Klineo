@@ -48,11 +48,18 @@ export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [devMode, setDevMode] = useState(false);
 
-  // Mock admin status - in production this would come from auth
-  const isAdmin = true;
+  // Admin status - in production this comes from auth/JWT
+  // For local dev only: set VITE_DEV_ADMIN=true (does NOT work in production)
+  const isAdmin = import.meta.env.PROD 
+    ? false 
+    : (import.meta.env.VITE_DEV_ADMIN === 'true');
 
   // Developer bypass: Press Ctrl+Shift+D to toggle dev mode
+  // SECURITY: Only works in development, NEVER in production builds
   useEffect(() => {
+    // Dev bypass ONLY works in development
+    if (import.meta.env.PROD) return;
+
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.ctrlKey && e.shiftKey && e.key === 'D') {
         e.preventDefault();
@@ -200,8 +207,8 @@ export default function App() {
 
   return (
     <div className="h-screen w-screen flex flex-col bg-background text-foreground overflow-hidden dark">
-      {/* Developer Mode Indicator */}
-      {devMode && (
+      {/* Developer Mode Indicator - ONLY in development */}
+      {!import.meta.env.PROD && devMode && (
         <div className="fixed top-4 right-4 z-50 bg-accent text-background px-4 py-2 rounded-lg shadow-lg font-mono text-sm flex items-center gap-2">
           <div className="size-2 rounded-full bg-background animate-pulse" />
           <div>

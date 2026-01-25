@@ -1,1 +1,23 @@
 node_modules
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Build output
+dist/
+
+# Vercel
+.vercel/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~

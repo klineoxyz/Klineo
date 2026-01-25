@@ -139,16 +139,18 @@ export function LoginPage({ onNavigate, onLogin }: LoginPageProps) {
               {loading ? "Logging in..." : "Log In"}
             </Button>
 
-            {/* Developer Quick Login */}
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full border-accent/30 text-accent hover:bg-accent/10"
-              onClick={handleDevLogin}
-              disabled={loading}
-            >
-              🚀 Quick Dev Login
-            </Button>
+            {/* Developer Quick Login - ONLY in development */}
+            {!import.meta.env.PROD && (
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full border-accent/30 text-accent hover:bg-accent/10"
+                onClick={handleDevLogin}
+                disabled={loading}
+              >
+                🚀 Quick Dev Login
+              </Button>
+            )}
           </form>
 
           <div className="mt-6 text-center text-sm text-muted-foreground">
