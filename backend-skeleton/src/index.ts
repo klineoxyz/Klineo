@@ -39,8 +39,9 @@ app.use((err: Error, req: express.Request, res: express.Response, next: express.
   res.status(500).json({ error: 'Internal server error' });
 });
 
-// Start server
-app.listen(PORT, () => {
-  console.log(`🚀 KLINEO Backend running on port ${PORT}`);
+// Start server (bind 0.0.0.0 for Railway/Docker)
+const HOST = '0.0.0.0';
+app.listen(Number(PORT), HOST, () => {
+  console.log(`🚀 KLINEO Backend running on ${HOST}:${PORT}`);
   console.log(`📍 Health check: http://localhost:${PORT}/health`);
 });
