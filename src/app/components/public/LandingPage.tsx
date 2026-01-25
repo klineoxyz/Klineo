@@ -5,7 +5,7 @@ import { ImageWithFallback } from "@/app/components/figma/ImageWithFallback";
 import { Footer } from "@/app/components/layout/Footer";
 import { MobileMenu } from "@/app/components/layout/MobileMenu";
 import { ChatWidget } from "@/app/components/ui/chat-widget";
-import heroImage from "figma:asset/27a5e37b3de43f564e5875751799a9ee08284de6.png";
+import heroImage from "@/assets/27a5e37b3de43f564e5875751799a9ee08284de6.png";
 import { 
   TrendingUp, 
   Users, 

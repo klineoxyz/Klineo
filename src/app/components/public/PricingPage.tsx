@@ -3,7 +3,7 @@ import { Card } from "@/app/components/ui/card";
 import { Badge } from "@/app/components/ui/badge";
 import { MobileMenu } from "@/app/components/layout/MobileMenu";
 import { CheckCircle2, ArrowLeft, Zap, User, Users } from "lucide-react";
-import klineoLogo from "figma:asset/8bf59ae1cbe92e0c2f3aa2a0b5d5e5eb7d8e9c25.png";
+import klineoLogo from "@/assets/6c13e9a600576bf702d05a5cf77f566f05f5c6a4.png";
 
 interface PricingPageProps {
   onNavigate: (view: string) => void;

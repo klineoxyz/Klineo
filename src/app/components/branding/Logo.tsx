@@ -6,7 +6,7 @@
  */
 
 // Using optimized K badge logo with transparent background
-import klineoLogo from "figma:asset/6c13e9a600576bf702d05a5cf77f566f05f5c6a4.png";
+import klineoLogo from "@/assets/6c13e9a600576bf702d05a5cf77f566f05f5c6a4.png";
 import { cn } from "@/app/components/ui/utils";
 
 type LogoVariant = "icon" | "wordmark";
