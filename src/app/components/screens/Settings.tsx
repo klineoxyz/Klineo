@@ -238,14 +238,14 @@ export function Settings() {
   };
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold mb-1">Settings</h1>
+        <h1 className="text-xl sm:text-2xl font-semibold mb-1">Settings</h1>
         <p className="text-sm text-muted-foreground">Manage your account and preferences</p>
       </div>
 
-      <Tabs defaultValue="profile" className="space-y-6">
-        <TabsList>
+      <Tabs defaultValue="profile" className="space-y-4 sm:space-y-6">
+        <TabsList className="flex-wrap h-auto gap-1 p-1 w-full sm:w-fit">
           <TabsTrigger value="profile">Profile</TabsTrigger>
           <TabsTrigger value="security">Security</TabsTrigger>
           <TabsTrigger value="exchange">
@@ -269,12 +269,12 @@ export function Settings() {
 
           {/* Backend Connection Status */}
           <Card className="p-4 border-primary/20">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <Wifi className={`size-5 ${backendStatus?.connected ? 'text-[#10B981]' : 'text-[#EF4444]'}`} />
-                <div>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <Wifi className={`size-5 shrink-0 ${backendStatus?.connected ? 'text-[#10B981]' : 'text-[#EF4444]'}`} />
+                <div className="min-w-0">
                   <div className="font-semibold">Backend Connection</div>
-                  <div className="text-sm text-muted-foreground">
+                  <div className="text-sm text-muted-foreground truncate">
                     {backendStatus?.connected 
                       ? `Connected to ${backendStatus.url}${backendStatus.latency ? ` (${backendStatus.latency}ms)` : ''}`
                       : backendStatus?.url 
@@ -289,15 +289,16 @@ export function Settings() {
                 size="sm" 
                 onClick={handleConnectionTest}
                 disabled={connectionTestLoading}
+                className="w-full sm:w-auto shrink-0"
               >
                 {connectionTestLoading ? "Testing..." : "Test Connection"}
               </Button>
             </div>
           </Card>
 
-          <Card className="p-6 space-y-6">
-            <h3 className="text-lg font-semibold">Profile Information</h3>
-            <div className="grid grid-cols-2 gap-6">
+          <Card className="p-4 sm:p-6 space-y-4 sm:space-y-6">
+            <h3 className="text-base sm:text-lg font-semibold">Profile Information</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
               <div className="space-y-2">
                 <Label>Full Name</Label>
                 <Input
@@ -363,12 +364,12 @@ export function Settings() {
 
           {/* Backend Connection Status */}
           <Card className="p-4 border-primary/20">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <Wifi className={`size-5 ${backendStatus?.connected ? 'text-[#10B981]' : 'text-[#EF4444]'}`} />
-                <div>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <Wifi className={`size-5 shrink-0 ${backendStatus?.connected ? 'text-[#10B981]' : 'text-[#EF4444]'}`} />
+                <div className="min-w-0">
                   <div className="font-semibold">Backend Connection</div>
-                  <div className="text-sm text-muted-foreground">
+                  <div className="text-sm text-muted-foreground truncate">
                     {backendStatus?.connected 
                       ? `Connected to ${backendStatus.url}${backendStatus.latency ? ` (${backendStatus.latency}ms)` : ''}`
                       : backendStatus?.url 
@@ -383,6 +384,7 @@ export function Settings() {
                 size="sm" 
                 onClick={handleConnectionTest}
                 disabled={connectionTestLoading}
+                className="w-full sm:w-auto shrink-0"
               >
                 {connectionTestLoading ? "Testing..." : "Test Connection"}
               </Button>

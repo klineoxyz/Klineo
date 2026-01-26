@@ -1,26 +1,13 @@
-import { 
-  LayoutDashboard, 
-  Store, 
-  Copy, 
-  Briefcase, 
-  TrendingUp, 
-  ListOrdered,
-  History,
-  Receipt,
-  Users,
-  CreditCard,
-  Settings,
-  HelpCircle,
-  Shield,
-  ChevronLeft,
-  ChevronRight,
-  Sparkles,
-  BarChart3,
-  Zap
-} from "lucide-react";
+import { ChevronLeft, ChevronRight, Shield, Sparkles, Zap } from "lucide-react";
 import { Button } from "@/app/components/ui/button";
 import { cn } from "@/app/components/ui/utils";
 import { SidebarLogo } from "@/app/components/branding/Logo";
+import {
+  navigationSections,
+  showAdminSection,
+  showUIStatesDemo,
+  showSmokeTest,
+} from "@/app/config/navigation";
 
 interface SidebarProps {
   activeView: string;
@@ -30,54 +17,11 @@ interface SidebarProps {
   isAdmin?: boolean;
 }
 
-// Grouped navigation structure based on UX audit
-const navigationSections = [
-  {
-    title: "Primary",
-    items: [
-      { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
-      { id: "marketplace", label: "Marketplace", icon: Store },
-      { id: "copy-trading", label: "Copy Trading", icon: Copy },
-    ]
-  },
-  {
-    title: "Trading",
-    items: [
-      { id: "trading-terminal", label: "Terminal", icon: BarChart3 },
-      { id: "positions", label: "Positions", icon: TrendingUp },
-      { id: "orders", label: "Orders", icon: ListOrdered },
-      { id: "trade-history", label: "Trade History", icon: History },
-    ]
-  },
-  {
-    title: "Portfolio",
-    items: [
-      { id: "portfolio", label: "Portfolio", icon: Briefcase },
-      { id: "strategy-backtest", label: "Strategy Backtest", icon: Zap },
-    ]
-  },
-  {
-    title: "Account",
-    items: [
-      { id: "subscription", label: "Subscription", icon: CreditCard },
-      { id: "referrals", label: "Referrals", icon: Users },
-      { id: "fees", label: "Fees", icon: Receipt },
-    ]
-  },
-  {
-    title: "System",
-    items: [
-      { id: "settings", label: "Settings", icon: Settings },
-      { id: "support", label: "Support", icon: HelpCircle },
-    ]
-  }
-];
-
 export function Sidebar({ activeView, onNavigate, isCollapsed, onToggleCollapse, isAdmin }: SidebarProps) {
   return (
-    <div 
+    <div
       className={cn(
-        "h-full border-r border-border bg-card flex flex-col transition-all duration-300",
+        "h-full border-r border-border bg-card hidden md:flex flex-col transition-all duration-300 shrink-0",
         isCollapsed ? "w-16" : "w-56"
       )}
     >
@@ -139,16 +83,9 @@ export function Sidebar({ activeView, onNavigate, isCollapsed, onToggleCollapse,
         ))}
 
         {/* Admin Section */}
-        {(() => {
-          // Debug logging in development
-          if (import.meta.env.DEV) {
-            console.log('[Sidebar] isAdmin:', isAdmin, 'isProd:', import.meta.env.PROD);
-          }
-          return isAdmin;
-        })() && (
+        {showAdminSection(!!isAdmin) && (
           <>
             <div className={cn("my-3 border-t border-border", isCollapsed ? "mx-2" : "mx-4")} />
-            
             {!isCollapsed && (
               <div className="px-4 mb-2">
                 <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">
@@ -156,7 +93,6 @@ export function Sidebar({ activeView, onNavigate, isCollapsed, onToggleCollapse,
                 </span>
               </div>
             )}
-
             <button
               onClick={() => onNavigate("admin")}
               className={cn(
@@ -167,23 +103,10 @@ export function Sidebar({ activeView, onNavigate, isCollapsed, onToggleCollapse,
               title={isCollapsed ? "Admin" : undefined}
             >
               {activeView === "admin" && <div className="absolute left-0 top-0 bottom-0 w-1 bg-accent" />}
-              <Shield className={cn(
-                "size-4 shrink-0",
-                activeView === "admin" ? "text-accent" : "text-muted-foreground"
-              )} />
-              {!isCollapsed && (
-                <span className={cn(activeView === "admin" && "font-medium")}>
-                  Admin Panel
-                </span>
-              )}
+              <Shield className={cn("size-4 shrink-0", activeView === "admin" ? "text-accent" : "text-muted-foreground")} />
+              {!isCollapsed && <span className={cn(activeView === "admin" && "font-medium")}>Admin Panel</span>}
             </button>
-
-            {/* UI States Demo - Dev always, or prod if admin */}
-            {(() => {
-              const isDev = import.meta.env.DEV;
-              const isProduction = import.meta.env.PROD;
-              return isDev || (isProduction && isAdmin);
-            })() && (
+            {showUIStatesDemo(!!isAdmin) && (
               <button
                 onClick={() => onNavigate("ui-states-demo")}
                 className={cn(
@@ -194,32 +117,18 @@ export function Sidebar({ activeView, onNavigate, isCollapsed, onToggleCollapse,
                 title={isCollapsed ? "UI States" : undefined}
               >
                 {activeView === "ui-states-demo" && <div className="absolute left-0 top-0 bottom-0 w-1 bg-accent" />}
-                <Sparkles className={cn(
-                  "size-4 shrink-0 text-accent",
-                  activeView === "ui-states-demo" && "text-accent"
-                )} />
+                <Sparkles className={cn("size-4 shrink-0 text-accent", activeView === "ui-states-demo" && "text-accent")} />
                 {!isCollapsed && (
                   <span className={cn("flex items-center gap-2", activeView === "ui-states-demo" && "font-medium")}>
                     UI States
-                    {import.meta.env.PROD ? (
-                      <span className="text-[10px] px-1.5 py-0.5 bg-accent/20 text-accent rounded-full font-medium">
-                        PROD
-                      </span>
-                    ) : (
-                      <span className="text-[10px] px-1.5 py-0.5 bg-accent/20 text-accent rounded-full font-medium">
-                        DEV
-                      </span>
-                    )}
+                    <span className="text-[10px] px-1.5 py-0.5 bg-accent/20 text-accent rounded-full font-medium">
+                      {import.meta.env.PROD ? "PROD" : "DEV"}
+                    </span>
                   </span>
                 )}
               </button>
             )}
-            {/* Smoke Test - Dev always, or prod if admin */}
-            {(() => {
-              const isDev = import.meta.env.DEV;
-              const isProduction = import.meta.env.PROD;
-              return isDev || (isProduction && isAdmin);
-            })() && (
+            {showSmokeTest(!!isAdmin) && (
               <button
                 onClick={() => onNavigate("smoke-test")}
                 className={cn(
@@ -230,10 +139,7 @@ export function Sidebar({ activeView, onNavigate, isCollapsed, onToggleCollapse,
                 title={isCollapsed ? "Smoke Test" : undefined}
               >
                 {activeView === "smoke-test" && <div className="absolute left-0 top-0 bottom-0 w-1 bg-accent" />}
-                <Zap className={cn(
-                  "size-4 shrink-0",
-                  activeView === "smoke-test" ? "text-accent" : "text-muted-foreground"
-                )} />
+                <Zap className={cn("size-4 shrink-0", activeView === "smoke-test" ? "text-accent" : "text-muted-foreground")} />
                 {!isCollapsed && (
                   <span className={cn("flex items-center gap-2", activeView === "smoke-test" && "font-medium")}>
                     Smoke Test

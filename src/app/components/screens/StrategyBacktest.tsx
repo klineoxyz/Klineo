@@ -327,11 +327,11 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
   const selectedStrategy = strategies.find((s) => s.id === strategy);
 
   return (
-    <div className="h-screen flex bg-background overflow-hidden">
+    <div className="min-h-screen lg:h-screen flex flex-col lg:flex-row bg-background overflow-y-auto lg:overflow-hidden">
       {/* LEFT PANEL - Strategy Configuration */}
       <div
-        className={`border-r border-border bg-card transition-all duration-300 overflow-y-auto ${
-          configCollapsed ? "w-14" : "w-80"
+        className={`border-b lg:border-b-0 lg:border-r border-border bg-card transition-all duration-300 overflow-y-auto shrink-0 ${
+          configCollapsed ? "w-full lg:w-14" : "w-full lg:w-80"
         }`}
       >
         {configCollapsed ? (
@@ -571,28 +571,28 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
       </div>
 
       {/* CENTER & BOTTOM PANELS */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 flex flex-col overflow-hidden min-w-0">
         {/* CENTER PANEL - Backtest Results */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-6">
-          <div className="flex items-center justify-between">
+        <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-6 space-y-4 sm:space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
-              <h1 className="text-2xl font-semibold mb-1">Strategy Backtest</h1>
+              <h1 className="text-xl sm:text-2xl font-semibold mb-1">Strategy Backtest</h1>
               <p className="text-sm text-muted-foreground">
                 Test and optimize your trading strategies before going live
               </p>
             </div>
             {hasResults && (
-              <div className="flex gap-2">
-                <Button variant="outline" size="sm" onClick={handleRunBacktest}>
-                  <RefreshCw className="h-4 w-4 mr-2" />
+              <div className="flex flex-wrap gap-2">
+                <Button variant="outline" size="sm" onClick={handleRunBacktest} className="gap-2">
+                  <RefreshCw className="h-4 w-4" />
                   Re-run
                 </Button>
-                <Button variant="outline" size="sm">
-                  <Zap className="h-4 w-4 mr-2" />
+                <Button variant="outline" size="sm" className="gap-2">
+                  <Zap className="h-4 w-4" />
                   Optimize
                 </Button>
-                <Button variant="outline" size="sm">
-                  <Share2 className="h-4 w-4 mr-2" />
+                <Button variant="outline" size="sm" className="gap-2">
+                  <Share2 className="h-4 w-4" />
                   Share
                 </Button>
               </div>
@@ -602,26 +602,26 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
           {/* Summary Statistics Header - Matching Screenshot */}
           {hasResults && (
             <div className="space-y-6">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <Badge className="bg-[#FFB000] text-black font-semibold px-2 py-1">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  <Badge className="bg-[#FFB000] text-black font-semibold px-2 py-1 shrink-0">
                     {kpis.totalTrades}
                   </Badge>
-                  <div>
-                    <h2 className="text-xl font-semibold">Backtest results</h2>
-                    <p className="text-sm text-muted-foreground">
+                  <div className="min-w-0">
+                    <h2 className="text-lg sm:text-xl font-semibold">Backtest results</h2>
+                    <p className="text-xs sm:text-sm text-muted-foreground truncate">
                       {selectedStrategy?.name || 'Strategy'} • {symbol.replace('/', '')} • {timeframe} • {new Date(dateFrom).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} - {new Date(dateTo).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                     </p>
                   </div>
                 </div>
-                <Button variant="outline" size="sm">
+                <Button variant="outline" size="sm" className="shrink-0 w-full sm:w-auto">
                   <Share2 className="h-4 w-4 mr-2" />
                   Share
                 </Button>
               </div>
 
               {/* KPI Cards - Matching Screenshot Layout */}
-              <div className="grid grid-cols-5 gap-4">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
                 <div>
                   <div className="text-xs text-muted-foreground mb-1">Total trades</div>
                   <div className="text-2xl font-bold">{kpis.totalTrades}</div>
@@ -659,9 +659,9 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
 
               {/* Price Chart with Buy/Sell Labels and Shaded Regions */}
               <Card className="p-6 bg-card/50">
-                <div className="flex gap-4">
-                  {/* Chart Toolbar (Left Side) */}
-                  <div className="flex flex-col gap-2 border-r border-border pr-4">
+                <div className="flex flex-col lg:flex-row gap-4">
+                  {/* Chart Toolbar - horizontal on mobile, vertical on lg+ */}
+                  <div className="flex flex-row lg:flex-col gap-2 lg:border-r border-border lg:pr-4 overflow-x-auto pb-2 lg:pb-0">
                     <Button variant="ghost" size="icon" className="h-8 w-8" title="Trend Line">
                       <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
@@ -706,7 +706,7 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
 
                   {/* Chart Area */}
                   <div className="flex-1">
-                    <div className="h-96 relative">
+                    <div className="h-64 sm:h-80 lg:h-96 relative min-w-0">
                       <ResponsiveContainer width="100%" height="100%">
                         <ComposedChart data={backtestChartData} margin={{ top: 20, right: 20, bottom: 60, left: 20 }}>
                           <defs>
@@ -1098,7 +1098,7 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
       </div>
 
       {/* RIGHT PANEL - Launch Strategy */}
-      <div className="w-80 border-l border-border bg-card overflow-y-auto">
+      <div className="w-full lg:w-80 border-t lg:border-t-0 lg:border-l border-border bg-card overflow-y-auto shrink-0">
         <div className="p-4 space-y-4">
           <div className="flex items-center gap-2">
             <Zap className="h-4 w-4 text-primary" />

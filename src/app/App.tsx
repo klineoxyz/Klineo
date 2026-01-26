@@ -43,12 +43,16 @@ import { SignUpPage } from "@/app/components/auth/SignUpPage";
 import { useAuth } from "@/app/contexts/AuthContext";
 import { TerminalLoader } from "@/app/components/ui/spinner";
 import { toast } from "sonner";
+import { useIsMobile } from "@/app/components/ui/use-mobile";
+import { MobileNavSheet } from "@/app/components/layout/MobileNavSheet";
 
 export default function App() {
   const { isAuthenticated, isAdmin, loading, logout } = useAuth();
+  const isMobile = useIsMobile();
   const [activeView, setActiveView] = useState("landing");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [viewData, setViewData] = useState<any>(null);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   const publicViews = useMemo(
     () =>
@@ -204,11 +208,16 @@ export default function App() {
   }
 
   return (
-    <div className="h-screen w-screen flex flex-col bg-background text-foreground overflow-hidden dark">
+    <div className="h-screen w-screen flex flex-col bg-background text-foreground overflow-hidden dark min-w-0">
       {isAuthenticated ? (
         <>
-          <TopBar onNavigate={handleNavigate} onLogout={handleLogout} sidebarCollapsed={sidebarCollapsed} />
-          <div className="flex-1 flex overflow-hidden">
+          <TopBar
+            onNavigate={handleNavigate}
+            onLogout={handleLogout}
+            sidebarCollapsed={sidebarCollapsed}
+            onOpenMobileNav={() => setMobileNavOpen(true)}
+          />
+          <div className="flex-1 flex overflow-hidden min-w-0">
             <Sidebar
               activeView={activeView}
               onNavigate={handleNavigate}
@@ -216,13 +225,22 @@ export default function App() {
               onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
               isAdmin={isAdmin}
             />
-            <main className="flex-1 overflow-y-auto">
+            <main className="flex-1 overflow-y-auto overflow-x-hidden min-w-0">
               {renderContent()}
             </main>
           </div>
+          {isMobile && (
+            <MobileNavSheet
+              open={mobileNavOpen}
+              onOpenChange={setMobileNavOpen}
+              activeView={activeView}
+              onNavigate={handleNavigate}
+              isAdmin={isAdmin}
+            />
+          )}
         </>
       ) : (
-        <main className="flex-1 overflow-y-auto">
+        <main className="flex-1 overflow-y-auto overflow-x-hidden min-w-0">
           {renderPublicContent()}
         </main>
       )}

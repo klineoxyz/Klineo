@@ -1,7 +1,7 @@
 import { TopBarLogo } from "@/app/components/branding/Logo";
 import { Badge } from "@/app/components/ui/badge";
 import { Button } from "@/app/components/ui/button";
-import { Bell, User, Settings, LogOut, Clock, Pause } from "lucide-react";
+import { Bell, User, Settings, LogOut, Clock, Pause, Menu } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -24,6 +24,7 @@ interface TopBarProps {
   onNavigate: (view: string) => void;
   onLogout?: () => void;
   sidebarCollapsed?: boolean;
+  onOpenMobileNav?: () => void;
   connectionStatus?: "connected" | "connecting" | "disconnected" | "error";
   activeCopies?: number;
   exchangeLatency?: number;
@@ -33,6 +34,7 @@ export function TopBar({
   onNavigate, 
   onLogout,
   sidebarCollapsed = false,
+  onOpenMobileNav,
   connectionStatus = "connected",
   activeCopies = 3,
   exchangeLatency = 45
@@ -63,12 +65,22 @@ export function TopBar({
 
   return (
     <>
-      <div className="h-14 border-b border-border bg-card flex items-center justify-between px-6">
-        <div className="flex items-center gap-6">
-          {/* KLINEO Logo - switches between wordmark and icon based on sidebar state */}
+      <div className="h-14 border-b border-border bg-card flex items-center justify-between gap-2 px-3 sm:px-4 md:px-6 shrink-0">
+        <div className="flex items-center gap-2 sm:gap-4 md:gap-6 min-w-0">
+          {/* Mobile menu trigger */}
+          {onOpenMobileNav && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="md:hidden size-9 shrink-0"
+              onClick={onOpenMobileNav}
+              aria-label="Open menu"
+            >
+              <Menu className="size-5" />
+            </Button>
+          )}
           <TopBarLogo sidebarCollapsed={sidebarCollapsed} />
-          
-          <div className="flex items-center gap-4">
+          <div className="hidden lg:flex items-center gap-4">
             <div className="flex items-center gap-2">
               <Badge variant="outline" className="bg-secondary text-xs">
                 PRO PLAN
@@ -77,8 +89,6 @@ export function TopBar({
                 Expires: Mar 15, 2026
               </span>
             </div>
-
-            {/* Active Copies Count */}
             <div className="flex items-center gap-2 px-2 py-1 bg-accent/10 rounded border border-accent/20">
               <div className="size-1.5 rounded-full bg-accent animate-pulse" />
               <span className="text-xs font-medium text-accent">
@@ -88,8 +98,8 @@ export function TopBar({
           </div>
         </div>
 
-        {/* Center - System Time & Exchange Info */}
-        <div className="flex items-center gap-6 text-xs">
+        {/* Center - System Time & Exchange Info (hidden on small screens) */}
+        <div className="hidden xl:flex items-center gap-4 lg:gap-6 text-xs shrink-0">
           <div className="flex items-center gap-2">
             <Clock className="size-3 text-muted-foreground" />
             <span className="font-mono font-medium">{formatTime(currentTime)} UTC</span>
@@ -109,16 +119,17 @@ export function TopBar({
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
-          {/* Emergency Pause Button */}
+        <div className="flex items-center gap-1 sm:gap-2 md:gap-3 shrink-0">
+          {/* Emergency Pause Button - icon only on small screens */}
           <Button 
             variant="outline" 
             size="sm"
             onClick={handleEmergencyPause}
-            className="border-amber-500/30 text-amber-500 hover:bg-red-500 hover:text-white hover:border-red-500 transition-all gap-2"
+            className="border-amber-500/30 text-amber-500 hover:bg-red-500 hover:text-white hover:border-red-500 transition-all gap-2 size-9 sm:size-auto sm:px-3"
+            title="Pause all copy trading"
           >
-            <Pause className="size-3" />
-            <span className="text-xs font-semibold">PAUSE ALL</span>
+            <Pause className="size-3 shrink-0" />
+            <span className="hidden sm:inline text-xs font-semibold">PAUSE ALL</span>
           </Button>
 
           <ConnectionStatus status={connectionStatus} />

@@ -78,7 +78,7 @@ export function Positions() {
 
   if (isLoading) {
     return (
-      <div className="p-6">
+      <div className="p-4 sm:p-6">
         <div className="animate-pulse space-y-6">
           <div className="h-8 bg-muted rounded w-1/3" />
           <div className="grid grid-cols-4 gap-4">
@@ -94,7 +94,7 @@ export function Positions() {
 
   if (error && positions.length === 0) {
     return (
-      <div className="p-6">
+      <div className="p-4 sm:p-6">
         <ErrorState
           title="Failed to load positions"
           message={error.includes("VITE_API_BASE_URL not set") 
@@ -111,23 +111,23 @@ export function Positions() {
   }
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold mb-1">Positions</h1>
+        <h1 className="text-xl sm:text-2xl font-semibold mb-1">Positions</h1>
         <p className="text-sm text-muted-foreground">Active trading positions</p>
       </div>
 
       {/* Summary */}
-      <div className="grid grid-cols-4 gap-4">
-        <Card className="p-4 space-y-2">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <Card className="p-3 sm:p-4 space-y-2">
           <div className="text-xs text-muted-foreground uppercase tracking-wide">Open Positions</div>
-          <div className="text-2xl font-semibold">{openPositions.length}</div>
+          <div className="text-xl sm:text-2xl font-semibold">{openPositions.length}</div>
           <div className="text-xs text-muted-foreground">of {total} total</div>
         </Card>
 
-        <Card className="p-4 space-y-2">
+        <Card className="p-3 sm:p-4 space-y-2">
           <div className="text-xs text-muted-foreground uppercase tracking-wide">Total Unrealized PnL</div>
-          <div className={`text-2xl font-semibold ${totalUnrealizedPnl >= 0 ? "text-[#10B981]" : "text-[#EF4444]"}`}>
+          <div className={`text-xl sm:text-2xl font-semibold ${totalUnrealizedPnl >= 0 ? "text-[#10B981]" : "text-[#EF4444]"}`}>
             {totalUnrealizedPnl >= 0 ? "+" : ""}${totalUnrealizedPnl.toFixed(2)}
           </div>
           <div className="text-xs text-muted-foreground">
@@ -135,15 +135,15 @@ export function Positions() {
           </div>
         </Card>
 
-        <Card className="p-4 space-y-2">
+        <Card className="p-3 sm:p-4 space-y-2">
           <div className="text-xs text-muted-foreground uppercase tracking-wide">Closed Positions</div>
-          <div className="text-2xl font-semibold">{positions.length - openPositions.length}</div>
+          <div className="text-xl sm:text-2xl font-semibold">{positions.length - openPositions.length}</div>
           <div className="text-xs text-muted-foreground">Total</div>
         </Card>
 
-        <Card className="p-4 space-y-2">
+        <Card className="p-3 sm:p-4 space-y-2">
           <div className="text-xs text-muted-foreground uppercase tracking-wide">Total Positions</div>
-          <div className="text-2xl font-semibold">{total}</div>
+          <div className="text-xl sm:text-2xl font-semibold">{total}</div>
           <div className="text-xs text-muted-foreground">All time</div>
         </Card>
       </div>
@@ -159,8 +159,8 @@ export function Positions() {
         </Card>
       ) : (
         <Card>
-          <div className="p-6 border-b border-border">
-            <h3 className="text-lg font-semibold">All Positions</h3>
+          <div className="p-4 sm:p-6 border-b border-border">
+            <h3 className="text-base sm:text-lg font-semibold">All Positions</h3>
           </div>
           <Table>
             <TableHeader>
