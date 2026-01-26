@@ -11,7 +11,9 @@
     "db:migrate:bundle": "node scripts/bundle-migrations.mjs",
     "supabase:login": "pnpm dlx supabase login",
     "supabase:link": "pnpm dlx supabase link --project-ref oyfeadnxwuazidfbjjfo",
-    "supabase:push": "pnpm dlx supabase db push"
+    "supabase:push": "pnpm dlx supabase db push",
+    "seed": "node scripts/seed-traders.mjs",
+    "bootstrap:admin": "node scripts/bootstrap-admin.mjs"
   },
   "dependencies": {
     "@emotion/react": "11.14.0",

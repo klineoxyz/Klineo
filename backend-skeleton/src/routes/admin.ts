@@ -691,6 +691,77 @@ adminRouter.put('/users/:id',
 });
 
 /**
+ * PUT /api/admin/users/:id/role
+ * Update user role (promote/demote admin)
+ */
+adminRouter.put('/users/:id/role',
+  validate([
+    uuidParam('id'),
+    body('role').isIn(['user', 'admin']).withMessage('role must be user or admin'),
+    optionalString('reason', 500)
+  ]),
+  async (req: AuthenticatedRequest, res) => {
+    const client = getSupabase();
+    if (!client) {
+      return res.status(503).json({ error: 'Database unavailable' });
+    }
+
+    try {
+      const { id } = req.params;
+      const { role, reason } = req.body;
+
+      // Prevent self-demotion (safety check)
+      if (id === req.user!.id && role === 'user') {
+        return res.status(400).json({ error: 'Cannot demote yourself' });
+      }
+
+      // Get current role
+      const { data: currentUser, error: fetchError } = await client
+        .from('user_profiles')
+        .select('role, email')
+        .eq('id', id)
+        .single();
+
+      if (fetchError || !currentUser) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+
+      // Update role (service role bypasses RLS)
+      const { data: updated, error } = await client
+        .from('user_profiles')
+        .update({ role, updated_at: new Date().toISOString() })
+        .eq('id', id)
+        .select('id, email, role, created_at, updated_at')
+        .single();
+
+      if (error) {
+        console.error('Error updating user role:', error);
+        return res.status(500).json({ error: 'Failed to update user role' });
+      }
+
+      // Log audit
+      await client.from('audit_logs').insert({
+        admin_id: req.user!.id,
+        action_type: role === 'admin' ? 'promote_admin' : 'demote_admin',
+        entity_type: 'user',
+        entity_id: id,
+        reason: reason || null,
+        details: { 
+          previous_role: currentUser.role, 
+          new_role: role,
+          user_email: currentUser.email 
+        },
+      });
+
+      res.json({ user: updated });
+    } catch (err) {
+      console.error('Admin update role error:', err);
+      res.status(500).json({ error: 'Failed to update user role' });
+    }
+  }
+);
+
+/**
  * GET /api/admin/audit-logs
  * Get audit logs
  */
