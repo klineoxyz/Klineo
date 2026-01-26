@@ -1,80 +1,110 @@
+import { useState, useEffect } from "react";
 import { Card } from "@/app/components/ui/card";
 import { Badge } from "@/app/components/ui/badge";
 import { Button } from "@/app/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/app/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/app/components/ui/tabs";
-import { X } from "lucide-react";
+import { X, Loader2 } from "lucide-react";
+import { api } from "@/lib/api";
+import { toast } from "@/app/lib/toast";
+import { LoadingWrapper } from "@/app/components/ui/loading-wrapper";
+import { EmptyState } from "@/app/components/ui/empty-state";
+import { ErrorState } from "@/app/components/ui/error-state";
+import { formatDistanceToNow } from "date-fns";
 
-const openOrders = [
-  {
-    id: "ORD-2024-001",
-    symbol: "BTCUSDT",
-    side: "BUY",
-    type: "LIMIT",
-    price: 42500.00,
-    size: 0.1,
-    filled: 0,
-    status: "OPEN",
-    trader: "ProTrader_XYZ",
-    time: "2 min ago",
-  },
-  {
-    id: "ORD-2024-002",
-    symbol: "ETHUSDT",
-    side: "SELL",
-    type: "LIMIT",
-    price: 2300.00,
-    size: 1.5,
-    filled: 0,
-    status: "OPEN",
-    trader: null,
-    time: "5 min ago",
-  },
-];
+interface Order {
+  id: string;
+  positionId?: string;
+  symbol: string;
+  side: "buy" | "sell";
+  orderType: "market" | "limit";
+  amount: number;
+  price?: number | null;
+  status: "pending" | "filled" | "cancelled" | "failed";
+  exchangeOrderId?: string;
+  createdAt: string;
+  updatedAt: string;
+}
 
-const filledOrders = [
-  {
-    id: "ORD-2024-003",
-    symbol: "SOLUSDT",
-    side: "BUY",
-    type: "MARKET",
-    price: 98.45,
-    size: 45.2,
-    filled: 45.2,
-    status: "FILLED",
-    trader: "QuantMaster_Pro",
-    time: "15 min ago",
-  },
-  {
-    id: "ORD-2024-004",
-    symbol: "BTCUSDT",
-    side: "BUY",
-    type: "LIMIT",
-    price: 43250.00,
-    size: 0.156,
-    filled: 0.156,
-    status: "FILLED",
-    trader: "ProTrader_XYZ",
-    time: "1 hour ago",
-  },
-];
-
-const cancelledOrders = [
-  {
-    id: "ORD-2024-005",
-    symbol: "ETHUSDT",
-    side: "BUY",
-    type: "LIMIT",
-    price: 2200.00,
-    size: 2.0,
-    filled: 0,
-    status: "CANCELLED",
-    trader: null,
-    time: "3 hours ago",
-  },
-];
+interface OrdersResponse {
+  orders: Order[];
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+}
 
 export function Orders() {
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+
+  const loadOrders = async (pageNum: number = 1) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const data = await api.get<OrdersResponse>(`/api/orders?page=${pageNum}&limit=50`);
+      setOrders(data.orders || []);
+      setPage(data.page);
+      setTotal(data.total);
+      setTotalPages(data.totalPages);
+    } catch (err: any) {
+      const message = err?.message || "Failed to load orders";
+      setError(message);
+      if (!message.includes("VITE_API_BASE_URL not set")) {
+        toast.error("Failed to load orders", { description: message });
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadOrders(1);
+  }, []);
+
+  // Categorize orders
+  const openOrders = orders.filter((o) => o.status === "pending");
+  const filledOrders = orders.filter((o) => o.status === "filled");
+  const cancelledOrders = orders.filter((o) => o.status === "cancelled");
+
+  if (isLoading) {
+    return (
+      <div className="p-6">
+        <div className="animate-pulse space-y-6">
+          <div className="h-8 bg-muted rounded w-1/3" />
+          <div className="grid grid-cols-4 gap-4">
+            {[...Array(4)].map((_, i) => (
+              <div key={i} className="h-24 bg-muted rounded" />
+            ))}
+          </div>
+          <div className="h-64 bg-muted rounded" />
+        </div>
+      </div>
+    );
+  }
+
+  if (error && orders.length === 0) {
+    return (
+      <div className="p-6">
+        <ErrorState
+          title="Failed to load orders"
+          message={error.includes("VITE_API_BASE_URL not set") 
+            ? "Backend not configured. Please try again later."
+            : error}
+          action={
+            <Button onClick={() => loadOrders(page)} variant="outline">
+              Try Again
+            </Button>
+          }
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="p-6 space-y-6">
       <div>
@@ -90,174 +120,204 @@ export function Orders() {
         </Card>
 
         <Card className="p-4 space-y-2">
-          <div className="text-xs text-muted-foreground uppercase tracking-wide">Filled Today</div>
-          <div className="text-2xl font-semibold">12</div>
+          <div className="text-xs text-muted-foreground uppercase tracking-wide">Filled</div>
+          <div className="text-2xl font-semibold">{filledOrders.length}</div>
         </Card>
 
         <Card className="p-4 space-y-2">
-          <div className="text-xs text-muted-foreground uppercase tracking-wide">Cancelled Today</div>
-          <div className="text-2xl font-semibold">3</div>
+          <div className="text-xs text-muted-foreground uppercase tracking-wide">Cancelled</div>
+          <div className="text-2xl font-semibold">{cancelledOrders.length}</div>
         </Card>
 
         <Card className="p-4 space-y-2">
-          <div className="text-xs text-muted-foreground uppercase tracking-wide">Partial Fills</div>
-          <div className="text-2xl font-semibold">0</div>
+          <div className="text-xs text-muted-foreground uppercase tracking-wide">Total Orders</div>
+          <div className="text-2xl font-semibold">{total}</div>
         </Card>
       </div>
 
       {/* Orders Tabs */}
-      <Card>
-        <Tabs defaultValue="open" className="w-full">
-          <div className="px-6 pt-6 border-b border-border">
-            <TabsList>
-              <TabsTrigger value="open">Open Orders</TabsTrigger>
-              <TabsTrigger value="filled">Filled Orders</TabsTrigger>
-              <TabsTrigger value="cancelled">Cancelled</TabsTrigger>
-            </TabsList>
-          </div>
+      {orders.length === 0 ? (
+        <Card className="p-12">
+          <EmptyState
+            icon={X}
+            title="No orders yet"
+            description="Your trading orders will appear here once you start copying traders or place manual orders."
+          />
+        </Card>
+      ) : (
+        <Card>
+          <Tabs defaultValue="open" className="w-full">
+            <div className="px-6 pt-6 border-b border-border">
+              <TabsList>
+                <TabsTrigger value="open">Open ({openOrders.length})</TabsTrigger>
+                <TabsTrigger value="filled">Filled ({filledOrders.length})</TabsTrigger>
+                <TabsTrigger value="cancelled">Cancelled ({cancelledOrders.length})</TabsTrigger>
+              </TabsList>
+            </div>
 
-          <TabsContent value="open" className="m-0">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Order ID</TableHead>
-                  <TableHead>Symbol</TableHead>
-                  <TableHead>Side</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Price</TableHead>
-                  <TableHead>Size</TableHead>
-                  <TableHead>Filled</TableHead>
-                  <TableHead>Trader</TableHead>
-                  <TableHead>Time</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {openOrders.map((order, i) => (
-                  <TableRow key={i}>
-                    <TableCell className="font-mono text-xs">{order.id}</TableCell>
-                    <TableCell className="font-mono font-semibold">{order.symbol}</TableCell>
-                    <TableCell>
-                      <Badge 
-                        variant="outline"
-                        className={order.side === "BUY" ? "border-[#10B981]/50 text-[#10B981]" : "border-[#EF4444]/50 text-[#EF4444]"}
-                      >
-                        {order.side}
-                      </Badge>
-                    </TableCell>
-                    <TableCell><Badge variant="secondary">{order.type}</Badge></TableCell>
-                    <TableCell className="font-mono">${order.price.toFixed(2)}</TableCell>
-                    <TableCell className="font-mono">{order.size}</TableCell>
-                    <TableCell className="font-mono">{order.filled}</TableCell>
-                    <TableCell>
-                      {order.trader ? (
-                        <Badge variant="outline" className="text-xs">{order.trader}</Badge>
-                      ) : (
-                        <span className="text-muted-foreground text-xs">Manual</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground text-sm">{order.time}</TableCell>
-                    <TableCell className="text-right">
-                      <Button variant="outline" size="sm" className="gap-1">
-                        <X className="size-3" />
-                        Cancel
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TabsContent>
+            <TabsContent value="open" className="m-0">
+              {openOrders.length === 0 ? (
+                <div className="p-12 text-center text-muted-foreground">No open orders</div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Order ID</TableHead>
+                      <TableHead>Symbol</TableHead>
+                      <TableHead>Side</TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead>Price</TableHead>
+                      <TableHead>Amount</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Time</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {openOrders.map((order) => (
+                      <TableRow key={order.id}>
+                        <TableCell className="font-mono text-xs">{order.id.substring(0, 8)}...</TableCell>
+                        <TableCell className="font-mono font-semibold">{order.symbol}</TableCell>
+                        <TableCell>
+                          <Badge 
+                            variant="outline"
+                            className={order.side === "buy" ? "border-[#10B981]/50 text-[#10B981]" : "border-[#EF4444]/50 text-[#EF4444]"}
+                          >
+                            {order.side.toUpperCase()}
+                          </Badge>
+                        </TableCell>
+                        <TableCell><Badge variant="secondary">{order.orderType}</Badge></TableCell>
+                        <TableCell className="font-mono">
+                          {order.price ? `$${order.price.toFixed(2)}` : "Market"}
+                        </TableCell>
+                        <TableCell className="font-mono">{order.amount.toFixed(8)}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline">{order.status}</Badge>
+                        </TableCell>
+                        <TableCell className="text-muted-foreground text-sm">
+                          {formatDistanceToNow(new Date(order.createdAt), { addSuffix: true })}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </TabsContent>
 
-          <TabsContent value="filled" className="m-0">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Order ID</TableHead>
-                  <TableHead>Symbol</TableHead>
-                  <TableHead>Side</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Price</TableHead>
-                  <TableHead>Size</TableHead>
-                  <TableHead>Trader</TableHead>
-                  <TableHead>Time</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filledOrders.map((order, i) => (
-                  <TableRow key={i}>
-                    <TableCell className="font-mono text-xs">{order.id}</TableCell>
-                    <TableCell className="font-mono font-semibold">{order.symbol}</TableCell>
-                    <TableCell>
-                      <Badge 
-                        variant="outline"
-                        className={order.side === "BUY" ? "border-[#10B981]/50 text-[#10B981]" : "border-[#EF4444]/50 text-[#EF4444]"}
-                      >
-                        {order.side}
-                      </Badge>
-                    </TableCell>
-                    <TableCell><Badge variant="secondary">{order.type}</Badge></TableCell>
-                    <TableCell className="font-mono">${order.price.toFixed(2)}</TableCell>
-                    <TableCell className="font-mono">{order.size}</TableCell>
-                    <TableCell>
-                      {order.trader ? (
-                        <Badge variant="outline" className="text-xs">{order.trader}</Badge>
-                      ) : (
-                        <span className="text-muted-foreground text-xs">Manual</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground text-sm">{order.time}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TabsContent>
+            <TabsContent value="filled" className="m-0">
+              {filledOrders.length === 0 ? (
+                <div className="p-12 text-center text-muted-foreground">No filled orders</div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Order ID</TableHead>
+                      <TableHead>Symbol</TableHead>
+                      <TableHead>Side</TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead>Price</TableHead>
+                      <TableHead>Amount</TableHead>
+                      <TableHead>Time</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filledOrders.map((order) => (
+                      <TableRow key={order.id}>
+                        <TableCell className="font-mono text-xs">{order.id.substring(0, 8)}...</TableCell>
+                        <TableCell className="font-mono font-semibold">{order.symbol}</TableCell>
+                        <TableCell>
+                          <Badge 
+                            variant="outline"
+                            className={order.side === "buy" ? "border-[#10B981]/50 text-[#10B981]" : "border-[#EF4444]/50 text-[#EF4444]"}
+                          >
+                            {order.side.toUpperCase()}
+                          </Badge>
+                        </TableCell>
+                        <TableCell><Badge variant="secondary">{order.orderType}</Badge></TableCell>
+                        <TableCell className="font-mono">
+                          {order.price ? `$${order.price.toFixed(2)}` : "Market"}
+                        </TableCell>
+                        <TableCell className="font-mono">{order.amount.toFixed(8)}</TableCell>
+                        <TableCell className="text-muted-foreground text-sm">
+                          {formatDistanceToNow(new Date(order.createdAt), { addSuffix: true })}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </TabsContent>
 
-          <TabsContent value="cancelled" className="m-0">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Order ID</TableHead>
-                  <TableHead>Symbol</TableHead>
-                  <TableHead>Side</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Price</TableHead>
-                  <TableHead>Size</TableHead>
-                  <TableHead>Trader</TableHead>
-                  <TableHead>Time</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {cancelledOrders.map((order, i) => (
-                  <TableRow key={i}>
-                    <TableCell className="font-mono text-xs">{order.id}</TableCell>
-                    <TableCell className="font-mono font-semibold">{order.symbol}</TableCell>
-                    <TableCell>
-                      <Badge 
-                        variant="outline"
-                        className={order.side === "BUY" ? "border-[#10B981]/50 text-[#10B981]" : "border-[#EF4444]/50 text-[#EF4444]"}
-                      >
-                        {order.side}
-                      </Badge>
-                    </TableCell>
-                    <TableCell><Badge variant="secondary">{order.type}</Badge></TableCell>
-                    <TableCell className="font-mono">${order.price.toFixed(2)}</TableCell>
-                    <TableCell className="font-mono">{order.size}</TableCell>
-                    <TableCell>
-                      {order.trader ? (
-                        <Badge variant="outline" className="text-xs">{order.trader}</Badge>
-                      ) : (
-                        <span className="text-muted-foreground text-xs">Manual</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground text-sm">{order.time}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TabsContent>
-        </Tabs>
-      </Card>
+            <TabsContent value="cancelled" className="m-0">
+              {cancelledOrders.length === 0 ? (
+                <div className="p-12 text-center text-muted-foreground">No cancelled orders</div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Order ID</TableHead>
+                      <TableHead>Symbol</TableHead>
+                      <TableHead>Side</TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead>Price</TableHead>
+                      <TableHead>Amount</TableHead>
+                      <TableHead>Time</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {cancelledOrders.map((order) => (
+                      <TableRow key={order.id}>
+                        <TableCell className="font-mono text-xs">{order.id.substring(0, 8)}...</TableCell>
+                        <TableCell className="font-mono font-semibold">{order.symbol}</TableCell>
+                        <TableCell>
+                          <Badge 
+                            variant="outline"
+                            className={order.side === "buy" ? "border-[#10B981]/50 text-[#10B981]" : "border-[#EF4444]/50 text-[#EF4444]"}
+                          >
+                            {order.side.toUpperCase()}
+                          </Badge>
+                        </TableCell>
+                        <TableCell><Badge variant="secondary">{order.orderType}</Badge></TableCell>
+                        <TableCell className="font-mono">
+                          {order.price ? `$${order.price.toFixed(2)}` : "Market"}
+                        </TableCell>
+                        <TableCell className="font-mono">{order.amount.toFixed(8)}</TableCell>
+                        <TableCell className="text-muted-foreground text-sm">
+                          {formatDistanceToNow(new Date(order.createdAt), { addSuffix: true })}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </TabsContent>
+          </Tabs>
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between p-4 border-t">
+              <div className="text-sm text-muted-foreground">
+                Page {page} of {totalPages} ({total} total)
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => loadOrders(page - 1)}
+                  disabled={page === 1}
+                >
+                  Previous
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => loadOrders(page + 1)}
+                  disabled={page >= totalPages}
+                >
+                  Next
+                </Button>
+              </div>
+            </div>
+          )}
+        </Card>
+      )}
     </div>
   );
 }

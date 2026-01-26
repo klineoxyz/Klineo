@@ -35,6 +35,12 @@ export async function apiRequest<T = unknown>(
     throw new Error('Unauthorized');
   }
 
+  if (res.status === 403) {
+    const text = await res.text();
+    const error = text || 'Access denied';
+    throw new Error(`403: ${error}`);
+  }
+
   if (!res.ok) {
     const text = await res.text();
     throw new Error(text || `API error: ${res.status} ${res.statusText}`);

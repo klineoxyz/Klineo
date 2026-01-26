@@ -1,7 +1,7 @@
+import { useState, useEffect } from "react";
 import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
 import { Badge } from "@/app/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/app/components/ui/tabs";
 import { 
   Bell, 
   TrendingUp, 
@@ -12,9 +12,15 @@ import {
   Settings,
   Trash2,
   Filter,
-  X
+  X,
+  Loader2
 } from "lucide-react";
-import { useState } from "react";
+import { api } from "@/lib/api";
+import { toast } from "@/app/lib/toast";
+import { LoadingWrapper } from "@/app/components/ui/loading-wrapper";
+import { EmptyState } from "@/app/components/ui/empty-state";
+import { ErrorState } from "@/app/components/ui/error-state";
+import { formatDistanceToNow } from "date-fns";
 
 interface NotificationsCenterProps {
   onNavigate: (view: string) => void;
@@ -25,97 +31,83 @@ type NotificationPriority = "high" | "medium" | "low";
 
 interface Notification {
   id: string;
-  type: NotificationType;
-  priority: NotificationPriority;
+  type: string;
   title: string;
-  message: string;
-  timestamp: string;
+  body?: string;
   read: boolean;
-  actionable?: boolean;
+  readAt?: string | null;
+  createdAt: string;
 }
 
-const mockNotifications: Notification[] = [
-  {
-    id: "1",
-    type: "trade",
-    priority: "high",
-    title: "Trade Executed",
-    message: "Copied trade from @CryptoWizard: BTC/USDT LONG at $67,245",
-    timestamp: "2 min ago",
-    read: false,
-    actionable: true,
-  },
-  {
-    id: "2",
-    type: "risk",
-    priority: "high",
-    title: "Risk Alert",
-    message: "Daily loss limit approaching: 85% used ($850/$1,000)",
-    timestamp: "15 min ago",
-    read: false,
-    actionable: true,
-  },
-  {
-    id: "3",
-    type: "trade",
-    priority: "medium",
-    title: "Position Closed",
-    message: "ETH/USDT LONG closed with +$145.50 profit (+12.5%)",
-    timestamp: "1 hour ago",
-    read: false,
-  },
-  {
-    id: "4",
-    type: "account",
-    priority: "medium",
-    title: "Subscription Renewal",
-    message: "Your Pro subscription will renew in 7 days ($79)",
-    timestamp: "3 hours ago",
-    read: true,
-  },
-  {
-    id: "5",
-    type: "system",
-    priority: "low",
-    title: "Platform Update",
-    message: "New features: Enhanced risk controls and portfolio analytics",
-    timestamp: "1 day ago",
-    read: true,
-  },
-  {
-    id: "6",
-    type: "trade",
-    priority: "medium",
-    title: "Trade Executed",
-    message: "Copied trade from @TradeMaster: SOL/USDT SHORT at $98.45",
-    timestamp: "1 day ago",
-    read: true,
-  },
-  {
-    id: "7",
-    type: "risk",
-    priority: "high",
-    title: "Margin Alert",
-    message: "Position #8234 margin ratio at 75% - consider adding funds",
-    timestamp: "2 days ago",
-    read: true,
-    actionable: true,
-  },
-  {
-    id: "8",
-    type: "system",
-    priority: "low",
-    title: "Maintenance Complete",
-    message: "Scheduled maintenance completed. All systems operational.",
-    timestamp: "3 days ago",
-    read: true,
-  },
-];
+interface NotificationsResponse {
+  notifications: Notification[];
+  unreadCount: number;
+}
 
 export function NotificationsCenter({ onNavigate }: NotificationsCenterProps) {
-  const [notifications, setNotifications] = useState<Notification[]>(mockNotifications);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<"all" | NotificationType>("all");
   const [showUnreadOnly, setShowUnreadOnly] = useState(false);
+  const [markingRead, setMarkingRead] = useState<string | null>(null);
+
+  const loadNotifications = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const data = await api.get<NotificationsResponse>("/api/notifications?limit=100");
+      setNotifications(data.notifications || []);
+      setUnreadCount(data.unreadCount || 0);
+    } catch (err: any) {
+      const message = err?.message || "Failed to load notifications";
+      setError(message);
+      if (!message.includes("VITE_API_BASE_URL not set")) {
+        toast.error("Failed to load notifications", { description: message });
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadNotifications();
+  }, []);
+
+  const markAsRead = async (id: string) => {
+    setMarkingRead(id);
+    try {
+      await api.post("/api/notifications/read", { notificationIds: [id] });
+      setNotifications(notifications.map((n) => 
+        n.id === id ? { ...n, read: true, readAt: new Date().toISOString() } : n
+      ));
+      setUnreadCount(Math.max(0, unreadCount - 1));
+      toast.success("Notification marked as read");
+    } catch (err: any) {
+      toast.error("Failed to mark as read", { description: err?.message });
+    } finally {
+      setMarkingRead(null);
+    }
+  };
+
+  const markAllAsRead = async () => {
+    const unreadIds = notifications.filter((n) => !n.read).map((n) => n.id);
+    if (unreadIds.length === 0) return;
+
+    try {
+      await api.post("/api/notifications/read", { notificationIds: unreadIds });
+      setNotifications(notifications.map((n) => 
+        unreadIds.includes(n.id) 
+          ? { ...n, read: true, readAt: new Date().toISOString() }
+          : n
+      ));
+      setUnreadCount(0);
+      toast.success("All notifications marked as read");
+    } catch (err: any) {
+      toast.error("Failed to mark all as read", { description: err?.message });
+    }
+  };
 
   const filteredNotifications = notifications.filter(n => {
     const matchesFilter = filter === "all" || n.type === filter;
@@ -123,27 +115,46 @@ export function NotificationsCenter({ onNavigate }: NotificationsCenterProps) {
     return matchesFilter && matchesRead;
   });
 
-  const unreadCount = notifications.filter(n => !n.read).length;
+  // Categorize by type
+  const tradeAlerts = notifications.filter((n) => n.type === "trade").length;
+  const riskAlerts = notifications.filter((n) => n.type === "risk").length;
+  const systemAlerts = notifications.filter((n) => n.type === "system").length;
 
-  const markAsRead = (id: string) => {
-    setNotifications(notifications.map(n => 
-      n.id === id ? { ...n, read: true } : n
-    ));
-  };
+  if (isLoading) {
+    return (
+      <div className="p-6">
+        <div className="animate-pulse space-y-6">
+          <div className="h-8 bg-muted rounded w-1/3" />
+          <div className="grid grid-cols-4 gap-4">
+            {[...Array(4)].map((_, i) => (
+              <div key={i} className="h-24 bg-muted rounded" />
+            ))}
+          </div>
+          <div className="h-64 bg-muted rounded" />
+        </div>
+      </div>
+    );
+  }
 
-  const markAllAsRead = () => {
-    setNotifications(notifications.map(n => ({ ...n, read: true })));
-  };
+  if (error && notifications.length === 0) {
+    return (
+      <div className="p-6">
+        <ErrorState
+          title="Failed to load notifications"
+          message={error.includes("VITE_API_BASE_URL not set") 
+            ? "Backend not configured. Please try again later."
+            : error}
+          action={
+            <Button onClick={loadNotifications} variant="outline">
+              Try Again
+            </Button>
+          }
+        />
+      </div>
+    );
+  }
 
-  const deleteNotification = (id: string) => {
-    setNotifications(notifications.filter(n => n.id !== id));
-  };
-
-  const clearAll = () => {
-    setNotifications([]);
-  };
-
-  const getIcon = (type: NotificationType, priority: NotificationPriority) => {
+  const getIcon = (type: string) => {
     if (type === "trade") return <TrendingUp className="size-5" />;
     if (type === "risk") return <AlertTriangle className="size-5" />;
     if (type === "system") return <Info className="size-5" />;
@@ -151,13 +162,13 @@ export function NotificationsCenter({ onNavigate }: NotificationsCenterProps) {
     return <Bell className="size-5" />;
   };
 
-  const getPriorityColor = (priority: NotificationPriority) => {
-    if (priority === "high") return "text-[#EF4444]";
-    if (priority === "medium") return "text-accent";
+  const getPriorityColor = (type: string) => {
+    if (type === "risk") return "text-[#EF4444]";
+    if (type === "trade") return "text-accent";
     return "text-muted-foreground";
   };
 
-  const getTypeColor = (type: NotificationType) => {
+  const getTypeColor = (type: string) => {
     if (type === "trade") return "bg-[#10B981]/10 border-[#10B981]/20 text-[#10B981]";
     if (type === "risk") return "bg-[#EF4444]/10 border-[#EF4444]/20 text-[#EF4444]";
     if (type === "account") return "bg-accent/10 border-accent/20 text-accent";
@@ -175,7 +186,12 @@ export function NotificationsCenter({ onNavigate }: NotificationsCenterProps) {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <Button variant="outline" size="sm" onClick={markAllAsRead} disabled={unreadCount === 0}>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={markAllAsRead} 
+            disabled={unreadCount === 0}
+          >
             Mark All Read
           </Button>
           <Button variant="outline" size="sm" onClick={() => onNavigate("settings")}>
@@ -206,165 +222,135 @@ export function NotificationsCenter({ onNavigate }: NotificationsCenterProps) {
             <span className="text-sm text-muted-foreground">Trade Alerts</span>
             <TrendingUp className="size-4 text-[#10B981]" />
           </div>
-          <div className="text-2xl font-semibold">
-            {notifications.filter(n => n.type === "trade").length}
-          </div>
+          <div className="text-2xl font-semibold">{tradeAlerts}</div>
         </Card>
         <Card className="p-4">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm text-muted-foreground">Risk Alerts</span>
             <AlertTriangle className="size-4 text-[#EF4444]" />
           </div>
-          <div className="text-2xl font-semibold">
-            {notifications.filter(n => n.type === "risk").length}
-          </div>
+          <div className="text-2xl font-semibold">{riskAlerts}</div>
         </Card>
       </div>
 
       {/* Filters */}
       <Card className="p-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
             <Filter className="size-4 text-muted-foreground" />
-            <Tabs value={filter} onValueChange={(v) => setFilter(v as typeof filter)}>
-              <TabsList>
-                <TabsTrigger value="all">All</TabsTrigger>
-                <TabsTrigger value="trade">Trades</TabsTrigger>
-                <TabsTrigger value="risk">Risk</TabsTrigger>
-                <TabsTrigger value="account">Account</TabsTrigger>
-                <TabsTrigger value="system">System</TabsTrigger>
-              </TabsList>
-            </Tabs>
+            <span className="text-sm font-medium">Filter:</span>
           </div>
-          <div className="flex items-center gap-3">
-            <label className="flex items-center gap-2 text-sm cursor-pointer">
-              <input
-                type="checkbox"
-                checked={showUnreadOnly}
-                onChange={(e) => setShowUnreadOnly(e.target.checked)}
-                className="rounded"
-              />
-              <span className="text-muted-foreground">Unread only</span>
+          <div className="flex gap-2">
+            <Button
+              variant={filter === "all" ? "default" : "outline"}
+              size="sm"
+              onClick={() => setFilter("all")}
+            >
+              All
+            </Button>
+            <Button
+              variant={filter === "trade" ? "default" : "outline"}
+              size="sm"
+              onClick={() => setFilter("trade")}
+            >
+              Trade
+            </Button>
+            <Button
+              variant={filter === "risk" ? "default" : "outline"}
+              size="sm"
+              onClick={() => setFilter("risk")}
+            >
+              Risk
+            </Button>
+            <Button
+              variant={filter === "system" ? "default" : "outline"}
+              size="sm"
+              onClick={() => setFilter("system")}
+            >
+              System
+            </Button>
+            <Button
+              variant={filter === "account" ? "default" : "outline"}
+              size="sm"
+              onClick={() => setFilter("account")}
+            >
+              Account
+            </Button>
+          </div>
+          <div className="flex items-center gap-2 ml-auto">
+            <input
+              type="checkbox"
+              id="unread-only"
+              checked={showUnreadOnly}
+              onChange={(e) => setShowUnreadOnly(e.target.checked)}
+              className="size-4 rounded"
+            />
+            <label htmlFor="unread-only" className="text-sm text-muted-foreground">
+              Unread only
             </label>
-            {notifications.length > 0 && (
-              <Button variant="ghost" size="sm" onClick={clearAll} className="text-[#EF4444] hover:text-[#EF4444] hover:bg-[#EF4444]/10">
-                <Trash2 className="size-4 mr-2" />
-                Clear All
-              </Button>
-            )}
           </div>
         </div>
       </Card>
 
       {/* Notifications List */}
-      <div className="space-y-3">
-        {filteredNotifications.length === 0 ? (
-          <Card className="p-12 text-center">
-            <Bell className="size-12 mx-auto mb-4 text-muted-foreground" />
-            <h3 className="text-lg font-semibold mb-2">No Notifications</h3>
-            <p className="text-sm text-muted-foreground">
-              {showUnreadOnly 
-                ? "You're all caught up! No unread notifications."
-                : "You don't have any notifications yet."}
-            </p>
-          </Card>
-        ) : (
-          filteredNotifications.map((notification) => (
-            <Card
-              key={notification.id}
-              className={`p-4 transition hover:border-primary/50 ${
-                !notification.read ? "border-primary/30 bg-primary/5" : ""
-              }`}
+      {filteredNotifications.length === 0 ? (
+        <Card className="p-12">
+          <EmptyState
+            icon={Bell}
+            title={showUnreadOnly ? "No unread notifications" : "No notifications"}
+            description={showUnreadOnly 
+              ? "You're all caught up!"
+              : "You'll receive notifications about trades, risks, and account updates here."}
+          />
+        </Card>
+      ) : (
+        <div className="space-y-3">
+          {filteredNotifications.map((notification) => (
+            <Card 
+              key={notification.id} 
+              className={`p-4 transition-colors ${!notification.read ? "border-accent/50 bg-accent/5" : ""}`}
             >
               <div className="flex items-start gap-4">
-                {/* Icon */}
-                <div className={`p-2 rounded ${getTypeColor(notification.type)}`}>
-                  {getIcon(notification.type, notification.priority)}
+                <div className={`p-2 rounded-lg ${getTypeColor(notification.type)}`}>
+                  {getIcon(notification.type)}
                 </div>
-
-                {/* Content */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-start justify-between gap-3 mb-1">
-                    <div className="flex items-center gap-2">
-                      <h4 className="font-semibold text-sm">{notification.title}</h4>
-                      {!notification.read && (
-                        <div className="size-2 rounded-full bg-primary"></div>
+                <div className="flex-1 space-y-1">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <h4 className="font-semibold">{notification.title}</h4>
+                      {notification.body && (
+                        <p className="text-sm text-muted-foreground mt-1">{notification.body}</p>
                       )}
                     </div>
-                    <span className="text-xs text-muted-foreground shrink-0">
-                      {notification.timestamp}
-                    </span>
-                  </div>
-                  <p className="text-sm text-muted-foreground mb-3">{notification.message}</p>
-                  
-                  {/* Actions */}
-                  <div className="flex items-center gap-2">
-                    {notification.actionable && (
-                      <>
-                        <Button variant="outline" size="sm" className="h-7 text-xs">
-                          View Details
-                        </Button>
-                        {notification.type === "risk" && (
-                          <Button variant="outline" size="sm" className="h-7 text-xs">
-                            Adjust Limits
-                          </Button>
-                        )}
-                      </>
+                    {!notification.read && (
+                      <div className="size-2 rounded-full bg-accent ml-2" />
                     )}
+                  </div>
+                  <div className="flex items-center justify-between mt-2">
+                    <span className="text-xs text-muted-foreground">
+                      {formatDistanceToNow(new Date(notification.createdAt), { addSuffix: true })}
+                    </span>
                     {!notification.read && (
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="h-7 text-xs"
                         onClick={() => markAsRead(notification.id)}
+                        disabled={markingRead === notification.id}
                       >
-                        Mark as Read
+                        {markingRead === notification.id ? (
+                          <Loader2 className="size-3 animate-spin" />
+                        ) : (
+                          "Mark as read"
+                        )}
                       </Button>
                     )}
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 w-7 p-0 ml-auto text-muted-foreground hover:text-[#EF4444]"
-                      onClick={() => deleteNotification(notification.id)}
-                    >
-                      <X className="size-4" />
-                    </Button>
                   </div>
                 </div>
               </div>
             </Card>
-          ))
-        )}
-      </div>
-
-      {/* Notification Settings Preview */}
-      <Card className="p-6 bg-secondary/30">
-        <div className="flex items-start justify-between">
-          <div>
-            <h3 className="font-semibold mb-2">Notification Preferences</h3>
-            <p className="text-sm text-muted-foreground mb-4">
-              Customize which notifications you receive and how you're alerted
-            </p>
-            <div className="flex flex-wrap gap-2">
-              <Badge variant="outline" className="bg-[#10B981]/10 text-[#10B981] border-[#10B981]/20">
-                Trade Alerts: ON
-              </Badge>
-              <Badge variant="outline" className="bg-[#EF4444]/10 text-[#EF4444] border-[#EF4444]/20">
-                Risk Alerts: ON
-              </Badge>
-              <Badge variant="outline" className="bg-accent/10 text-accent border-accent/20">
-                Email Notifications: ON
-              </Badge>
-              <Badge variant="outline">
-                Telegram Alerts: OFF
-              </Badge>
-            </div>
-          </div>
-          <Button variant="outline" onClick={() => onNavigate("settings")}>
-            Configure
-          </Button>
+          ))}
         </div>
-      </Card>
+      )}
     </div>
   );
 }
