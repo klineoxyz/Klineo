@@ -16,7 +16,7 @@ function getSupabase(): SupabaseClient | null {
   return supabase;
 }
 
-export const portfolioRouter = Router();
+export const portfolioRouter: Router = Router();
 
 // All portfolio routes require authentication
 portfolioRouter.use(verifySupabaseJWT);

@@ -17,7 +17,7 @@ function getSupabase(): SupabaseClient | null {
   return supabase;
 }
 
-export const positionsRouter = Router();
+export const positionsRouter: Router = Router();
 
 // All positions routes require authentication
 positionsRouter.use(verifySupabaseJWT);

@@ -18,7 +18,7 @@ function getSupabase(): SupabaseClient | null {
   return supabase;
 }
 
-export const notificationsRouter = Router();
+export const notificationsRouter: Router = Router();
 
 // All notifications routes require authentication
 notificationsRouter.use(verifySupabaseJWT);

@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { verifySupabaseJWT, requireAdmin, AuthenticatedRequest } from '../middleware/auth.js';
 
-export const authRouter = Router();
+export const authRouter: Router = Router();
 
 /**
  * GET /api/auth/me

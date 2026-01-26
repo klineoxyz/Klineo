@@ -18,7 +18,7 @@ function getSupabase(): SupabaseClient | null {
   return supabase;
 }
 
-export const copySetupsRouter = Router();
+export const copySetupsRouter: Router = Router();
 
 // All copy setup routes require authentication
 copySetupsRouter.use(verifySupabaseJWT);

@@ -18,7 +18,7 @@ function getSupabase(): SupabaseClient | null {
   return supabase;
 }
 
-export const profileRouter = Router();
+export const profileRouter: Router = Router();
 
 // All profile routes require authentication
 profileRouter.use(verifySupabaseJWT);

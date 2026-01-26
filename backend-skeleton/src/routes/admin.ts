@@ -18,7 +18,7 @@ function getSupabase(): SupabaseClient | null {
   return supabase;
 }
 
-export const adminRouter = Router();
+export const adminRouter: Router = Router();
 
 // All admin routes require authentication + admin role
 adminRouter.use(verifySupabaseJWT);

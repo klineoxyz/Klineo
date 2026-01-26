@@ -17,7 +17,7 @@ function getSupabase(): SupabaseClient | null {
   return supabase;
 }
 
-export const ordersRouter = Router();
+export const ordersRouter: Router = Router();
 
 // All orders routes require authentication
 ordersRouter.use(verifySupabaseJWT);

@@ -17,7 +17,7 @@ function getSupabase(): SupabaseClient | null {
   return supabase;
 }
 
-export const tradersRouter = Router();
+export const tradersRouter: Router = Router();
 
 /**
  * GET /api/traders

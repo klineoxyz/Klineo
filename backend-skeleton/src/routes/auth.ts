@@ -1,6 +1,6 @@
 import { Router } from 'express';
 
-export const authRouter = Router();
+export const authRouter: Router = Router();
 
 // Placeholder - will verify Supabase JWT when integrated
 authRouter.get('/me', async (req, res) => {
