@@ -92,7 +92,7 @@ adminRouter.get('/users', async (req, res) => {
       query = query.or(`email.ilike.%${search}%,full_name.ilike.%${search}%,username.ilike.%${search}%`);
     }
 
-    const { data: profiles, error } = await query.range(offset, offset + limit - 1);
+    const { data: profiles, error, count } = await query.range(offset, offset + limit - 1);
 
     if (error) {
       console.error('Error fetching users:', error);
@@ -115,7 +115,10 @@ adminRouter.get('/users', async (req, res) => {
         username: profile.username,
         role: profile.role,
         plan: (sub?.subscription_plans as any)?.name || 'None',
-        status: sub?.status === 'active' ? 'Active' : 'Inactive',
+        status: profile.status === 'suspended' || profile.status === 'banned' 
+          ? 'Suspended' 
+          : sub?.status === 'active' ? 'Active' : 'Inactive',
+        userStatus: profile.status || 'active',
         joined: new Date(profile.created_at).toLocaleDateString('en-US', {
           month: 'short',
           day: 'numeric',
@@ -124,7 +127,13 @@ adminRouter.get('/users', async (req, res) => {
       };
     });
 
-    res.json({ users: users || [], page, limit });
+    res.json({ 
+      users: users || [], 
+      page, 
+      limit,
+      total: count || 0,
+      totalPages: Math.ceil((count || 0) / limit)
+    });
   } catch (err) {
     console.error('Admin users error:', err);
     res.status(500).json({ error: 'Failed to fetch users' });
@@ -148,6 +157,11 @@ adminRouter.get('/traders', async (req, res) => {
       .select('id, user_id, display_name, slug, status, created_at')
       .order('created_at', { ascending: false });
 
+    // Get trades for win rate calculation (before filtering)
+    const { data: allTrades } = await client
+      .from('trades')
+      .select('trader_id, pnl');
+
     if (status) {
       query = query.eq('status', status);
     }
@@ -167,6 +181,9 @@ adminRouter.get('/traders', async (req, res) => {
       .in('trader_id', traderIds)
       .order('period_start', { ascending: false });
 
+    // Use trades we already fetched
+    const trades = allTrades?.filter((t) => traderIds.includes(t.trader_id)) || [];
+
     // Get follower count (copy_setups referencing this trader)
     const { data: copySetups } = await client
       .from('copy_setups')
@@ -182,6 +199,13 @@ adminRouter.get('/traders', async (req, res) => {
         ? perf.reduce((sum, p) => sum + parseFloat(p.pnl_pct?.toString() || '0'), 0) / perf.length
         : 0;
 
+      // Calculate win rate from trades
+      const traderTrades = trades?.filter((t) => t.trader_id === trader.id) || [];
+      const winningTrades = traderTrades.filter((t) => parseFloat(t.pnl?.toString() || '0') > 0).length;
+      const winRate = traderTrades.length > 0 
+        ? Math.round((winningTrades / traderTrades.length) * 100 * 10) / 10 
+        : 0;
+
       return {
         id: trader.id,
         name: trader.display_name,
@@ -194,8 +218,8 @@ adminRouter.get('/traders', async (req, res) => {
           day: 'numeric',
           year: 'numeric',
         }),
-        trades: perf.length,
-        winRate: 0, // TODO: Calculate from trades table
+        trades: traderTrades.length,
+        winRate,
       };
     });
 
@@ -359,9 +383,24 @@ adminRouter.get('/fees', async (req, res) => {
 
     const { data: fees, error } = await client
       .from('fee_ledger')
-      .select('id, user_id, amount, currency, fee_type, created_at')
+      .select('id, user_id, amount, currency, fee_type, created_at, trade_id, trader_id')
       .gte('created_at', startOfMonth.toISOString())
       .order('created_at', { ascending: false });
+
+    // Get trades and traders for linking
+    const tradeIds = [...new Set(fees?.map((f) => f.trade_id).filter(Boolean) || [])];
+    const { data: feeTrades } = await client
+      .from('trades')
+      .select('id, symbol, pnl')
+      .in('id', tradeIds);
+    const tradeMap = new Map(feeTrades?.map((t) => [t.id, t]) || []);
+
+    const traderIds = [...new Set(fees?.map((f) => f.trader_id).filter(Boolean) || [])];
+    const { data: feeTraders } = await client
+      .from('traders')
+      .select('id, display_name')
+      .in('id', traderIds);
+    const traderMap = new Map(feeTraders?.map((t) => [t.id, t.display_name]) || []);
 
     if (error) {
       console.error('Error fetching fees:', error);
@@ -377,20 +416,26 @@ adminRouter.get('/fees', async (req, res) => {
       .gte('created_at', startOfMonth.toISOString());
     const referralPayouts = referralEarnings?.reduce((sum, r) => sum + parseFloat(r.amount?.toString() || '0'), 0) || 0;
 
-    const feeTransactions = fees?.map((fee) => ({
-      userId: fee.user_id,
-      trade: 'N/A', // TODO: Link to trades table
-      profit: 0, // TODO: Calculate from trade
-      fee: parseFloat(fee.amount?.toString() || '0'),
-      date: new Date(fee.created_at).toLocaleString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-      }),
-      trader: 'N/A', // TODO: Link to trader via copy_setup
-    }));
+    const feeTransactions = fees?.map((fee) => {
+      const trade = fee.trade_id ? tradeMap.get(fee.trade_id) : null;
+      const traderName = fee.trader_id ? traderMap.get(fee.trader_id) : null;
+      const profit = trade ? parseFloat(trade.pnl?.toString() || '0') : 0;
+
+      return {
+        userId: fee.user_id,
+        trade: trade?.symbol || 'N/A',
+        profit,
+        fee: parseFloat(fee.amount?.toString() || '0'),
+        date: new Date(fee.created_at).toLocaleString('en-US', {
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+        }),
+        trader: traderName || 'N/A',
+      };
+    });
 
     res.json({
       summary: {
@@ -419,7 +464,7 @@ adminRouter.get('/referrals', async (req, res) => {
   try {
     const { data: earnings, error } = await client
       .from('referral_earnings')
-      .select('id, referral_id, amount, currency, tier, rate_pct, created_at')
+      .select('id, referral_id, amount, currency, tier, rate_pct, status, created_at')
       .order('created_at', { ascending: false });
 
     // Get referral details
@@ -461,7 +506,7 @@ adminRouter.get('/referrals', async (req, res) => {
         referrer: referrerEmail,
         tier: `Tier ${earning.tier}`,
         commission: parseFloat(earning.amount?.toString() || '0'),
-        status: 'Pending', // TODO: Add status field
+        status: earning.status === 'paid' ? 'Paid' : earning.status === 'failed' ? 'Failed' : 'Pending',
         date: new Date(earning.created_at).toLocaleDateString('en-US', {
           month: 'short',
           day: 'numeric',
@@ -492,25 +537,102 @@ adminRouter.get('/referrals', async (req, res) => {
  * List all discount coupons
  */
 adminRouter.get('/coupons', async (req, res) => {
-  // TODO: Create coupons table or use subscription_plans with discount field
-  // For now, return empty array
-  res.json({ coupons: [] });
+  const client = getSupabase();
+  if (!client) {
+    return res.status(503).json({ error: 'Database unavailable' });
+  }
+
+  try {
+    const { data: coupons, error } = await client
+      .from('coupons')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching coupons:', error);
+      return res.status(500).json({ error: 'Failed to fetch coupons' });
+    }
+
+    const formatted = coupons?.map((c) => ({
+      id: c.id,
+      code: c.code,
+      discount: parseFloat(c.discount_percent?.toString() || '0'),
+      maxRedemptions: c.max_redemptions,
+      currentRedemptions: c.current_redemptions || 0,
+      durationMonths: c.duration_months,
+      expiresAt: c.expires_at 
+        ? new Date(c.expires_at).toLocaleDateString('en-US', {
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric',
+          })
+        : '—',
+      status: c.status === 'expired' ? 'Expired' : c.status === 'disabled' ? 'Disabled' : 'Active',
+      createdBy: c.created_by,
+      createdAt: new Date(c.created_at).toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      }),
+      description: c.description || '',
+    }));
+
+    res.json({ coupons: formatted || [] });
+  } catch (err) {
+    console.error('Admin coupons error:', err);
+    res.status(500).json({ error: 'Failed to fetch coupons' });
+  }
 });
 
 /**
  * POST /api/admin/coupons
  * Create a new discount coupon
  */
-adminRouter.post('/coupons', async (req, res) => {
-  // TODO: Implement coupon creation
-  res.status(501).json({ error: 'Coupon creation not yet implemented' });
+adminRouter.post('/coupons', async (req: AuthenticatedRequest, res) => {
+  const client = getSupabase();
+  if (!client) {
+    return res.status(503).json({ error: 'Database unavailable' });
+  }
+
+  try {
+    const { code, discount, maxRedemptions, durationMonths, expiresAt, description } = req.body;
+
+    if (!code || !discount || !durationMonths) {
+      return res.status(400).json({ error: 'Missing required fields: code, discount, durationMonths' });
+    }
+
+    const { data, error } = await client
+      .from('coupons')
+      .insert({
+        code: code.toUpperCase(),
+        discount_percent: parseFloat(discount),
+        max_redemptions: maxRedemptions ? parseInt(maxRedemptions) : null,
+        duration_months: parseInt(durationMonths),
+        expires_at: expiresAt || null,
+        description: description || null,
+        created_by: req.user!.id,
+        status: 'active',
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error creating coupon:', error);
+      return res.status(500).json({ error: 'Failed to create coupon', details: error.message });
+    }
+
+    res.json({ coupon: data });
+  } catch (err) {
+    console.error('Admin create coupon error:', err);
+    res.status(500).json({ error: 'Failed to create coupon' });
+  }
 });
 
 /**
  * PUT /api/admin/users/:id
  * Update user (suspend/reactivate)
  */
-adminRouter.put('/users/:id', async (req, res) => {
+adminRouter.put('/users/:id', async (req: AuthenticatedRequest, res) => {
   const client = getSupabase();
   if (!client) {
     return res.status(503).json({ error: 'Database unavailable' });
@@ -518,13 +640,80 @@ adminRouter.put('/users/:id', async (req, res) => {
 
   try {
     const { id } = req.params;
-    const { action } = req.body; // 'suspend' | 'activate'
+    const { status, reason } = req.body; // status: 'active' | 'suspended' | 'banned'
 
-    // For now, we can't suspend users directly in user_profiles
-    // This would require a status field or separate suspensions table
-    res.status(501).json({ error: 'User suspension not yet implemented' });
+    if (!status || !['active', 'suspended', 'banned'].includes(status)) {
+      return res.status(400).json({ error: 'Invalid status. Must be: active, suspended, or banned' });
+    }
+
+    const { data, error } = await client
+      .from('user_profiles')
+      .update({ status, updated_at: new Date().toISOString() })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error updating user:', error);
+      return res.status(500).json({ error: 'Failed to update user' });
+    }
+
+    // Log audit
+    await client.from('audit_logs').insert({
+      admin_id: req.user!.id,
+      action_type: status === 'suspended' ? 'suspend_user' : status === 'banned' ? 'ban_user' : 'activate_user',
+      entity_type: 'user',
+      entity_id: id,
+      reason: reason || null,
+      details: { previous_status: data.status, new_status: status },
+    });
+
+    res.json({ user: data });
   } catch (err) {
     console.error('Admin update user error:', err);
     res.status(500).json({ error: 'Failed to update user' });
+  }
+});
+
+/**
+ * GET /api/admin/audit-logs
+ * Get audit logs
+ */
+adminRouter.get('/audit-logs', async (req, res) => {
+  const client = getSupabase();
+  if (!client) {
+    return res.status(503).json({ error: 'Database unavailable' });
+  }
+
+  try {
+    const limit = parseInt(req.query.limit as string) || 100;
+    const { data: logs, error } = await client
+      .from('audit_logs')
+      .select('id, admin_id, action_type, entity_type, entity_id, details, reason, created_at, user_profiles!audit_logs_admin_id_fkey(email)')
+      .order('created_at', { ascending: false })
+      .limit(limit);
+
+    if (error) {
+      console.error('Error fetching audit logs:', error);
+      return res.status(500).json({ error: 'Failed to fetch audit logs' });
+    }
+
+    const formatted = logs?.map((log) => ({
+      timestamp: new Date(log.created_at).toLocaleString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      }),
+      admin: (log.user_profiles as any)?.email || 'Unknown',
+      action: `${log.action_type.replace(/_/g, ' ')} ${log.entity_type} ${log.entity_id?.substring(0, 8) || ''}`.trim(),
+      reason: log.reason || '—',
+    }));
+
+    res.json({ logs: formatted || [] });
+  } catch (err) {
+    console.error('Admin audit logs error:', err);
+    res.status(500).json({ error: 'Failed to fetch audit logs' });
   }
 });

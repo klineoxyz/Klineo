@@ -14,88 +14,7 @@ import { toast } from "@/app/lib/toast";
 import { copyToClipboard } from "@/app/lib/clipboard";
 import { Search, Shield, ChevronLeft, ChevronRight, Download, Filter, Settings2, Percent, Calendar, Save, Copy, Link2, Trash2, RefreshCw, Ticket } from "lucide-react";
 
-// Mock data for audit logs and coupons (not yet implemented in backend)
-const auditLogs = [
-  { timestamp: "Jan 23, 2026 14:30", admin: "admin@klineo.xyz", action: "Suspended user USER-003", reason: "ToS violation - Market manipulation" },
-  { timestamp: "Jan 23, 2026 11:22", admin: "admin@klineo.xyz", action: "Approved trader Risk_Reward_Pro", reason: "Verification complete" },
-  { timestamp: "Jan 22, 2026 16:45", admin: "support@klineo.xyz", action: "Rejected trader NewTrader_ABC", reason: "Insufficient trading history" },
-  { timestamp: "Jan 22, 2026 10:15", admin: "admin@klineo.xyz", action: "Manual payout to USER-011", reason: "Referral commission $67.89" },
-  { timestamp: "Jan 21, 2026 18:33", admin: "admin@klineo.xyz", action: "Reactivated user USER-013", reason: "Appeal approved" },
-  { timestamp: "Jan 21, 2026 14:20", admin: "support@klineo.xyz", action: "Updated subscription USER-007", reason: "Failed payment retry successful" },
-  { timestamp: "Jan 20, 2026 09:54", admin: "admin@klineo.xyz", action: "Approved trader Scalper_King", reason: "Verification complete" },
-  { timestamp: "Jan 19, 2026 16:12", admin: "admin@klineo.xyz", action: "Suspended user USER-013", reason: "Suspicious trading activity" },
-  { timestamp: "Jan 18, 2026 11:45", admin: "support@klineo.xyz", action: "Refund processed USER-006", reason: "Duplicate payment $29.00" },
-  { timestamp: "Jan 17, 2026 14:22", admin: "admin@klineo.xyz", action: "Manual fee adjustment USER-010", reason: "Correction applied -$23.45" },
-];
-
-// Active coupon codes (TODO: Load from API when coupons table exists)
-const activeCoupons = [
-  { 
-    id: 1, 
-    code: "LAUNCH50", 
-    discount: 50, 
-    maxRedemptions: 100, 
-    currentRedemptions: 73, 
-    durationMonths: 3, 
-    expiresAt: "Mar 31, 2026", 
-    status: "Active",
-    createdBy: "admin@klineo.xyz", 
-    createdAt: "Jan 1, 2026",
-    description: "Launch promotion - 50% off first 3 months" 
-  },
-  { 
-    id: 2, 
-    code: "VIP25", 
-    discount: 25, 
-    maxRedemptions: 50, 
-    currentRedemptions: 12, 
-    durationMonths: 6, 
-    expiresAt: "Dec 31, 2026", 
-    status: "Active",
-    createdBy: "admin@klineo.xyz", 
-    createdAt: "Jan 10, 2026",
-    description: "VIP client referrals" 
-  },
-  { 
-    id: 3, 
-    code: "EARLY2026", 
-    discount: 30, 
-    maxRedemptions: 200, 
-    currentRedemptions: 200, 
-    durationMonths: 1, 
-    expiresAt: "Jan 31, 2026", 
-    status: "Expired",
-    createdBy: "admin@klineo.xyz", 
-    createdAt: "Dec 20, 2025",
-    description: "Early bird discount - January only" 
-  },
-  { 
-    id: 4, 
-    code: "WHALE10", 
-    discount: 10, 
-    maxRedemptions: 20, 
-    currentRedemptions: 8, 
-    durationMonths: 12, 
-    expiresAt: "Jun 30, 2026", 
-    status: "Active",
-    createdBy: "admin@klineo.xyz", 
-    createdAt: "Jan 15, 2026",
-    description: "High-volume trader permanent discount" 
-  },
-  { 
-    id: 5, 
-    code: "PARTNER15", 
-    discount: 15, 
-    maxRedemptions: 500, 
-    currentRedemptions: 234, 
-    durationMonths: 6, 
-    expiresAt: "—", 
-    status: "Active",
-    createdBy: "admin@klineo.xyz", 
-    createdAt: "Dec 1, 2025",
-    description: "Partner affiliate program" 
-  },
-];
+// Mock data removed - now loaded from API
 
 export function Admin() {
   // Data state
@@ -107,6 +26,8 @@ export function Admin() {
     referralPayouts: 0,
   });
   const [users, setUsers] = useState<any[]>([]);
+  const [usersPagination, setUsersPagination] = useState({ page: 1, limit: 50, total: 0, totalPages: 0 });
+  const [usersSearch, setUsersSearch] = useState("");
   const [traders, setTraders] = useState<any[]>([]);
   const [subscriptionPayments, setSubscriptionPayments] = useState<any[]>([]);
   const [subscriptionStats, setSubscriptionStats] = useState({ starter: 0, pro: 0, unlimited: 0 });
@@ -114,11 +35,15 @@ export function Admin() {
   const [feeSummary, setFeeSummary] = useState({ totalFees: 0, referralPayouts: 0, netRevenue: 0 });
   const [referralPayouts, setReferralPayouts] = useState<any[]>([]);
   const [referralStats, setReferralStats] = useState({ totalCommissions: 0, pendingPayouts: 0, activeReferrers: 0 });
+  const [coupons, setCoupons] = useState<any[]>([]);
+  const [auditLogs, setAuditLogs] = useState<any[]>([]);
 
   // Loading states
   const [loading, setLoading] = useState(true);
   const [usersLoading, setUsersLoading] = useState(false);
   const [tradersLoading, setTradersLoading] = useState(false);
+  const [couponsLoading, setCouponsLoading] = useState(false);
+  const [auditLogsLoading, setAuditLogsLoading] = useState(false);
 
   // Platform settings state
   const [starterFee, setStarterFee] = useState("20");
@@ -151,11 +76,21 @@ export function Admin() {
     }
   };
 
-  const loadUsers = async () => {
+  const loadUsers = async (page = 1, search = "") => {
     setUsersLoading(true);
     try {
-      const data = await api.get('/api/admin/users');
+      const params = new URLSearchParams();
+      params.set('page', page.toString());
+      params.set('limit', '50');
+      if (search) params.set('search', search);
+      const data = await api.get(`/api/admin/users?${params.toString()}`);
       setUsers((data as any).users || []);
+      setUsersPagination({
+        page: (data as any).page || 1,
+        limit: (data as any).limit || 50,
+        total: (data as any).total || 0,
+        totalPages: (data as any).totalPages || 0,
+      });
     } catch (err: any) {
       console.error('Failed to load users:', err);
       toast.error('Failed to load users');
@@ -210,6 +145,52 @@ export function Admin() {
     }
   };
 
+  const loadCoupons = async () => {
+    setCouponsLoading(true);
+    try {
+      const data = await api.get('/api/admin/coupons');
+      setCoupons((data as any).coupons || []);
+    } catch (err: any) {
+      console.error('Failed to load coupons:', err);
+      toast.error('Failed to load coupons');
+    } finally {
+      setCouponsLoading(false);
+    }
+  };
+
+  const loadAuditLogs = async () => {
+    setAuditLogsLoading(true);
+    try {
+      const data = await api.get('/api/admin/audit-logs');
+      setAuditLogs((data as any).logs || []);
+    } catch (err: any) {
+      console.error('Failed to load audit logs:', err);
+      toast.error('Failed to load audit logs');
+    } finally {
+      setAuditLogsLoading(false);
+    }
+  };
+
+  const handleSuspendUser = async (userId: string, reason: string) => {
+    try {
+      await api.put(`/api/admin/users/${userId}`, { status: 'suspended', reason });
+      toast.success('User suspended');
+      loadUsers(usersPagination.page, usersSearch);
+    } catch (err: any) {
+      toast.error('Failed to suspend user', { description: err.message });
+    }
+  };
+
+  const handleActivateUser = async (userId: string) => {
+    try {
+      await api.put(`/api/admin/users/${userId}`, { status: 'active' });
+      toast.success('User activated');
+      loadUsers(usersPagination.page, usersSearch);
+    } catch (err: any) {
+      toast.error('Failed to activate user', { description: err.message });
+    }
+  };
+
   const handleSaveFeeSettings = () => {
     setShowFeeConfirm(false);
     toast.success("Platform fees updated", {
@@ -228,9 +209,9 @@ export function Admin() {
   };
 
   const handleCreateCoupon = async () => {
-    if (!couponCode || !discountPercent || !maxRedemptions || !durationMonths) {
+    if (!couponCode || !discountPercent || !durationMonths) {
       toast.error("Missing required fields", {
-        description: "Please fill in code, discount, max uses, and duration",
+        description: "Please fill in code, discount, and duration",
       });
       return;
     }
@@ -239,7 +220,7 @@ export function Admin() {
       await api.post('/api/admin/coupons', {
         code: couponCode,
         discount: parseFloat(discountPercent),
-        maxRedemptions: parseInt(maxRedemptions),
+        maxRedemptions: maxRedemptions ? parseInt(maxRedemptions) : null,
         durationMonths: parseInt(durationMonths),
         expiresAt: couponExpiry || null,
         description: couponDescription || '',
@@ -254,6 +235,7 @@ export function Admin() {
       setDurationMonths("");
       setCouponExpiry("");
       setCouponDescription("");
+      loadCoupons();
     } catch (err: any) {
       toast.error("Failed to create coupon", {
         description: err.message || "Please try again",
@@ -340,11 +322,25 @@ export function Admin() {
           <TabsTrigger value="audit">Audit Logs</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="users" className="space-y-4" onFocus={loadUsers}>
+        <TabsContent value="users" className="space-y-4" onFocus={() => loadUsers(1, usersSearch)}>
           <Card className="p-4">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-              <Input placeholder="Search users by email, ID..." className="pl-9" />
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+                <Input 
+                  placeholder="Search users by email, ID..." 
+                  className="pl-9" 
+                  value={usersSearch}
+                  onChange={(e) => {
+                    setUsersSearch(e.target.value);
+                    loadUsers(1, e.target.value);
+                  }}
+                />
+              </div>
+              <Button variant="outline" onClick={() => loadUsers(usersPagination.page, usersSearch)}>
+                <RefreshCw className="size-4 mr-2" />
+                Refresh
+              </Button>
             </div>
           </Card>
 
@@ -388,7 +384,25 @@ export function Admin() {
                     <TableCell className="text-right">
                       <div className="flex gap-2 justify-end">
                         <Button variant="outline" size="sm">View</Button>
-                        <Button variant="outline" size="sm" className="text-[#EF4444]">Suspend</Button>
+                        {user.userStatus === 'active' ? (
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="text-[#EF4444]"
+                            onClick={() => handleSuspendUser(user.id, 'Admin action')}
+                          >
+                            Suspend
+                          </Button>
+                        ) : (
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="text-[#10B981]"
+                            onClick={() => handleActivateUser(user.id)}
+                          >
+                            Activate
+                          </Button>
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>
@@ -396,6 +410,47 @@ export function Admin() {
                   )}
                 </TableBody>
               </Table>
+            )}
+            {usersPagination.totalPages > 1 && (
+              <div className="flex items-center justify-between p-4 border-t">
+                <div className="text-sm text-muted-foreground">
+                  Showing {((usersPagination.page - 1) * usersPagination.limit) + 1} to {Math.min(usersPagination.page * usersPagination.limit, usersPagination.total)} of {usersPagination.total} users
+                </div>
+                <div className="flex gap-2">
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={() => loadUsers(usersPagination.page - 1, usersSearch)}
+                    disabled={usersPagination.page === 1}
+                  >
+                    <ChevronLeft className="size-4" />
+                  </Button>
+                  <div className="flex items-center gap-1">
+                    {Array.from({ length: Math.min(5, usersPagination.totalPages) }, (_, i) => {
+                      const page = usersPagination.page <= 3 ? i + 1 : usersPagination.page - 2 + i;
+                      if (page > usersPagination.totalPages) return null;
+                      return (
+                        <Button
+                          key={page}
+                          variant={page === usersPagination.page ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => loadUsers(page, usersSearch)}
+                        >
+                          {page}
+                        </Button>
+                      );
+                    })}
+                  </div>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={() => loadUsers(usersPagination.page + 1, usersSearch)}
+                    disabled={usersPagination.page >= usersPagination.totalPages}
+                  >
+                    <ChevronRight className="size-4" />
+                  </Button>
+                </div>
+              </div>
             )}
           </Card>
         </TabsContent>
@@ -406,9 +461,15 @@ export function Admin() {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
               <Input placeholder="Search traders..." className="pl-9" />
             </div>
-            <Badge variant="outline" className="border-primary/50 text-primary">
-              {traders.filter((t) => t.status === "Pending").length} Pending Approval
-            </Badge>
+            <div className="flex items-center gap-3">
+              <Badge variant="outline" className="border-primary/50 text-primary">
+                {traders.filter((t) => t.status === "Pending").length} Pending Approval
+              </Badge>
+              <Button variant="outline" onClick={loadTraders}>
+                <RefreshCw className="size-4 mr-2" />
+                Refresh
+              </Button>
+            </div>
           </Card>
 
           <Card>
@@ -502,10 +563,16 @@ export function Admin() {
 
           <Card className="p-4 flex items-center justify-between">
             <h3 className="text-lg font-semibold">Payment History</h3>
-            <Button variant="outline" size="sm">
-              <Download className="size-4 mr-2" />
-              Export CSV
-            </Button>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={loadSubscriptions}>
+                <RefreshCw className="size-4 mr-2" />
+                Refresh
+              </Button>
+              <Button variant="outline" size="sm">
+                <Download className="size-4 mr-2" />
+                Export CSV
+              </Button>
+            </div>
           </Card>
 
           <Card>
@@ -575,10 +642,16 @@ export function Admin() {
 
           <Card className="p-4 flex items-center justify-between">
             <h3 className="text-lg font-semibold">Fee Transaction History</h3>
-            <Button variant="outline" size="sm">
-              <Download className="size-4 mr-2" />
-              Export Report
-            </Button>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={loadFees}>
+                <RefreshCw className="size-4 mr-2" />
+                Refresh
+              </Button>
+              <Button variant="outline" size="sm">
+                <Download className="size-4 mr-2" />
+                Export Report
+              </Button>
+            </div>
           </Card>
 
           <Card>
@@ -642,10 +715,16 @@ export function Admin() {
 
           <Card className="p-4 flex items-center justify-between">
             <h3 className="text-lg font-semibold">Commission History</h3>
-            <Button variant="outline" size="sm">
-              <Download className="size-4 mr-2" />
-              Export CSV
-            </Button>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={loadReferrals}>
+                <RefreshCw className="size-4 mr-2" />
+                Refresh
+              </Button>
+              <Button variant="outline" size="sm">
+                <Download className="size-4 mr-2" />
+                Export CSV
+              </Button>
+            </div>
           </Card>
 
           <Card>
@@ -827,7 +906,7 @@ export function Admin() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="discounts" className="space-y-6">
+        <TabsContent value="discounts" className="space-y-6" onFocus={loadCoupons}>
           {/* Create New Coupon */}
           <Card className="p-6">
             <div className="flex items-center gap-3 mb-6">
@@ -967,28 +1046,44 @@ export function Admin() {
             <div className="p-6 border-b border-border flex items-center justify-between">
               <div>
                 <h3 className="text-lg font-semibold">Active Coupons</h3>
-                <p className="text-sm text-muted-foreground mt-1">{activeCoupons.filter(c => c.status === "Active").length} active coupon codes</p>
+                <p className="text-sm text-muted-foreground mt-1">{coupons.filter(c => c.status === "Active").length} active coupon codes</p>
               </div>
-              <Button variant="outline" size="sm">
-                <Download className="size-4 mr-2" />
-                Export CSV
-              </Button>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={loadCoupons}>
+                  <RefreshCw className="size-4 mr-2" />
+                  Refresh
+                </Button>
+                <Button variant="outline" size="sm">
+                  <Download className="size-4 mr-2" />
+                  Export CSV
+                </Button>
+              </div>
             </div>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Code</TableHead>
-                  <TableHead>Discount</TableHead>
-                  <TableHead>Usage</TableHead>
-                  <TableHead>Duration</TableHead>
-                  <TableHead>Expires</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Description</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {activeCoupons.map((coupon) => (
+            {couponsLoading ? (
+              <div className="p-8 text-center text-muted-foreground">Loading coupons...</div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Code</TableHead>
+                    <TableHead>Discount</TableHead>
+                    <TableHead>Usage</TableHead>
+                    <TableHead>Duration</TableHead>
+                    <TableHead>Expires</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Description</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {coupons.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
+                        No coupons found.
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    coupons.map((coupon) => (
                   <TableRow key={coupon.id}>
                     <TableCell className="font-mono font-semibold text-primary">
                       {coupon.code}
@@ -1056,9 +1151,11 @@ export function Admin() {
                       </div>
                     </TableCell>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            )}
           </Card>
 
           {/* Coupon URL Preview */}
@@ -1071,7 +1168,7 @@ export function Admin() {
               </div>
             </div>
             <div className="space-y-2">
-              {activeCoupons.filter(c => c.status === "Active").slice(0, 3).map((coupon) => (
+              {coupons.filter(c => c.status === "Active").slice(0, 3).map((coupon) => (
                 <div 
                   key={coupon.id} 
                   className="flex items-center gap-3 p-3 bg-secondary/30 rounded border border-border"
@@ -1117,9 +1214,11 @@ export function Admin() {
                     <TableCell className="font-medium">{log.action}</TableCell>
                     <TableCell className="text-muted-foreground text-sm">{log.reason}</TableCell>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            )}
           </Card>
         </TabsContent>
       </Tabs>
