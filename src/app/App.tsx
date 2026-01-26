@@ -42,6 +42,7 @@ import { LoginPage } from "@/app/components/auth/LoginPage";
 import { SignUpPage } from "@/app/components/auth/SignUpPage";
 import { useAuth } from "@/app/contexts/AuthContext";
 import { TerminalLoader } from "@/app/components/ui/spinner";
+import { toast } from "sonner";
 
 export default function App() {
   const { isAuthenticated, isAdmin, loading, logout } = useAuth();
@@ -163,7 +164,17 @@ export default function App() {
         return <UIStatesDemo onNavigate={handleNavigate} />;
       case "smoke-test":
         const enableSmokeTest = import.meta.env.VITE_ENABLE_SMOKE_TEST_PAGE === 'true';
-        if (import.meta.env.PROD && !enableSmokeTest) return <Dashboard />;
+        const isDev = import.meta.env.DEV;
+        // Access control: dev OR (prod + env flag + admin)
+        if (import.meta.env.PROD && (!enableSmokeTest || !isAdmin)) {
+          // Redirect to dashboard and show toast
+          setTimeout(() => {
+            toast.error("Smoke test disabled in production", {
+              description: "This page is only available in development or when explicitly enabled for admins."
+            });
+          }, 100);
+          return <Dashboard />;
+        }
         return <SmokeTest />;
       case "onboarding-wizard":
         return (

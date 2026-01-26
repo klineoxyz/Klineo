@@ -254,23 +254,59 @@ VITE_SUPABASE_ANON_KEY=<anon_key>
 
 ---
 
-## RLS Self-Test Endpoint
+## Smoke Test & RLS Self-Test Endpoint
 
-### How to Run RLS Self-Test
+### Production Safety
 
-The backend provides an admin-only endpoint to verify RLS policies and backend isolation:
+Both the frontend Smoke Test page and backend RLS self-test endpoint are **disabled by default in production** for security.
+
+### Frontend Smoke Test Page
+
+**Location**: `/#smoke-test`
+
+**Access Control**:
+- ✅ **Development**: Always accessible
+- ✅ **Production**: Only accessible if:
+  - `VITE_ENABLE_SMOKE_TEST_PAGE=true` is set in Vercel env vars, AND
+  - User is logged in as admin
+
+**How to Enable in Production**:
+1. Set `VITE_ENABLE_SMOKE_TEST_PAGE=true` in Vercel environment variables
+2. Log in as admin user
+3. Navigate to `/#smoke-test` (or use sidebar link if visible)
+
+**Features**:
+- Tests all backend endpoints (public, authenticated, admin)
+- Sanitized responses (no tokens, secrets, or PII)
+- Summary banner with pass/fail/skipped counts
+- Copy Report feature (fully sanitized JSON)
+- Stops early on 401 and marks remaining tests as SKIPPED
+
+**Recommended**: Keep disabled in production unless actively debugging.
+
+### Backend RLS Self-Test Endpoint
 
 **Endpoint**: `GET /api/self-test/rls`
+
+**Access Control**:
+- ✅ **Development/Staging**: Works by default (admin-only)
+- ✅ **Production**: Returns 404 unless `ENABLE_SELF_TEST_ENDPOINT=true` is set on Railway
+
+**How to Enable in Production**:
+1. Set `ENABLE_SELF_TEST_ENDPOINT=true` in Railway environment variables
+2. Ensure `SUPABASE_ANON_KEY` is set (required for RLS checks)
+3. Call endpoint with admin Bearer token
 
 **Requirements**:
 - Admin Bearer token (login as admin first)
 - Backend env var `SUPABASE_ANON_KEY` must be set (separate from frontend)
+- Backend env var `ENABLE_SELF_TEST_ENDPOINT=true` (production only)
 
 **Usage**:
 ```bash
 # Get admin token (login via frontend or Supabase)
 curl -H "Authorization: Bearer <admin-token>" \
-  https://klineo-production-1dfe.up.railway.app/api/self-test/rls
+  https://<railway-backend-url>/api/self-test/rls
 ```
 
 **Response Format**:
@@ -289,6 +325,12 @@ curl -H "Authorization: Bearer <admin-token>" \
 }
 ```
 
+**Security Notes**:
+- Response contains **zero PII** (no emails, user IDs, or row contents)
+- Only boolean pass/fail and small numeric counts
+- Never logs tokens or headers
+- Returns 503 if `SUPABASE_ANON_KEY` is missing (safe error message)
+
 **Interpretation**:
 - All checks should be `"pass": true` for a healthy system
 - `rls_user_profiles_other_row_behavior` mode indicates RLS policy type:
@@ -296,7 +338,7 @@ curl -H "Authorization: Bearer <admin-token>" \
   - `"admin_can_read_all"`: Admins can read all profiles (expected if admin policy exists)
 - `service_role_visibility_expected` confirms service role can see all rows (expected, endpoint is admin-only)
 
-**Frontend Access**: Use the Smoke Test page (`/#smoke-test`) - includes RLS test button.
+**Recommended**: Keep disabled in production unless actively debugging. See `SECURITY_NOTE.md` for details.
 
 ## 📝 Notes
 

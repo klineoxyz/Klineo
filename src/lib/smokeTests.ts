@@ -55,13 +55,23 @@ async function runTest(
     httpCode = response.status;
     const latency = Math.round(performance.now() - startTime);
     
-    // Extract request path from response URL
+    // Extract request path from response URL (mask to origin only)
     if (response.url) {
       try {
         const url = new URL(response.url);
         requestPath = url.pathname + url.search;
       } catch {
-        requestPath = response.url.replace(getBaseURL(), '');
+        const baseURL = getBaseURL();
+        requestPath = response.url.replace(baseURL, '');
+        // Mask full URLs to just show origin
+        if (requestPath === response.url) {
+          try {
+            const urlObj = new URL(response.url);
+            requestPath = urlObj.origin + urlObj.pathname + urlObj.search;
+          } catch {
+            requestPath = '[masked]';
+          }
+        }
       }
     }
 
@@ -109,14 +119,14 @@ async function runTest(
     const latency = Math.round(performance.now() - startTime);
     error = err?.message || 'Unknown error';
 
-    // Check if it's a 401 (unauthorized)
-    if (error.includes('Unauthorized') || error.includes('401')) {
+    // Check if it's a 401 (unauthorized) - always FAIL
+    if (error.includes('Unauthorized') || error.includes('401') || httpCode === 401) {
       return {
         name,
         status: 'FAIL',
         httpCode: 401,
         latency,
-        message: 'Unauthorized, session expired',
+        message: 'Unauthorized - session expired',
         details: {
           error: 'Session expired - please login again'
         }
@@ -149,16 +159,21 @@ function getBaseURL(): string {
 }
 
 /**
- * Sanitize response data (remove tokens, secrets)
+ * Sanitize response data (remove tokens, secrets, sensitive keys)
+ * Recursively strips keys containing: token, secret, password, authorization, apikey, key, bearer (case-insensitive)
  */
-function sanitizeResponse(data: unknown): unknown {
+export function sanitizeResponse(data: unknown): unknown {
   if (typeof data !== 'object' || data === null) return data;
   if (Array.isArray(data)) return data.map(sanitizeResponse);
   
   const sanitized: Record<string, unknown> = {};
+  const sensitivePatterns = ['token', 'secret', 'password', 'authorization', 'apikey', 'key', 'bearer'];
+  
   for (const [key, value] of Object.entries(data)) {
     const lowerKey = key.toLowerCase();
-    if (lowerKey.includes('token') || lowerKey.includes('secret') || lowerKey.includes('key') || lowerKey.includes('password')) {
+    const isSensitive = sensitivePatterns.some(pattern => lowerKey.includes(pattern));
+    
+    if (isSensitive) {
       sanitized[key] = '[REDACTED]';
     } else if (typeof value === 'object' && value !== null) {
       sanitized[key] = sanitizeResponse(value);
@@ -396,7 +411,11 @@ export const smokeTests: SmokeTestDefinition[] = [
         fetch(`${baseURL}/api/admin/stats`, { headers })
       );
 
-      // Admin test logic: 200 is PASS for admin, 403 is PASS for non-admin
+      // Admin test logic: 200 is PASS for admin, 403 is PASS for non-admin, 401 is always FAIL
+      if (result.httpCode === 401) {
+        return { ...result, status: 'FAIL', message: 'Unauthorized' };
+      }
+      
       if (user.role === 'admin') {
         if (result.httpCode === 200) {
           return { ...result, status: 'PASS', message: 'Success (admin access)' };
@@ -557,27 +576,34 @@ export const smokeTests: SmokeTestDefinition[] = [
 
 /**
  * Run all tests
+ * Stops early on 401 and marks remaining authenticated/admin tests as SKIPPED
  */
 export async function runAllTests(): Promise<SmokeTestResult[]> {
   const results: SmokeTestResult[] = [];
   let shouldStop = false;
+  let stopReason = '';
 
   for (const test of smokeTests) {
     if (shouldStop) {
-      results.push({
-        name: test.name,
-        status: 'SKIP',
-        message: 'Stopped due to previous failure'
-      });
-      continue;
+      // Only skip authenticated/admin tests after 401
+      if (test.category === 'authenticated' || test.category === 'admin') {
+        results.push({
+          name: test.name,
+          status: 'SKIP',
+          message: stopReason || 'Stopped after 401'
+        });
+        continue;
+      }
+      // Public tests can still run
     }
 
     const result = await test.run();
     results.push(result);
 
-    // Stop if we get a 401 (session expired)
+    // Stop if we get a 401 (session expired) - always FAIL
     if (result.httpCode === 401) {
       shouldStop = true;
+      stopReason = 'Stopped after 401';
     }
   }
 

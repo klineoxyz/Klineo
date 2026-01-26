@@ -7,24 +7,58 @@ import { Alert, AlertDescription } from "@/app/components/ui/alert";
 import { Loader2, Copy, Trash2, CheckCircle2, XCircle, MinusCircle, ChevronDown, ChevronUp } from "lucide-react";
 import { useAuth } from "@/app/contexts/AuthContext";
 import { api } from "@/lib/api";
-import { runAllTests, runTestByName, smokeTests, type SmokeTestResult } from "@/lib/smokeTests";
-import { toast } from "@/app/lib/toast";
+import { runAllTests, runTestByName, smokeTests, type SmokeTestResult, sanitizeResponse } from "@/lib/smokeTests";
+import { toast } from "sonner";
 
 export function SmokeTest() {
   const { user, isAdmin } = useAuth();
+  const navigate = useNavigate();
+  
+  // Access control: dev OR (prod + env flag + admin)
+  const isDev = import.meta.env.DEV;
+  const enableSmokeTest = import.meta.env.VITE_ENABLE_SMOKE_TEST_PAGE === 'true';
+  const isProduction = import.meta.env.PROD;
+  
+  useEffect(() => {
+    if (isProduction && (!enableSmokeTest || !isAdmin)) {
+      // Redirect to dashboard and show toast
+      setTimeout(() => {
+        toast.error("Smoke test disabled in production", {
+          description: "This page is only available in development or when explicitly enabled for admins."
+        });
+      }, 100);
+      // App.tsx will handle redirect
+    }
+  }, [isProduction, enableSmokeTest, isAdmin]);
+  
+  // If production and not allowed, don't render
+  if (isProduction && (!enableSmokeTest || !isAdmin)) {
+    return null; // App.tsx will handle redirect
+  }
   const [results, setResults] = useState<SmokeTestResult[]>([]);
   const [isRunning, setIsRunning] = useState(false);
   const [expandedTest, setExpandedTest] = useState<string | null>(null);
   const [userInfo, setUserInfo] = useState<{ email: string; role: string } | null>(null);
 
-  // Get environment info
+  // Get environment info (never display raw values)
   const apiBaseURL = import.meta.env.VITE_API_BASE_URL || '';
   const supabaseURL = import.meta.env.VITE_SUPABASE_URL || '';
-  const enableSmokeTest = import.meta.env.VITE_ENABLE_SMOKE_TEST_PAGE === 'true';
 
-  // Mask URLs for display
-  const maskedApiDomain = apiBaseURL ? new URL(apiBaseURL).hostname : 'Not configured';
-  const maskedSupabaseDomain = supabaseURL ? new URL(supabaseURL).hostname : 'Not configured';
+  // Mask URLs for display (only show hostname, never full URL)
+  const maskedApiDomain = apiBaseURL ? (() => {
+    try {
+      return new URL(apiBaseURL).hostname;
+    } catch {
+      return '[masked]';
+    }
+  })() : 'Not configured';
+  const maskedSupabaseDomain = supabaseURL ? (() => {
+    try {
+      return new URL(supabaseURL).hostname;
+    } catch {
+      return '[masked]';
+    }
+  })() : 'Not configured';
 
   useEffect(() => {
     // Load current user info
@@ -73,21 +107,39 @@ export function SmokeTest() {
   };
 
   const handleCopyReport = () => {
+    // Create fully sanitized report
     const report = {
       timestamp: new Date().toISOString(),
       environment: {
         api_domain: maskedApiDomain,
         supabase_domain: maskedSupabaseDomain,
-        user_email: userInfo?.email || 'Not logged in',
-        user_role: userInfo?.role || 'none'
+        user_role: userInfo?.role || 'none',
+        // Never include email in report
       },
-      results: results.map(r => ({
-        name: r.name,
-        status: r.status,
-        httpCode: r.httpCode,
-        latency: r.latency,
-        message: r.message
-      }))
+      summary: {
+        total: results.length,
+        passed: results.filter(r => r.status === 'PASS').length,
+        failed: results.filter(r => r.status === 'FAIL').length,
+        skipped: results.filter(r => r.status === 'SKIP').length,
+      },
+      results: results.map(r => {
+        const sanitized: any = {
+          name: r.name,
+          status: r.status,
+          httpCode: r.httpCode,
+          latency: r.latency,
+          message: r.message
+        };
+        // Sanitize details if present
+        if (r.details) {
+          sanitized.details = {
+            requestPath: r.details.requestPath,
+            response: sanitizeResponse(r.details.response),
+            error: r.details.error
+          };
+        }
+        return sanitized;
+      })
     };
 
     navigator.clipboard.writeText(JSON.stringify(report, null, 2));
@@ -111,13 +163,38 @@ export function SmokeTest() {
   };
 
   const getOverallStatus = () => {
-    if (results.length === 0) return { status: 'NOT RUN', badge: <Badge variant="outline">NOT RUN</Badge> };
+    if (results.length === 0) {
+      return {
+        status: 'NOT RUN',
+        badge: <Badge variant="outline">NOT RUN</Badge>,
+        passed: 0,
+        failed: 0,
+        skipped: 0,
+        total: 0
+      };
+    }
     const passed = results.filter(r => r.status === 'PASS').length;
     const failed = results.filter(r => r.status === 'FAIL').length;
+    const skipped = results.filter(r => r.status === 'SKIP').length;
+    
     if (failed === 0) {
-      return { status: 'ALL PASS', badge: <Badge className="bg-[#10B981] text-white">ALL PASS</Badge> };
+      return {
+        status: 'ALL PASS',
+        badge: <Badge className="bg-[#10B981] text-white">ALL PASS</Badge>,
+        passed,
+        failed,
+        skipped,
+        total: results.length
+      };
     }
-    return { status: 'SOME FAIL', badge: <Badge className="bg-[#EF4444] text-white">SOME FAIL</Badge> };
+    return {
+      status: 'SOME FAIL',
+      badge: <Badge className="bg-[#EF4444] text-white">SOME FAIL</Badge>,
+      passed,
+      failed,
+      skipped,
+      total: results.length
+    };
   };
 
   const overallStatus = getOverallStatus();
@@ -152,29 +229,39 @@ export function SmokeTest() {
         </div>
       </Card>
 
-      {/* Overall Status */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <span className="text-sm font-medium">Overall Status:</span>
-          {overallStatus.badge}
-          <span className="text-sm text-muted-foreground">
-            ({results.filter(r => r.status === 'PASS').length}/{results.length} passed)
-          </span>
+      {/* Overall Status Banner */}
+      <Card className={`p-4 ${
+        overallStatus.status === 'ALL PASS' ? 'bg-[#10B981]/10 border-[#10B981]/20' :
+        overallStatus.status === 'SOME FAIL' ? 'bg-[#EF4444]/10 border-[#EF4444]/20' :
+        'bg-muted/50'
+      }`}>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <span className="text-sm font-medium">Overall Status:</span>
+            {overallStatus.badge}
+            {overallStatus.total > 0 && (
+              <span className="text-sm text-muted-foreground">
+                {overallStatus.passed} passed, {overallStatus.failed} failed, {overallStatus.skipped} skipped (total: {overallStatus.total})
+              </span>
+            )}
+          </div>
         </div>
-        <div className="flex gap-2">
-          <Button onClick={handleRunAll} disabled={isRunning} className="gap-2">
-            {isRunning ? <Loader2 className="size-4 animate-spin" /> : <CheckCircle2 className="size-4" />}
-            Run All Tests
-          </Button>
-          <Button onClick={handleCopyReport} variant="outline" disabled={results.length === 0} className="gap-2">
-            <Copy className="size-4" />
-            Copy Report
-          </Button>
-          <Button onClick={handleClear} variant="outline" disabled={results.length === 0} className="gap-2">
-            <Trash2 className="size-4" />
-            Clear Results
-          </Button>
-        </div>
+      </Card>
+
+      {/* Action Buttons */}
+      <div className="flex items-center justify-end gap-2">
+        <Button onClick={handleRunAll} disabled={isRunning} className="gap-2">
+          {isRunning ? <Loader2 className="size-4 animate-spin" /> : <CheckCircle2 className="size-4" />}
+          Run All Tests
+        </Button>
+        <Button onClick={handleCopyReport} variant="outline" disabled={results.length === 0} className="gap-2">
+          <Copy className="size-4" />
+          Copy Report
+        </Button>
+        <Button onClick={handleClear} variant="outline" disabled={results.length === 0} className="gap-2">
+          <Trash2 className="size-4" />
+          Clear Results
+        </Button>
       </div>
 
       {/* Test Buttons */}
@@ -233,10 +320,10 @@ export function SmokeTest() {
                     <TableCell className="font-medium">{result.name}</TableCell>
                     <TableCell>{getStatusBadge(result.status)}</TableCell>
                     <TableCell className="font-mono text-sm">
-                      {result.httpCode || '—'}
+                      {result.httpCode || '-'}
                     </TableCell>
                     <TableCell className="font-mono text-sm">
-                      {result.latency ? `${result.latency}ms` : '—'}
+                      {result.latency ? `${result.latency}ms` : '-'}
                     </TableCell>
                     <TableCell className="text-sm">{result.message}</TableCell>
                     <TableCell className="text-right">
@@ -269,7 +356,7 @@ export function SmokeTest() {
                             <div>
                               <span className="text-sm font-medium">Response:</span>
                               <pre className="mt-1 p-2 bg-background rounded text-xs overflow-auto max-h-48">
-                                {JSON.stringify(result.details.response, null, 2)}
+                                {JSON.stringify(sanitizeResponse(result.details.response), null, 2)}
                               </pre>
                             </div>
                           )}

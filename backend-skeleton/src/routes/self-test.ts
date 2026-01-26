@@ -29,6 +29,14 @@ function getSupabaseAnon(): SupabaseClient | null {
 
 export const selfTestRouter: Router = Router();
 
+// Production kill switch: return 404 in production unless explicitly enabled
+selfTestRouter.use((req, res, next) => {
+  if (process.env.NODE_ENV === 'production' && process.env.ENABLE_SELF_TEST_ENDPOINT !== 'true') {
+    return res.status(404).json({ error: 'Not found' });
+  }
+  next();
+});
+
 // All self-test routes require authentication + admin role
 selfTestRouter.use(verifySupabaseJWT);
 selfTestRouter.use(requireAdmin);
@@ -65,9 +73,9 @@ selfTestRouter.get('/rls', async (req: AuthenticatedRequest, res) => {
       name: 'auth_sanity',
       pass: true,
       details: {
-        user_id_prefix: req.user.id.substring(0, 8) + '...',
-        email_prefix: req.user.email.substring(0, 3) + '***',
-        role: req.user.role
+        // Never expose PII - only role and minimal metadata
+        role: req.user.role,
+        authenticated: true
       }
     });
 
@@ -77,16 +85,24 @@ selfTestRouter.get('/rls', async (req: AuthenticatedRequest, res) => {
       checks.push({
         name: 'rls_user_profiles_self_row',
         pass: false,
-        details: { error: 'Supabase anon client not configured (SUPABASE_ANON_KEY missing)' }
+        details: { error: 'Supabase anon client not configured' }
       });
       checks.push({
         name: 'rls_user_profiles_other_row_behavior',
         pass: false,
         details: { error: 'Supabase anon client not configured' }
       });
+      return res.status(503).json({
+        status: 'fail',
+        timestamp: new Date().toISOString(),
+        request_id: requestId,
+        checks,
+        error: 'Service unavailable - configuration missing'
+      });
     } else {
-      // Get Bearer token from request
-      const token = req.headers.authorization?.replace('Bearer ', '');
+      // Get Bearer token from request (never log it)
+      const authHeader = req.headers.authorization;
+      const token = authHeader?.replace(/^Bearer\s+/i, '');
       if (!token) {
         checks.push({
           name: 'rls_user_profiles_self_row',
@@ -108,13 +124,14 @@ selfTestRouter.get('/rls', async (req: AuthenticatedRequest, res) => {
         );
 
         // Test 2a: Query own row (should return exactly 1)
-        const { data: selfData, error: selfError } = await authenticatedAnonClient
+        // Only select role, never expose id or email
+        const { data: selfData, error: selfError, count: selfCount } = await authenticatedAnonClient
           .from('user_profiles')
-          .select('id, email, role')
+          .select('role', { count: 'exact' })
           .eq('id', req.user.id)
-          .single();
+          .limit(1);
 
-        if (selfError || !selfData) {
+        if (selfError || selfCount === 0) {
           checks.push({
             name: 'rls_user_profiles_self_row',
             pass: false,
@@ -126,19 +143,20 @@ selfTestRouter.get('/rls', async (req: AuthenticatedRequest, res) => {
             pass: true,
             details: {
               found: true,
-              role: selfData.role
+              row_count: selfCount || 1
             }
           });
         }
 
         // Test 2b: Query other user's row (behavior depends on RLS policy)
-        const { data: otherData, error: otherError } = await authenticatedAnonClient
+        // Only count, never expose actual row data
+        const { count: otherCount, error: otherError } = await authenticatedAnonClient
           .from('user_profiles')
-          .select('id, email, role')
+          .select('*', { count: 'exact', head: true })
           .neq('id', req.user.id)
           .limit(1);
 
-        const otherRowCount = otherData?.length || 0;
+        const otherRowCount = otherCount || 0;
         const isAdmin = req.user.role === 'admin';
 
         if (otherError) {
@@ -194,9 +212,10 @@ selfTestRouter.get('/rls', async (req: AuthenticatedRequest, res) => {
       });
     } else {
       // Service role bypasses RLS, so it can see all rows
-      const { data: serviceData, error: serviceError } = await serviceClient
+      // Only count, never expose actual row data
+      const { count: serviceCount, error: serviceError } = await serviceClient
         .from('user_profiles')
-        .select('id, email, role')
+        .select('*', { count: 'exact', head: true })
         .neq('id', req.user.id)
         .limit(1);
 
@@ -207,12 +226,13 @@ selfTestRouter.get('/rls', async (req: AuthenticatedRequest, res) => {
           details: { error: serviceError.message }
         });
       } else {
-        const serviceRowCount = serviceData?.length || 0;
+        const serviceRowCount = serviceCount || 0;
         checks.push({
           name: 'service_role_visibility_expected',
           pass: true,
           details: {
             other_rows_visible: serviceRowCount > 0,
+            other_rows_count: serviceRowCount,
             note: 'Service role can see other rows (expected). Endpoint is admin-only, so this capability is not exposed to non-admins.'
           }
         });

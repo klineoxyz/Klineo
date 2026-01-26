@@ -198,8 +198,13 @@ export function Sidebar({ activeView, onNavigate, isCollapsed, onToggleCollapse,
                 )}
               </button>
             )}
-            {/* Smoke Test - Dev only or if VITE_ENABLE_SMOKE_TEST_PAGE=true */}
-            {(!import.meta.env.PROD || import.meta.env.VITE_ENABLE_SMOKE_TEST_PAGE === 'true') && (
+            {/* Smoke Test - Dev always, or prod if env flag + admin */}
+            {(() => {
+              const isDev = import.meta.env.DEV;
+              const enableSmokeTest = import.meta.env.VITE_ENABLE_SMOKE_TEST_PAGE === 'true';
+              const isProduction = import.meta.env.PROD;
+              return isDev || (isProduction && enableSmokeTest && isAdmin);
+            })() && (
               <button
                 onClick={() => onNavigate("smoke-test")}
                 className={cn(
