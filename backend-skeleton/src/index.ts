@@ -31,6 +31,17 @@ if (!FRONTEND_URL) {
   process.exit(1);
 }
 
+// Support both www and non-www domains for CORS
+// If FRONTEND_URL is https://klineo.xyz, also allow https://www.klineo.xyz
+const corsOrigins: string[] = [FRONTEND_URL];
+if (FRONTEND_URL.startsWith('https://') && !FRONTEND_URL.includes('www.')) {
+  // Add www version
+  corsOrigins.push(FRONTEND_URL.replace('https://', 'https://www.'));
+} else if (FRONTEND_URL.startsWith('https://www.')) {
+  // Add non-www version
+  corsOrigins.push(FRONTEND_URL.replace('https://www.', 'https://'));
+}
+
 // Request ID middleware (adds X-Request-ID header and includes in logs)
 app.use((req, res, next) => {
   const requestId = randomUUID();
@@ -45,7 +56,7 @@ app.set('trust proxy', 1);
 
 // Middleware
 app.use(cors({
-  origin: FRONTEND_URL,
+  origin: corsOrigins.length === 1 ? corsOrigins[0] : corsOrigins,
   credentials: true,
   optionsSuccessStatus: 200
 }));

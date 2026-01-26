@@ -1,0 +1,236 @@
+#!/usr/bin/env node
+/**
+ * KLINEO Production Smoke Test
+ * 
+ * Tests all critical endpoints on production URLs.
+ * 
+ * Usage:
+ *   node scripts/smoke-prod.mjs
+ * 
+ * Required env vars:
+ *   BACKEND_URL=https://klineo-production-1dfe.up.railway.app
+ *   FRONTEND_URL=https://www.klineo.xyz
+ *   SUPABASE_URL=https://oyfeadnxwuazidfbjjfo.supabase.co
+ *   TEST_USER_EMAIL=test@example.com
+ *   TEST_USER_PASSWORD=your-password
+ *   ADMIN_EMAIL=mmxinthi@gmail.com
+ *   ADMIN_PASSWORD=your-admin-password
+ */
+
+import { createClient } from '@supabase/supabase-js';
+import dotenv from 'dotenv';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+// Load env vars
+dotenv.config({ path: join(__dirname, '..', '.env') });
+dotenv.config({ path: join(__dirname, '..', '.env.local') });
+
+const BACKEND_URL = process.env.BACKEND_URL || 'https://klineo-production-1dfe.up.railway.app';
+const FRONTEND_URL = process.env.FRONTEND_URL || 'https://www.klineo.xyz';
+const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+const TEST_USER_EMAIL = process.env.TEST_USER_EMAIL;
+const TEST_USER_PASSWORD = process.env.TEST_USER_PASSWORD;
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'mmxinthi@gmail.com';
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
+
+const results = {
+  passed: [],
+  failed: [],
+  skipped: []
+};
+
+function log(message, type = 'info') {
+  const prefix = type === 'pass' ? '✅' : type === 'fail' ? '❌' : type === 'skip' ? '⏭️' : 'ℹ️';
+  console.log(`${prefix} ${message}`);
+}
+
+async function test(name, fn) {
+  try {
+    await fn();
+    results.passed.push(name);
+    log(name, 'pass');
+    return true;
+  } catch (err) {
+    results.failed.push({ name, error: err.message });
+    log(`${name}: ${err.message}`, 'fail');
+    return false;
+  }
+}
+
+async function skip(name, reason) {
+  results.skipped.push({ name, reason });
+  log(`${name}: ${reason}`, 'skip');
+}
+
+// Initialize Supabase
+if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+  console.error('❌ Missing SUPABASE_URL or SUPABASE_ANON_KEY');
+  process.exit(1);
+}
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+console.log('\n🚀 KLINEO Production Smoke Test\n');
+console.log(`Backend: ${BACKEND_URL}`);
+console.log(`Frontend: ${FRONTEND_URL}`);
+console.log(`Supabase: ${SUPABASE_URL}\n`);
+
+// Test 1: Health check
+await test('GET /health', async () => {
+  const res = await fetch(`${BACKEND_URL}/health`);
+  if (!res.ok) throw new Error(`Status ${res.status}`);
+  const data = await res.json();
+  if (data.status !== 'ok') throw new Error('Status not ok');
+  if (data.environment !== 'production') throw new Error('Not production environment');
+});
+
+// Test 2: Public traders endpoint
+await test('GET /api/traders (public)', async () => {
+  const res = await fetch(`${BACKEND_URL}/api/traders?limit=10`);
+  if (!res.ok) throw new Error(`Status ${res.status}`);
+  const data = await res.json();
+  if (!Array.isArray(data.traders)) throw new Error('Invalid response format');
+});
+
+// Test 3: Authenticated endpoints (if test user provided)
+let testUserToken = null;
+if (TEST_USER_EMAIL && TEST_USER_PASSWORD) {
+  await test('Login test user', async () => {
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: TEST_USER_EMAIL,
+      password: TEST_USER_PASSWORD
+    });
+    if (error) throw new Error(error.message);
+    if (!data.session) throw new Error('No session');
+    testUserToken = data.session.access_token;
+  });
+
+  if (testUserToken) {
+    const headers = { Authorization: `Bearer ${testUserToken}` };
+
+    await test('GET /api/me/profile', async () => {
+      const res = await fetch(`${BACKEND_URL}/api/me/profile`, { headers });
+      if (!res.ok) throw new Error(`Status ${res.status}`);
+      const data = await res.json();
+      if (!data.id || !data.email) throw new Error('Invalid profile');
+    });
+
+    await test('GET /api/copy-setups', async () => {
+      const res = await fetch(`${BACKEND_URL}/api/copy-setups`, { headers });
+      if (!res.ok) throw new Error(`Status ${res.status}`);
+      const data = await res.json();
+      if (!Array.isArray(data.copySetups)) throw new Error('Invalid response');
+    });
+
+    await test('GET /api/positions', async () => {
+      const res = await fetch(`${BACKEND_URL}/api/positions?page=1&limit=10`, { headers });
+      if (!res.ok) throw new Error(`Status ${res.status}`);
+      const data = await res.json();
+      if (!Array.isArray(data.positions)) throw new Error('Invalid response');
+    });
+
+    await test('GET /api/orders', async () => {
+      const res = await fetch(`${BACKEND_URL}/api/orders?page=1&limit=10`, { headers });
+      if (!res.ok) throw new Error(`Status ${res.status}`);
+      const data = await res.json();
+      if (!Array.isArray(data.orders)) throw new Error('Invalid response');
+    });
+
+    await test('GET /api/trades', async () => {
+      const res = await fetch(`${BACKEND_URL}/api/trades?page=1&limit=10`, { headers });
+      if (!res.ok) throw new Error(`Status ${res.status}`);
+      const data = await res.json();
+      if (!Array.isArray(data.trades)) throw new Error('Invalid response');
+    });
+
+    await test('GET /api/notifications', async () => {
+      const res = await fetch(`${BACKEND_URL}/api/notifications?limit=10`, { headers });
+      if (!res.ok) throw new Error(`Status ${res.status}`);
+      const data = await res.json();
+      if (!Array.isArray(data.notifications)) throw new Error('Invalid response');
+    });
+
+    await test('GET /api/portfolio/summary', async () => {
+      const res = await fetch(`${BACKEND_URL}/api/portfolio/summary`, { headers });
+      if (!res.ok) throw new Error(`Status ${res.status}`);
+      const data = await res.json();
+      if (typeof data.totalEquity !== 'number') throw new Error('Invalid response');
+    });
+
+    // Test 403 for non-admin accessing admin endpoint
+    await test('GET /api/admin/users (should 403 for non-admin)', async () => {
+      const res = await fetch(`${BACKEND_URL}/api/admin/users`, { headers });
+      if (res.status !== 403) throw new Error(`Expected 403, got ${res.status}`);
+    });
+  }
+} else {
+  await skip('Authenticated endpoints', 'TEST_USER_EMAIL and TEST_USER_PASSWORD not set');
+}
+
+// Test 4: Admin endpoints (if admin credentials provided)
+let adminToken = null;
+if (ADMIN_EMAIL && ADMIN_PASSWORD) {
+  await test('Login admin user', async () => {
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: ADMIN_EMAIL,
+      password: ADMIN_PASSWORD
+    });
+    if (error) throw new Error(error.message);
+    if (!data.session) throw new Error('No session');
+    adminToken = data.session.access_token;
+  });
+
+  if (adminToken) {
+    const headers = { Authorization: `Bearer ${adminToken}` };
+
+    await test('GET /api/admin/users (admin)', async () => {
+      const res = await fetch(`${BACKEND_URL}/api/admin/users?page=1&limit=10`, { headers });
+      if (!res.ok) throw new Error(`Status ${res.status}`);
+      const data = await res.json();
+      if (!Array.isArray(data.users)) throw new Error('Invalid response');
+    });
+
+    await test('GET /api/admin/traders (admin)', async () => {
+      const res = await fetch(`${BACKEND_URL}/api/admin/traders`, { headers });
+      if (!res.ok) throw new Error(`Status ${res.status}`);
+      const data = await res.json();
+      if (!Array.isArray(data.traders)) throw new Error('Invalid response');
+    });
+
+    await test('GET /api/admin/stats (admin)', async () => {
+      const res = await fetch(`${BACKEND_URL}/api/admin/stats`, { headers });
+      if (!res.ok) throw new Error(`Status ${res.status}`);
+      const data = await res.json();
+      if (typeof data.totalUsers !== 'number') throw new Error('Invalid response');
+    });
+  }
+} else {
+  await skip('Admin endpoints', 'ADMIN_EMAIL and ADMIN_PASSWORD not set');
+}
+
+// Summary
+console.log('\n📊 Test Summary\n');
+console.log(`✅ Passed: ${results.passed.length}`);
+console.log(`❌ Failed: ${results.failed.length}`);
+console.log(`⏭️  Skipped: ${results.skipped.length}\n`);
+
+if (results.failed.length > 0) {
+  console.log('❌ Failed Tests:');
+  results.failed.forEach(({ name, error }) => {
+    console.log(`   - ${name}: ${error}`);
+  });
+  console.log('');
+}
+
+if (results.passed.length > 0 && results.failed.length === 0) {
+  console.log('✅ All tests passed!');
+  process.exit(0);
+} else {
+  console.log('❌ Some tests failed');
+  process.exit(1);
+}
