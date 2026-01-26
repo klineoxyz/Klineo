@@ -751,34 +751,35 @@ export function Admin() {
                   </TableRow>
                 ) : (
                   referralPayouts.map((payout, i) => (
-                  <TableRow key={i}>
-                    <TableCell className="font-mono text-xs">{payout.userId}</TableCell>
-                    <TableCell className="font-mono text-xs">{payout.referrer}</TableCell>
-                    <TableCell>
-                      <Badge variant={payout.tier === "Tier 1" ? "default" : "secondary"}>
-                        {payout.tier}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="font-mono text-sm">${payout.referralFees.toFixed(2)}</TableCell>
-                    <TableCell className="font-mono text-primary">${payout.commission.toFixed(2)}</TableCell>
-                    <TableCell>
-                      <Badge 
-                        variant={payout.status === "Paid" ? "default" : payout.status === "Pending" ? "secondary" : "destructive"}
-                        className={payout.status === "Paid" ? "bg-[#10B981]/10 text-[#10B981] border-[#10B981]/50" : ""}
-                      >
-                        {payout.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground text-sm">{payout.date}</TableCell>
-                    <TableCell className="text-right">
-                      {payout.status === "Pending" && (
-                        <Button variant="outline" size="sm" className="bg-[#10B981]/10 text-[#10B981] border-[#10B981]/50">
-                          Process
-                        </Button>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))}
+                    <TableRow key={i}>
+                      <TableCell className="font-mono text-xs">{payout.userId}</TableCell>
+                      <TableCell className="font-mono text-xs">{payout.referrer}</TableCell>
+                      <TableCell>
+                        <Badge variant={payout.tier === "Tier 1" ? "default" : "secondary"}>
+                          {payout.tier}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="font-mono text-sm">${payout.referralFees.toFixed(2)}</TableCell>
+                      <TableCell className="font-mono text-primary">${payout.commission.toFixed(2)}</TableCell>
+                      <TableCell>
+                        <Badge 
+                          variant={payout.status === "Paid" ? "default" : payout.status === "Pending" ? "secondary" : "destructive"}
+                          className={payout.status === "Paid" ? "bg-[#10B981]/10 text-[#10B981] border-[#10B981]/50" : ""}
+                        >
+                          {payout.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-muted-foreground text-sm">{payout.date}</TableCell>
+                      <TableCell className="text-right">
+                        {payout.status === "Pending" && (
+                          <Button variant="outline" size="sm" className="bg-[#10B981]/10 text-[#10B981] border-[#10B981]/50">
+                            Process
+                          </Button>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
               </TableBody>
             </Table>
           </Card>
