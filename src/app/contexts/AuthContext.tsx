@@ -44,15 +44,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const fetchRole = useCallback(async (accessToken: string): Promise<"user" | "admin"> => {
     try {
       const base = import.meta.env.VITE_API_BASE_URL ?? "";
-      if (!base) return "user";
+      if (!base) {
+        console.warn('[AuthContext] No API base URL configured');
+        return "user";
+      }
       const res = await fetch(`${base.replace(/\/$/, "")}/api/auth/me`, {
         headers: { Authorization: `Bearer ${accessToken}` },
         credentials: "include",
       });
-      if (!res.ok) return "user";
+      if (!res.ok) {
+        console.warn('[AuthContext] Failed to fetch role:', res.status, res.statusText);
+        return "user";
+      }
       const data = (await res.json()) as AuthMe;
-      return data.role === "admin" ? "admin" : "user";
-    } catch {
+      const role = data.role === "admin" ? "admin" : "user";
+      if (import.meta.env.DEV) {
+        console.log('[AuthContext] User role:', role, 'email:', data.email);
+      }
+      return role;
+    } catch (err) {
+      console.error('[AuthContext] Error fetching role:', err);
       return "user";
     }
   }, []);

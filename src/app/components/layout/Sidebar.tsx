@@ -139,7 +139,13 @@ export function Sidebar({ activeView, onNavigate, isCollapsed, onToggleCollapse,
         ))}
 
         {/* Admin Section */}
-        {isAdmin && (
+        {(() => {
+          // Debug logging in development
+          if (import.meta.env.DEV) {
+            console.log('[Sidebar] isAdmin:', isAdmin, 'isProd:', import.meta.env.PROD);
+          }
+          return isAdmin;
+        })() && (
           <>
             <div className={cn("my-3 border-t border-border", isCollapsed ? "mx-2" : "mx-4")} />
             
@@ -172,8 +178,12 @@ export function Sidebar({ activeView, onNavigate, isCollapsed, onToggleCollapse,
               )}
             </button>
 
-            {/* UI States Demo - ONLY in development */}
-            {!import.meta.env.PROD && (
+            {/* UI States Demo - Dev always, or prod if admin */}
+            {(() => {
+              const isDev = import.meta.env.DEV;
+              const isProduction = import.meta.env.PROD;
+              return isDev || (isProduction && isAdmin);
+            })() && (
               <button
                 onClick={() => onNavigate("ui-states-demo")}
                 className={cn(
@@ -191,9 +201,15 @@ export function Sidebar({ activeView, onNavigate, isCollapsed, onToggleCollapse,
                 {!isCollapsed && (
                   <span className={cn("flex items-center gap-2", activeView === "ui-states-demo" && "font-medium")}>
                     UI States
-                    <span className="text-[10px] px-1.5 py-0.5 bg-accent/20 text-accent rounded-full font-medium">
-                      DEV
-                    </span>
+                    {import.meta.env.PROD ? (
+                      <span className="text-[10px] px-1.5 py-0.5 bg-accent/20 text-accent rounded-full font-medium">
+                        PROD
+                      </span>
+                    ) : (
+                      <span className="text-[10px] px-1.5 py-0.5 bg-accent/20 text-accent rounded-full font-medium">
+                        DEV
+                      </span>
+                    )}
                   </span>
                 )}
               </button>

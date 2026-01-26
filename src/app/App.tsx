@@ -160,7 +160,15 @@ export default function App() {
       case "notifications-center":
         return <NotificationsCenter onNavigate={handleNavigate} />;
       case "ui-states-demo":
-        if (import.meta.env.PROD) return <Dashboard />;
+        // Access control: dev OR (prod + admin)
+        if (import.meta.env.PROD && !isAdmin) {
+          setTimeout(() => {
+            toast.error("UI States Demo disabled in production", {
+              description: "This page is only available in development or for admins."
+            });
+          }, 100);
+          return <Dashboard />;
+        }
         return <UIStatesDemo onNavigate={handleNavigate} />;
       case "smoke-test":
         const isDev = import.meta.env.DEV;
