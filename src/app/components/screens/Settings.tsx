@@ -23,6 +23,7 @@ export function Settings() {
   const [saveLoading, setSaveLoading] = useState(false);
   const [connectionTestLoading, setConnectionTestLoading] = useState(false);
   const [connectionTestResult, setConnectionTestResult] = useState<string | null>(null);
+  const [backendStatus, setBackendStatus] = useState<{ connected: boolean; url?: string; latency?: number } | null>(null);
 
   useEffect(() => {
     if (!user?.id) {
@@ -78,16 +79,71 @@ export function Settings() {
     setConnectionTestLoading(true);
     setConnectionTestResult(null);
     try {
+      const baseURL = import.meta.env.VITE_API_BASE_URL ?? '';
+      const startTime = Date.now();
+      
+      // Test health endpoint first
+      const healthRes = await fetch(`${baseURL.replace(/\/$/, '')}/health`);
+      const healthData = await healthRes.json();
+      
+      // Test auth endpoint
       const me = await api.get<{ id: string; email: string; role: string }>("/api/auth/me");
-      setConnectionTestResult(JSON.stringify(me, null, 2));
-      toast.success("Connection OK", { description: `Role: ${me.role}` });
+      const latency = Date.now() - startTime;
+      
+      // Extract domain from baseURL (mask full URL)
+      const urlObj = baseURL ? new URL(baseURL) : null;
+      const maskedUrl = urlObj ? `${urlObj.protocol}//${urlObj.hostname}` : 'Not configured';
+      
+      setBackendStatus({
+        connected: true,
+        url: maskedUrl,
+        latency,
+      });
+      setConnectionTestResult(JSON.stringify({ health: healthData, user: me }, null, 2));
+      toast.success("Connection OK", { description: `Backend: ${maskedUrl} (${latency}ms)` });
     } catch (e: any) {
+      setBackendStatus({
+        connected: false,
+        url: import.meta.env.VITE_API_BASE_URL ? new URL(import.meta.env.VITE_API_BASE_URL).hostname : 'Not configured',
+      });
       setConnectionTestResult(`Error: ${e?.message ?? "Unknown"}`);
       toast.error("Connection test failed", { description: e?.message });
     } finally {
       setConnectionTestLoading(false);
     }
   };
+
+  // Check backend status on mount
+  useEffect(() => {
+    const checkBackend = async () => {
+      const baseURL = import.meta.env.VITE_API_BASE_URL ?? '';
+      if (!baseURL) {
+        setBackendStatus({ connected: false });
+        return;
+      }
+      try {
+        const startTime = Date.now();
+        const res = await fetch(`${baseURL.replace(/\/$/, '')}/health`, { 
+          method: 'GET',
+          signal: AbortSignal.timeout(5000) // 5 second timeout
+        });
+        const latency = Date.now() - startTime;
+        if (res.ok) {
+          const urlObj = new URL(baseURL);
+          setBackendStatus({
+            connected: true,
+            url: `${urlObj.protocol}//${urlObj.hostname}`,
+            latency,
+          });
+        } else {
+          setBackendStatus({ connected: false, url: new URL(baseURL).hostname });
+        }
+      } catch {
+        setBackendStatus({ connected: false, url: baseURL ? new URL(baseURL).hostname : undefined });
+      }
+    };
+    checkBackend();
+  }, []);
 
   return (
     <div className="p-6 space-y-6">
@@ -111,6 +167,34 @@ export function Settings() {
               <AlertDescription>{profileError}</AlertDescription>
             </Alert>
           )}
+
+          {/* Backend Connection Status */}
+          <Card className="p-4 border-primary/20">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Wifi className={`size-5 ${backendStatus?.connected ? 'text-[#10B981]' : 'text-[#EF4444]'}`} />
+                <div>
+                  <div className="font-semibold">Backend Connection</div>
+                  <div className="text-sm text-muted-foreground">
+                    {backendStatus?.connected 
+                      ? `Connected to ${backendStatus.url}${backendStatus.latency ? ` (${backendStatus.latency}ms)` : ''}`
+                      : backendStatus?.url 
+                        ? `Disconnected from ${backendStatus.url}`
+                        : 'Not configured — VITE_API_BASE_URL missing'
+                    }
+                  </div>
+                </div>
+              </div>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={handleConnectionTest}
+                disabled={connectionTestLoading}
+              >
+                {connectionTestLoading ? "Testing..." : "Test Connection"}
+              </Button>
+            </div>
+          </Card>
 
           <Card className="p-6 space-y-6">
             <h3 className="text-lg font-semibold">Profile Information</h3>
@@ -178,10 +262,38 @@ export function Settings() {
             </Button>
           </Card>
 
+          {/* Backend Connection Status */}
+          <Card className="p-4 border-primary/20">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Wifi className={`size-5 ${backendStatus?.connected ? 'text-[#10B981]' : 'text-[#EF4444]'}`} />
+                <div>
+                  <div className="font-semibold">Backend Connection</div>
+                  <div className="text-sm text-muted-foreground">
+                    {backendStatus?.connected 
+                      ? `Connected to ${backendStatus.url}${backendStatus.latency ? ` (${backendStatus.latency}ms)` : ''}`
+                      : backendStatus?.url 
+                        ? `Disconnected from ${backendStatus.url}`
+                        : 'Not configured — VITE_API_BASE_URL missing'
+                    }
+                  </div>
+                </div>
+              </div>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={handleConnectionTest}
+                disabled={connectionTestLoading}
+              >
+                {connectionTestLoading ? "Testing..." : "Test Connection"}
+              </Button>
+            </div>
+          </Card>
+
           <Card className="p-6 space-y-4 border-primary/20 bg-primary/5">
             <h3 className="text-lg font-semibold flex items-center gap-2">
               <Wifi className="size-5 text-primary" />
-              Connection Test
+              Connection Test Details
             </h3>
             <p className="text-sm text-muted-foreground">
               Call backend <code className="font-mono text-xs">GET /api/auth/me</code> and show the result.

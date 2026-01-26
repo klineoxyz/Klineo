@@ -69,7 +69,8 @@ export async function verifySupabaseJWT(
       .split(',')
       .map((e) => e.trim().toLowerCase())
       .filter(Boolean);
-    if (role !== 'admin' && adminEmails.includes((user.email ?? '').toLowerCase())) {
+    if (role !== 'admin' && adminEmails.length > 0 && adminEmails.includes((user.email ?? '').toLowerCase())) {
+      console.warn(`[SECURITY] Admin elevation via email for: ${user.email}`);
       role = 'admin';
     }
 
@@ -81,7 +82,8 @@ export async function verifySupabaseJWT(
 
     next();
   } catch (err) {
-    console.error('JWT verification error:', err);
+    // Don't log the full error object (may contain tokens)
+    console.error('JWT verification failed:', err instanceof Error ? err.message : 'Unknown error');
     return res.status(401).json({ error: 'Token verification failed' });
   }
 }

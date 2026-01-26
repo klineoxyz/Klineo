@@ -1,5 +1,7 @@
 import { Router } from 'express';
 import { verifySupabaseJWT, requireAdmin, AuthenticatedRequest } from '../middleware/auth.js';
+import { validate, uuidParam, statusBody, optionalString, pageQuery, limitQuery, searchQuery } from '../middleware/validation.js';
+import { body } from 'express-validator';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 let supabase: SupabaseClient | null = null;
@@ -71,25 +73,30 @@ adminRouter.get('/stats', async (req, res) => {
  * GET /api/admin/users
  * List all users with pagination
  */
-adminRouter.get('/users', async (req, res) => {
-  const client = getSupabase();
-  if (!client) {
-    return res.status(503).json({ error: 'Database unavailable' });
-  }
+adminRouter.get('/users', 
+  validate([pageQuery, limitQuery, searchQuery]),
+  async (req, res) => {
+    const client = getSupabase();
+    if (!client) {
+      return res.status(503).json({ error: 'Database unavailable' });
+    }
 
-  try {
-    const page = parseInt(req.query.page as string) || 1;
-    const limit = parseInt(req.query.limit as string) || 50;
-    const offset = (page - 1) * limit;
-    const search = req.query.search as string;
+    try {
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 50;
+      const offset = (page - 1) * limit;
+      const search = (req.query.search as string) || '';
+      
+      // Sanitize search input
+      const sanitized = search.replace(/[%_\\]/g, '').substring(0, 100);
 
     let query = client
       .from('user_profiles')
       .select('id, email, role, created_at, full_name, username, status')
       .order('created_at', { ascending: false });
 
-    if (search) {
-      query = query.or(`email.ilike.%${search}%,full_name.ilike.%${search}%,username.ilike.%${search}%`);
+    if (sanitized.length > 0) {
+      query = query.or(`email.ilike.%${sanitized}%,full_name.ilike.%${sanitized}%,username.ilike.%${sanitized}%`);
     }
 
     const { data: profiles, error, count } = await query.range(offset, offset + limit - 1);
@@ -234,19 +241,20 @@ adminRouter.get('/traders', async (req, res) => {
  * PUT /api/admin/traders/:id
  * Update trader status (approve/reject)
  */
-adminRouter.put('/traders/:id', async (req, res) => {
-  const client = getSupabase();
-  if (!client) {
-    return res.status(503).json({ error: 'Database unavailable' });
-  }
-
-  try {
-    const { id } = req.params;
-    const { status } = req.body;
-
-    if (!status || !['approved', 'rejected', 'pending'].includes(status)) {
-      return res.status(400).json({ error: 'Invalid status' });
+adminRouter.put('/traders/:id', 
+  validate([
+    uuidParam('id'),
+    statusBody('status', ['approved', 'rejected', 'pending'])
+  ]),
+  async (req, res) => {
+    const client = getSupabase();
+    if (!client) {
+      return res.status(503).json({ error: 'Database unavailable' });
     }
+
+    try {
+      const { id } = req.params;
+      const { status } = req.body;
 
     const { data, error } = await client
       .from('traders')
@@ -588,18 +596,23 @@ adminRouter.get('/coupons', async (req, res) => {
  * POST /api/admin/coupons
  * Create a new discount coupon
  */
-adminRouter.post('/coupons', async (req: AuthenticatedRequest, res) => {
-  const client = getSupabase();
-  if (!client) {
-    return res.status(503).json({ error: 'Database unavailable' });
-  }
-
-  try {
-    const { code, discount, maxRedemptions, durationMonths, expiresAt, description } = req.body;
-
-    if (!code || !discount || !durationMonths) {
-      return res.status(400).json({ error: 'Missing required fields: code, discount, durationMonths' });
+adminRouter.post('/coupons', 
+  validate([
+    body('code').isString().isLength({ min: 3, max: 20 }).matches(/^[A-Z0-9]+$/).withMessage('code must be 3-20 uppercase alphanumeric characters'),
+    body('discount').isFloat({ min: 0, max: 100 }).withMessage('discount must be between 0 and 100'),
+    body('maxRedemptions').optional().isInt({ min: 1 }).withMessage('maxRedemptions must be a positive integer'),
+    body('durationMonths').isInt({ min: 1, max: 12 }).withMessage('durationMonths must be between 1 and 12'),
+    body('expiresAt').optional().isISO8601().withMessage('expiresAt must be a valid ISO date'),
+    optionalString('description', 500)
+  ]),
+  async (req: AuthenticatedRequest, res) => {
+    const client = getSupabase();
+    if (!client) {
+      return res.status(503).json({ error: 'Database unavailable' });
     }
+
+    try {
+      const { code, discount, maxRedemptions, durationMonths, expiresAt, description } = req.body;
 
     const { data, error } = await client
       .from('coupons')
@@ -632,19 +645,21 @@ adminRouter.post('/coupons', async (req: AuthenticatedRequest, res) => {
  * PUT /api/admin/users/:id
  * Update user (suspend/reactivate)
  */
-adminRouter.put('/users/:id', async (req: AuthenticatedRequest, res) => {
-  const client = getSupabase();
-  if (!client) {
-    return res.status(503).json({ error: 'Database unavailable' });
-  }
-
-  try {
-    const { id } = req.params;
-    const { status, reason } = req.body; // status: 'active' | 'suspended' | 'banned'
-
-    if (!status || !['active', 'suspended', 'banned'].includes(status)) {
-      return res.status(400).json({ error: 'Invalid status. Must be: active, suspended, or banned' });
+adminRouter.put('/users/:id', 
+  validate([
+    uuidParam('id'),
+    statusBody('status', ['active', 'suspended', 'banned']),
+    optionalString('reason', 500)
+  ]),
+  async (req: AuthenticatedRequest, res) => {
+    const client = getSupabase();
+    if (!client) {
+      return res.status(503).json({ error: 'Database unavailable' });
     }
+
+    try {
+      const { id } = req.params;
+      const { status, reason } = req.body;
 
     const { data, error } = await client
       .from('user_profiles')
