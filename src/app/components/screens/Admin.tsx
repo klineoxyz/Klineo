@@ -598,24 +598,25 @@ export function Admin() {
                   </TableRow>
                 ) : (
                   subscriptionPayments.map((payment, i) => (
-                  <TableRow key={i}>
-                    <TableCell className="font-mono text-xs">{payment.userId}</TableCell>
-                    <TableCell className="text-sm">{payment.email}</TableCell>
-                    <TableCell><Badge variant="outline">{payment.plan}</Badge></TableCell>
-                    <TableCell className="font-mono">${payment.amount.toFixed(2)}</TableCell>
-                    <TableCell>
-                      <Badge 
-                        variant={payment.status === "Paid" ? "default" : "destructive"}
-                        className={payment.status === "Paid" ? "bg-[#10B981]/10 text-[#10B981] border-[#10B981]/50" : ""}
-                      >
-                        {payment.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground text-sm">{payment.date}</TableCell>
-                    <TableCell className="text-muted-foreground text-sm">{payment.nextRenewal}</TableCell>
-                    <TableCell className="font-mono text-xs text-primary">{payment.txHash}</TableCell>
-                  </TableRow>
-                ))}
+                    <TableRow key={i}>
+                      <TableCell className="font-mono text-xs">{payment.userId}</TableCell>
+                      <TableCell className="text-sm">{payment.email}</TableCell>
+                      <TableCell><Badge variant="outline">{payment.plan}</Badge></TableCell>
+                      <TableCell className="font-mono">${payment.amount.toFixed(2)}</TableCell>
+                      <TableCell>
+                        <Badge 
+                          variant={payment.status === "Paid" ? "default" : "destructive"}
+                          className={payment.status === "Paid" ? "bg-[#10B981]/10 text-[#10B981] border-[#10B981]/50" : ""}
+                        >
+                          {payment.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-muted-foreground text-sm">{payment.date}</TableCell>
+                      <TableCell className="text-muted-foreground text-sm">{payment.nextRenewal}</TableCell>
+                      <TableCell className="font-mono text-xs text-primary">{payment.txHash}</TableCell>
+                    </TableRow>
+                  ))
+                )}
               </TableBody>
             </Table>
           </Card>
