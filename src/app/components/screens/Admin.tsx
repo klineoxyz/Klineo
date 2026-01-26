@@ -191,6 +191,16 @@ export function Admin() {
     }
   };
 
+  const handleChangeRole = async (userId: string, role: 'user' | 'admin', reason?: string) => {
+    try {
+      await api.put(`/api/admin/users/${userId}/role`, { role, reason });
+      toast.success(`User role changed to ${role}`);
+      loadUsers(usersPagination.page, usersSearch);
+    } catch (err: any) {
+      toast.error('Failed to change role', { description: err.message });
+    }
+  };
+
   const handleSaveFeeSettings = () => {
     setShowFeeConfirm(false);
     toast.success("Platform fees updated", {
@@ -353,6 +363,7 @@ export function Admin() {
                   <TableRow>
                     <TableHead>User ID</TableHead>
                     <TableHead>Email</TableHead>
+                    <TableHead>Role</TableHead>
                     <TableHead>Plan</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Joined</TableHead>
@@ -371,6 +382,20 @@ export function Admin() {
                   <TableRow key={i}>
                     <TableCell className="font-mono text-xs">{user.id?.substring(0, 8)}...</TableCell>
                     <TableCell className="font-medium">{user.email}</TableCell>
+                    <TableCell>
+                      <Select
+                        value={user.role || 'user'}
+                        onValueChange={(value: 'user' | 'admin') => handleChangeRole(user.id, value)}
+                      >
+                        <SelectTrigger className="w-24 h-8">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="user">User</SelectItem>
+                          <SelectItem value="admin">Admin</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </TableCell>
                     <TableCell><Badge variant="outline">{user.plan || "None"}</Badge></TableCell>
                     <TableCell>
                       <Badge 

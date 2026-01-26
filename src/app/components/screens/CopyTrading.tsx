@@ -1,41 +1,110 @@
+import { useState, useEffect } from "react";
 import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
 import { Badge } from "@/app/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/app/components/ui/table";
-import { Activity, Pause, StopCircle, AlertTriangle } from "lucide-react";
-
-const activeCopies = [
-  {
-    trader: "ProTrader_XYZ",
-    status: "paused",
-    allocation: "$1,000.00",
-    pnl: "+$245.50",
-    lastTrade: "2 min ago",
-    errors: 0,
-  },
-  {
-    trader: "AlphaStrategist",
-    status: "running",
-    allocation: "$1,500.00",
-    pnl: "+$387.20",
-    lastTrade: "15 sec ago",
-    errors: 0,
-  },
-  {
-    trader: "QuantMaster_Pro",
-    status: "running",
-    allocation: "$2,000.00",
-    pnl: "+$612.80",
-    lastTrade: "1 min ago",
-    errors: 0,
-  },
-];
+import { Activity, Pause, StopCircle, AlertTriangle, Loader2 } from "lucide-react";
+import { api } from "@/lib/api";
+import { toast } from "@/app/lib/toast";
+import { LoadingWrapper } from "@/app/components/ui/loading-wrapper";
+import { EmptyState } from "@/app/components/ui/empty-state";
+import { ErrorState } from "@/app/components/ui/error-state";
+import { formatDistanceToNow } from "date-fns";
 
 interface CopyTradingProps {
   onNavigate: (view: string) => void;
 }
 
+interface CopySetup {
+  id: string;
+  traderId: string;
+  trader: {
+    id: string;
+    name: string;
+    slug: string;
+    avatarUrl?: string;
+    status: string;
+  } | null;
+  allocationPct: number;
+  maxPositionPct: number | null;
+  status: "active" | "paused" | "stopped";
+  createdAt: string;
+  updatedAt: string;
+}
+
 export function CopyTrading({ onNavigate }: CopyTradingProps) {
+  const [copySetups, setCopySetups] = useState<CopySetup[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [updatingId, setUpdatingId] = useState<string | null>(null);
+
+  const loadCopySetups = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const data = await api.get<{ copySetups: CopySetup[] }>("/api/copy-setups");
+      setCopySetups(data.copySetups || []);
+    } catch (err: any) {
+      const message = err?.message || "Failed to load copy setups";
+      setError(message);
+      toast.error("Failed to load copy setups", { description: message });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadCopySetups();
+  }, []);
+
+  const handleStatusChange = async (id: string, newStatus: "active" | "paused" | "stopped") => {
+    setUpdatingId(id);
+    try {
+      await api.put(`/api/copy-setups/${id}`, { status: newStatus });
+      toast.success(`Copy setup ${newStatus === "active" ? "resumed" : newStatus === "paused" ? "paused" : "stopped"}`);
+      loadCopySetups();
+    } catch (err: any) {
+      toast.error("Failed to update", { description: err?.message });
+    } finally {
+      setUpdatingId(null);
+    }
+  };
+
+  const activeSetups = copySetups.filter((s) => s.status === "active");
+  const totalAllocated = copySetups.reduce((sum, s) => sum + s.allocationPct, 0);
+
+  if (isLoading) {
+    return (
+      <div className="p-6">
+        <div className="animate-pulse space-y-6">
+          <div className="h-8 bg-muted rounded w-1/3" />
+          <div className="grid grid-cols-4 gap-4">
+            {[...Array(4)].map((_, i) => (
+              <div key={i} className="h-24 bg-muted rounded" />
+            ))}
+          </div>
+          <div className="h-64 bg-muted rounded" />
+        </div>
+      </div>
+    );
+  }
+
+  if (error && copySetups.length === 0) {
+    return (
+      <div className="p-6">
+        <ErrorState
+          title="Failed to load copy setups"
+          message={error}
+          action={
+            <Button onClick={loadCopySetups} variant="outline">
+              Try Again
+            </Button>
+          }
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
@@ -52,127 +121,152 @@ export function CopyTrading({ onNavigate }: CopyTradingProps) {
       <div className="grid grid-cols-4 gap-4">
         <Card className="p-4 space-y-2">
           <div className="text-xs text-muted-foreground uppercase tracking-wide">Active Copies</div>
-          <div className="text-2xl font-semibold">3</div>
-          <div className="text-xs text-muted-foreground">of 5 max</div>
+          <div className="text-2xl font-semibold">{activeSetups.length}</div>
+          <div className="text-xs text-muted-foreground">of {copySetups.length} total</div>
         </Card>
 
         <Card className="p-4 space-y-2">
           <div className="text-xs text-muted-foreground uppercase tracking-wide">Total Allocated</div>
-          <div className="text-2xl font-semibold">$4,500.00</div>
-          <div className="text-xs text-muted-foreground">USDT</div>
+          <div className="text-2xl font-semibold">{totalAllocated.toFixed(1)}%</div>
+          <div className="text-xs text-muted-foreground">of portfolio</div>
         </Card>
 
         <Card className="p-4 space-y-2">
-          <div className="text-xs text-muted-foreground uppercase tracking-wide">Total PnL</div>
-          <div className="text-2xl font-semibold text-[#10B981]">+$1,245.50</div>
-          <div className="text-xs text-muted-foreground">+27.68%</div>
+          <div className="text-xs text-muted-foreground uppercase tracking-wide">Paused</div>
+          <div className="text-2xl font-semibold">
+            {copySetups.filter((s) => s.status === "paused").length}
+          </div>
+          <div className="text-xs text-muted-foreground">copy setups</div>
         </Card>
 
         <Card className="p-4 space-y-2">
           <div className="text-xs text-muted-foreground uppercase tracking-wide">Copy Engine</div>
           <div className="flex items-center gap-2">
-            <div className="size-2 rounded-full bg-[#10B981]" />
-            <span className="font-medium">Running</span>
+            <div className={`size-2 rounded-full ${activeSetups.length > 0 ? "bg-[#10B981]" : "bg-muted"}`} />
+            <span className="font-medium">{activeSetups.length > 0 ? "Running" : "Idle"}</span>
           </div>
-          <div className="text-xs text-muted-foreground">No errors</div>
+          <div className="text-xs text-muted-foreground">
+            {activeSetups.length} active
+          </div>
         </Card>
       </div>
 
       {/* Active Copy Traders */}
-      <Card>
-        <div className="p-6 border-b border-border">
-          <h3 className="text-lg font-semibold">Active Copy Positions</h3>
-        </div>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Trader</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Allocation</TableHead>
-              <TableHead>PnL</TableHead>
-              <TableHead>Last Trade</TableHead>
-              <TableHead>Errors</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {activeCopies.map((copy, i) => (
-              <TableRow key={i}>
-                <TableCell>
-                  <div className="flex items-center gap-3">
-                    <div className="size-8 rounded bg-muted flex items-center justify-center text-xs font-semibold">
-                      {copy.trader.charAt(0)}
-                    </div>
-                    <div className="font-medium">{copy.trader}</div>
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <Badge 
-                    variant={copy.status === "running" ? "default" : "secondary"}
-                    className="gap-1"
-                  >
-                    {copy.status === "running" ? (
-                      <><Activity className="size-3" /> Running</>
-                    ) : (
-                      <><Pause className="size-3" /> Paused</>
-                    )}
-                  </Badge>
-                </TableCell>
-                <TableCell className="font-mono">{copy.allocation}</TableCell>
-                <TableCell className="font-mono text-[#10B981]">{copy.pnl}</TableCell>
-                <TableCell className="text-muted-foreground">{copy.lastTrade}</TableCell>
-                <TableCell>
-                  {copy.errors > 0 ? (
-                    <Badge variant="destructive" className="gap-1">
-                      <AlertTriangle className="size-3" />
-                      {copy.errors}
-                    </Badge>
-                  ) : (
-                    <span className="text-muted-foreground">—</span>
-                  )}
-                </TableCell>
-                <TableCell className="text-right">
-                  <div className="flex items-center justify-end gap-2">
-                    <Button variant="outline" size="sm">
-                      {copy.status === "running" ? "Pause" : "Resume"}
-                    </Button>
-                    <Button variant="outline" size="sm" className="text-[#EF4444] border-[#EF4444]/50 hover:bg-[#EF4444]/10">
-                      <StopCircle className="size-3 mr-1" />
-                      Stop
-                    </Button>
-                  </div>
-                </TableCell>
+      {copySetups.length === 0 ? (
+        <Card className="p-12">
+          <div className="text-center space-y-4">
+            <p className="text-muted-foreground">No copy setups yet</p>
+            <Button onClick={() => onNavigate("marketplace")} className="bg-primary text-primary-foreground">
+              Browse Traders
+            </Button>
+          </div>
+        </Card>
+      ) : (
+        <Card>
+          <div className="p-6 border-b border-border">
+            <h3 className="text-lg font-semibold">Active Copy Positions</h3>
+          </div>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Trader</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Allocation</TableHead>
+                <TableHead>Max Position</TableHead>
+                <TableHead>Created</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </Card>
-
-      {/* Risk Status */}
-      <Card className="p-6">
-        <h3 className="text-lg font-semibold mb-4">Risk Status</h3>
-        <div className="grid grid-cols-3 gap-6">
-          {activeCopies.map((copy, i) => (
-            <div key={i} className="space-y-3">
-              <div className="font-medium">{copy.trader}</div>
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Daily Loss:</span>
-                  <span className="text-[#10B981]">-2.3% of 5.0%</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Drawdown:</span>
-                  <span className="text-[#10B981]">-4.1% of 15.0%</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Open Positions:</span>
-                  <span>2 / 10 max</span>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </Card>
+            </TableHeader>
+            <TableBody>
+              {copySetups.map((setup) => (
+                <TableRow key={setup.id}>
+                  <TableCell>
+                    <div className="flex items-center gap-3">
+                      <div className="size-8 rounded bg-muted flex items-center justify-center text-xs font-semibold">
+                        {setup.trader?.name?.charAt(0) || "?"}
+                      </div>
+                      <div>
+                        <div className="font-medium">{setup.trader?.name || "Unknown Trader"}</div>
+                        {setup.trader?.status !== "approved" && (
+                          <div className="text-xs text-muted-foreground">Trader not approved</div>
+                        )}
+                      </div>
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <Badge 
+                      variant={setup.status === "active" ? "default" : "secondary"}
+                      className="gap-1"
+                    >
+                      {setup.status === "active" ? (
+                        <><Activity className="size-3" /> Active</>
+                      ) : setup.status === "paused" ? (
+                        <><Pause className="size-3" /> Paused</>
+                      ) : (
+                        <><StopCircle className="size-3" /> Stopped</>
+                      )}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="font-mono">{setup.allocationPct.toFixed(1)}%</TableCell>
+                  <TableCell className="font-mono">
+                    {setup.maxPositionPct ? `${setup.maxPositionPct.toFixed(1)}%` : "—"}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {formatDistanceToNow(new Date(setup.createdAt), { addSuffix: true })}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <div className="flex items-center justify-end gap-2">
+                      {setup.status === "active" ? (
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => handleStatusChange(setup.id, "paused")}
+                          disabled={updatingId === setup.id}
+                        >
+                          {updatingId === setup.id ? (
+                            <Loader2 className="size-3 mr-1 animate-spin" />
+                          ) : (
+                            <Pause className="size-3 mr-1" />
+                          )}
+                          Pause
+                        </Button>
+                      ) : setup.status === "paused" ? (
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => handleStatusChange(setup.id, "active")}
+                          disabled={updatingId === setup.id}
+                        >
+                          {updatingId === setup.id ? (
+                            <Loader2 className="size-3 mr-1 animate-spin" />
+                          ) : (
+                            <Activity className="size-3 mr-1" />
+                          )}
+                          Resume
+                        </Button>
+                      ) : null}
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="text-[#EF4444] border-[#EF4444]/50 hover:bg-[#EF4444]/10"
+                        onClick={() => handleStatusChange(setup.id, "stopped")}
+                        disabled={updatingId === setup.id}
+                      >
+                        {updatingId === setup.id ? (
+                          <Loader2 className="size-3 mr-1 animate-spin" />
+                        ) : (
+                          <StopCircle className="size-3 mr-1" />
+                        )}
+                        Stop
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </Card>
+      )}
     </div>
   );
 }

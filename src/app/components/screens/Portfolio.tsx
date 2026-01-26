@@ -1,26 +1,93 @@
+import { useState, useEffect } from "react";
 import { Card } from "@/app/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/app/components/ui/table";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { api } from "@/lib/api";
+import { toast } from "@/app/lib/toast";
+import { LoadingWrapper } from "@/app/components/ui/loading-wrapper";
+import { ErrorState } from "@/app/components/ui/error-state";
 
-const equityData = [
-  { date: "Jan 15", value: 20000 },
-  { date: "Jan 16", value: 20450 },
-  { date: "Jan 17", value: 20280 },
-  { date: "Jan 18", value: 21100 },
-  { date: "Jan 19", value: 22300 },
-  { date: "Jan 20", value: 22850 },
-  { date: "Jan 21", value: 23420 },
-  { date: "Jan 22", value: 24150 },
-  { date: "Jan 23", value: 24567 },
-];
-
-const assets = [
-  { symbol: "USDT", balance: 8234.50, equity: 8234.50, unrealizedPnL: 0, allocation: 33.5 },
-  { symbol: "BTC", balance: 0.3456, equity: 13567.80, unrealizedPnL: 245.60, allocation: 55.2 },
-  { symbol: "ETH", balance: 1.2340, equity: 2765.70, unrealizedPnL: -128.45, allocation: 11.3 },
-];
+interface PortfolioSummary {
+  totalPnl: number;
+  unrealizedPnl: number;
+  realizedPnl: number;
+  totalVolume: number;
+  openPositions: number;
+  activeCopySetups: number;
+}
 
 export function Portfolio() {
+  const [summary, setSummary] = useState<PortfolioSummary | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const loadSummary = async () => {
+      setIsLoading(true);
+      setError(null);
+      try {
+        const data = await api.get<PortfolioSummary>("/api/portfolio/summary");
+        setSummary(data);
+      } catch (err: any) {
+        const message = err?.message || "Failed to load portfolio";
+        setError(message);
+        toast.error("Failed to load portfolio", { description: message });
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadSummary();
+  }, []);
+
+  if (isLoading) {
+    return (
+      <div className="p-6">
+        <div className="animate-pulse space-y-6">
+          <div className="h-8 bg-muted rounded w-1/3" />
+          <div className="grid grid-cols-4 gap-4">
+            {[...Array(4)].map((_, i) => (
+              <div key={i} className="h-24 bg-muted rounded" />
+            ))}
+          </div>
+          <div className="h-64 bg-muted rounded" />
+        </div>
+      </div>
+    );
+  }
+
+  if (error && !summary) {
+    return (
+      <div className="p-6">
+        <ErrorState
+          title="Failed to load portfolio"
+          message={error}
+          action={
+            <button
+              onClick={() => window.location.reload()}
+              className="px-4 py-2 bg-primary text-primary-foreground rounded"
+            >
+              Retry
+            </button>
+          }
+        />
+      </div>
+    );
+  }
+
+  // Mock chart data (in real app, this would come from historical data)
+  const equityData = [
+    { date: "Jan 15", value: 20000 },
+    { date: "Jan 16", value: 20450 },
+    { date: "Jan 17", value: 20280 },
+    { date: "Jan 18", value: 21100 },
+    { date: "Jan 19", value: 22300 },
+    { date: "Jan 20", value: 22850 },
+    { date: "Jan 21", value: 23420 },
+    { date: "Jan 22", value: 24150 },
+    { date: "Jan 23", value: 24567 },
+  ];
+
   return (
     <div className="p-6 space-y-6">
       <div>
@@ -31,27 +98,45 @@ export function Portfolio() {
       {/* Summary Metrics */}
       <div className="grid grid-cols-4 gap-4">
         <Card className="p-4 space-y-2">
-          <div className="text-xs text-muted-foreground uppercase tracking-wide">Total Equity</div>
-          <div className="text-2xl font-semibold">$24,567.82</div>
-          <div className="text-xs text-muted-foreground">USDT</div>
+          <div className="text-xs text-muted-foreground uppercase tracking-wide">Total PnL</div>
+          <div className={`text-2xl font-semibold ${(summary?.totalPnl || 0) >= 0 ? "text-[#10B981]" : "text-[#EF4444]"}`}>
+            ${(summary?.totalPnl || 0).toFixed(2)}
+          </div>
+          <div className="text-xs text-muted-foreground">All time</div>
         </Card>
 
         <Card className="p-4 space-y-2">
           <div className="text-xs text-muted-foreground uppercase tracking-wide">Unrealized PnL</div>
-          <div className="text-2xl font-semibold text-[#10B981]">+$117.15</div>
-          <div className="text-xs text-muted-foreground">+0.48%</div>
+          <div className={`text-2xl font-semibold ${(summary?.unrealizedPnl || 0) >= 0 ? "text-[#10B981]" : "text-[#EF4444]"}`}>
+            ${(summary?.unrealizedPnl || 0).toFixed(2)}
+          </div>
+          <div className="text-xs text-muted-foreground">Open positions</div>
         </Card>
 
         <Card className="p-4 space-y-2">
-          <div className="text-xs text-muted-foreground uppercase tracking-wide">Realized PnL (24h)</div>
-          <div className="text-2xl font-semibold text-[#10B981]">+$342.18</div>
-          <div className="text-xs text-muted-foreground">+1.42%</div>
+          <div className="text-xs text-muted-foreground uppercase tracking-wide">Realized PnL</div>
+          <div className={`text-2xl font-semibold ${(summary?.realizedPnl || 0) >= 0 ? "text-[#10B981]" : "text-[#EF4444]"}`}>
+            ${(summary?.realizedPnl || 0).toFixed(2)}
+          </div>
+          <div className="text-xs text-muted-foreground">Closed positions</div>
         </Card>
 
         <Card className="p-4 space-y-2">
-          <div className="text-xs text-muted-foreground uppercase tracking-wide">Margin Usage</div>
-          <div className="text-2xl font-semibold">23.4%</div>
-          <div className="text-xs text-muted-foreground">$5,750 / $24,567</div>
+          <div className="text-xs text-muted-foreground uppercase tracking-wide">Total Volume</div>
+          <div className="text-2xl font-semibold">${((summary?.totalVolume || 0) / 1000).toFixed(1)}k</div>
+          <div className="text-xs text-muted-foreground">USDT</div>
+        </Card>
+      </div>
+
+      {/* Additional Stats */}
+      <div className="grid grid-cols-2 gap-4">
+        <Card className="p-4 space-y-2">
+          <div className="text-xs text-muted-foreground uppercase tracking-wide">Open Positions</div>
+          <div className="text-2xl font-semibold">{summary?.openPositions || 0}</div>
+        </Card>
+        <Card className="p-4 space-y-2">
+          <div className="text-xs text-muted-foreground uppercase tracking-wide">Active Copy Setups</div>
+          <div className="text-2xl font-semibold">{summary?.activeCopySetups || 0}</div>
         </Card>
       </div>
 
@@ -76,54 +161,6 @@ export function Portfolio() {
             <Line type="monotone" dataKey="value" stroke="#10B981" strokeWidth={2} dot={false} activeDot={{ r: 4, fill: "#10B981", stroke: "#12151A", strokeWidth: 2 }} />
           </LineChart>
         </ResponsiveContainer>
-      </Card>
-
-      {/* Asset Balances */}
-      <Card>
-        <div className="p-6 border-b border-border">
-          <h3 className="text-lg font-semibold">Asset Balances</h3>
-        </div>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Asset</TableHead>
-              <TableHead>Balance</TableHead>
-              <TableHead>Equity (USDT)</TableHead>
-              <TableHead>Unrealized PnL</TableHead>
-              <TableHead>Portfolio %</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {assets.map((asset, i) => (
-              <TableRow key={i}>
-                <TableCell>
-                  <div className="flex items-center gap-3">
-                    <div className="size-8 rounded-full bg-primary/10 flex items-center justify-center text-xs font-semibold text-primary">
-                      {asset.symbol.charAt(0)}
-                    </div>
-                    <span className="font-semibold">{asset.symbol}</span>
-                  </div>
-                </TableCell>
-                <TableCell className="font-mono">{asset.balance.toFixed(4)}</TableCell>
-                <TableCell className="font-mono">${asset.equity.toFixed(2)}</TableCell>
-                <TableCell className={`font-mono ${asset.unrealizedPnL >= 0 ? "text-[#10B981]" : "text-[#EF4444]"}`}>
-                  {asset.unrealizedPnL >= 0 ? "+" : ""}${asset.unrealizedPnL.toFixed(2)}
-                </TableCell>
-                <TableCell>
-                  <div className="flex items-center gap-2">
-                    <div className="flex-1 h-2 bg-secondary rounded-full overflow-hidden">
-                      <div 
-                        className="h-full bg-primary" 
-                        style={{ width: `${asset.allocation}%` }}
-                      />
-                    </div>
-                    <span className="text-sm font-mono w-12 text-right">{asset.allocation}%</span>
-                  </div>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
       </Card>
     </div>
   );

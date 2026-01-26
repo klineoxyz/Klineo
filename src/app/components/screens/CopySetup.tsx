@@ -6,7 +6,9 @@ import { Label } from "@/app/components/ui/label";
 import { Switch } from "@/app/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/app/components/ui/select";
 import { Alert, AlertDescription } from "@/app/components/ui/alert";
-import { ArrowLeft, AlertTriangle } from "lucide-react";
+import { ArrowLeft, AlertTriangle, Loader2 } from "lucide-react";
+import { api } from "@/lib/api";
+import { toast } from "@/app/lib/toast";
 
 interface CopySetupProps {
   onNavigate: (view: string) => void;
@@ -14,10 +16,65 @@ interface CopySetupProps {
 }
 
 export function CopySetup({ onNavigate, traderData }: CopySetupProps) {
-  const [allocationMethod, setAllocationMethod] = useState("fixed");
+  const [allocationMethod, setAllocationMethod] = useState("percentage");
+  const [allocationValue, setAllocationValue] = useState("");
+  const [maxPositionPct, setMaxPositionPct] = useState("");
   const [spotOnly, setSpotOnly] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const trader = traderData || { name: "ProTrader_XYZ" };
+  const trader = traderData || { name: "Unknown Trader", id: null };
+
+  const handleSubmit = async () => {
+    if (!trader.id) {
+      toast.error("Invalid trader", { description: "Trader ID is required" });
+      return;
+    }
+
+    // Validation
+    if (allocationMethod === "percentage") {
+      const pct = parseFloat(allocationValue);
+      if (isNaN(pct) || pct <= 0 || pct > 100) {
+        toast.error("Invalid allocation", { description: "Percentage must be between 1 and 100" });
+        return;
+      }
+    } else {
+      const amount = parseFloat(allocationValue);
+      if (isNaN(amount) || amount <= 0) {
+        toast.error("Invalid allocation", { description: "Amount must be greater than 0" });
+        return;
+      }
+    }
+
+    setIsSubmitting(true);
+    try {
+      const payload: any = {
+        traderId: trader.id,
+      };
+
+      if (allocationMethod === "percentage") {
+        payload.allocationPct = parseFloat(allocationValue);
+      } else {
+        // For fixed amount, we'll use 100% allocation (backend handles this)
+        payload.allocationPct = 100;
+      }
+
+      if (maxPositionPct) {
+        const maxPct = parseFloat(maxPositionPct);
+        if (!isNaN(maxPct) && maxPct > 0 && maxPct <= 100) {
+          payload.maxPositionPct = maxPct;
+        }
+      }
+
+      await api.post("/api/copy-setups", payload);
+      toast.success("Copy setup created", { description: `You're now copying ${trader.name}` });
+      onNavigate("copy-trading");
+    } catch (err: any) {
+      const message = err?.message || "Failed to create copy setup";
+      toast.error("Error", { description: message });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   return (
     <div className="p-6 space-y-6">
@@ -47,8 +104,8 @@ export function CopySetup({ onNavigate, traderData }: CopySetupProps) {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="fixed">Fixed Amount (USDT)</SelectItem>
                       <SelectItem value="percentage">Percentage of Portfolio</SelectItem>
+                      <SelectItem value="fixed">Fixed Amount (USDT)</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -56,14 +113,28 @@ export function CopySetup({ onNavigate, traderData }: CopySetupProps) {
                 {allocationMethod === "fixed" ? (
                   <div>
                     <Label>Copy Amount (USDT)</Label>
-                    <Input type="number" placeholder="1000.00" className="mt-2" />
-                    <p className="text-xs text-muted-foreground mt-1">Available: $24,567.82 USDT</p>
+                    <Input 
+                      type="number" 
+                      placeholder="1000.00" 
+                      className="mt-2"
+                      value={allocationValue}
+                      onChange={(e) => setAllocationValue(e.target.value)}
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">Enter the amount to allocate</p>
                   </div>
                 ) : (
                   <div>
                     <Label>Portfolio Percentage (%)</Label>
-                    <Input type="number" placeholder="10" className="mt-2" />
-                    <p className="text-xs text-muted-foreground mt-1">Max: 25% per trader</p>
+                    <Input 
+                      type="number" 
+                      placeholder="10" 
+                      className="mt-2"
+                      value={allocationValue}
+                      onChange={(e) => setAllocationValue(e.target.value)}
+                      min="1"
+                      max="100"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">Max: 100% per trader</p>
                   </div>
                 )}
               </div>
@@ -76,50 +147,25 @@ export function CopySetup({ onNavigate, traderData }: CopySetupProps) {
               
               <div className="space-y-4">
                 <div>
-                  <Label>Max Leverage</Label>
-                  <Select defaultValue="5">
-                    <SelectTrigger className="mt-2">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="1">1x (No Leverage)</SelectItem>
-                      <SelectItem value="2">2x</SelectItem>
-                      <SelectItem value="5">5x</SelectItem>
-                      <SelectItem value="10">10x</SelectItem>
-                      <SelectItem value="20">20x</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div>
-                  <Label>Max Position Size (USDT)</Label>
-                  <Input type="number" placeholder="500.00" className="mt-2" />
-                  <p className="text-xs text-muted-foreground mt-1">Per individual position</p>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label>Max Daily Loss (%)</Label>
-                    <Input type="number" placeholder="5" className="mt-2" />
-                  </div>
-                  <div>
-                    <Label>Max Drawdown (%)</Label>
-                    <Input type="number" placeholder="15" className="mt-2" />
-                  </div>
-                </div>
-
-                <div>
-                  <Label>Allowed Symbols</Label>
-                  <Input placeholder="BTC, ETH, SOL (leave empty for all)" className="mt-2" />
-                  <p className="text-xs text-muted-foreground mt-1">Comma-separated list</p>
+                  <Label>Max Position Size (%)</Label>
+                  <Input 
+                    type="number" 
+                    placeholder="25" 
+                    className="mt-2"
+                    value={maxPositionPct}
+                    onChange={(e) => setMaxPositionPct(e.target.value)}
+                    min="1"
+                    max="100"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">Per individual position (optional)</p>
                 </div>
 
                 <div className="flex items-center justify-between pt-2">
                   <div>
                     <Label>Spot Trading Only</Label>
-                    <p className="text-xs text-muted-foreground mt-1">Disable futures/leveraged trading</p>
+                    <p className="text-xs text-muted-foreground mt-1">Disable futures/leveraged trading (coming soon)</p>
                   </div>
-                  <Switch checked={spotOnly} onCheckedChange={setSpotOnly} />
+                  <Switch checked={spotOnly} onCheckedChange={setSpotOnly} disabled />
                 </div>
               </div>
             </div>
@@ -138,24 +184,20 @@ export function CopySetup({ onNavigate, traderData }: CopySetupProps) {
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Allocation:</span>
-                <span className="font-medium">$1,000 USDT</span>
+                <span className="font-medium">
+                  {allocationValue ? (
+                    allocationMethod === "percentage" ? `${allocationValue}%` : `$${allocationValue} USDT`
+                  ) : (
+                    "Not set"
+                  )}
+                </span>
               </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Max Leverage:</span>
-                <span className="font-medium">5x</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Max Position:</span>
-                <span className="font-medium">$500 USDT</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Daily Loss Limit:</span>
-                <span className="font-medium">5%</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Drawdown Limit:</span>
-                <span className="font-medium">15%</span>
-              </div>
+              {maxPositionPct && (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Max Position:</span>
+                  <span className="font-medium">{maxPositionPct}%</span>
+                </div>
+              )}
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Trading Mode:</span>
                 <span className="font-medium">{spotOnly ? "Spot Only" : "All Markets"}</span>
@@ -171,10 +213,19 @@ export function CopySetup({ onNavigate, traderData }: CopySetupProps) {
           </Alert>
 
           <div className="space-y-2">
-            <Button className="w-full bg-primary text-primary-foreground" onClick={() => {
-              onNavigate("copy-trading");
-            }}>
-              Confirm & Start Copying
+            <Button 
+              className="w-full bg-primary text-primary-foreground" 
+              onClick={handleSubmit}
+              disabled={isSubmitting || !allocationValue}
+            >
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="size-4 mr-2 animate-spin" />
+                  Creating...
+                </>
+              ) : (
+                "Confirm & Start Copying"
+              )}
             </Button>
             <Button variant="outline" className="w-full" onClick={() => onNavigate("trader-profile", trader)}>
               Cancel
@@ -185,7 +236,7 @@ export function CopySetup({ onNavigate, traderData }: CopySetupProps) {
             <div className="text-xs text-muted-foreground space-y-2">
               <p>• Platform fee: 20% of profitable trades</p>
               <p>• No fees on losing trades</p>
-              <p>• Your Pro plan allows up to 5 simultaneous copies</p>
+              <p>• You can manage multiple copy setups</p>
             </div>
           </Card>
         </div>

@@ -8,7 +8,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/app/components/ui/ta
 import { Alert, AlertDescription } from "@/app/components/ui/alert";
 import { AlertTriangle, Key, Shield, Wifi } from "lucide-react";
 import { useAuth } from "@/app/contexts/AuthContext";
-import { supabase } from "@/lib/supabase";
 import { api } from "@/lib/api";
 import { toast } from "@/app/lib/toast";
 
@@ -32,21 +31,27 @@ export function Settings() {
     }
     setProfileLoading(true);
     setProfileError("");
-    supabase
-      .from("user_profiles")
-      .select("full_name, username, timezone, referral_wallet, email")
-      .eq("id", user.id)
-      .single()
-      .then(({ data, error }) => {
-        if (error) {
-          setProfileError(error.message);
-          setProfileLoading(false);
-          return;
-        }
-        setFullName(data?.full_name ?? "");
-        setUsername(data?.username ?? "");
-        setTimezone(data?.timezone ?? "UTC");
-        setReferralWallet(data?.referral_wallet ?? "");
+    api.get<{
+      id: string;
+      email: string;
+      role: string;
+      fullName?: string;
+      username?: string;
+      timezone: string;
+      referralWallet?: string;
+      status: string;
+      createdAt: string;
+      updatedAt: string;
+    }>("/api/me/profile")
+      .then((data) => {
+        setFullName(data.fullName ?? "");
+        setUsername(data.username ?? "");
+        setTimezone(data.timezone ?? "UTC");
+        setReferralWallet(data.referralWallet ?? "");
+        setProfileLoading(false);
+      })
+      .catch((err: any) => {
+        setProfileError(err?.message || "Failed to load profile");
         setProfileLoading(false);
       });
   }, [user?.id]);
@@ -55,24 +60,19 @@ export function Settings() {
     if (!user?.id) return;
     setSaveLoading(true);
     setProfileError("");
-    const { error } = await supabase
-      .from("user_profiles")
-      .update({
-        full_name: fullName || null,
+    try {
+      await api.put("/api/me/profile", {
+        fullName: fullName || null,
         username: username || null,
         timezone: timezone || "UTC",
-        referral_wallet: referralWallet || null,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", user.id);
-
-    if (error) {
-      toast.error("Failed to save profile", { description: error.message });
+        referralWallet: referralWallet || null,
+      });
+      toast.success("Profile saved");
+    } catch (err: any) {
+      toast.error("Failed to save profile", { description: err?.message || "Please try again" });
+    } finally {
       setSaveLoading(false);
-      return;
     }
-    toast.success("Profile saved");
-    setSaveLoading(false);
   };
 
   const handleConnectionTest = async () => {
