@@ -21,9 +21,13 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Validate required environment variables
-const FRONTEND_URL = process.env.FRONTEND_URL;
+const FRONTEND_URL = process.env.FRONTEND_URL || (process.env.NODE_ENV === 'development' ? 'http://localhost:5173' : undefined);
 if (!FRONTEND_URL) {
   console.error('FATAL: FRONTEND_URL environment variable is required');
+  console.error('For local development, create backend-skeleton/.env with:');
+  console.error('  FRONTEND_URL=http://localhost:5173');
+  console.error('  SUPABASE_URL=https://oyfeadnxwuazidfbjjfo.supabase.co');
+  console.error('  SUPABASE_SERVICE_ROLE_KEY=your-service-role-key');
   process.exit(1);
 }
 
