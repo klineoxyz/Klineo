@@ -10,8 +10,6 @@ export const apiLimiter = rateLimit({
   message: 'Too many requests from this IP, please try again later.',
   standardHeaders: true,
   legacyHeaders: false,
-  // Trust Railway proxy
-  trustProxy: true,
 });
 
 /**
@@ -24,7 +22,6 @@ export const authLimiter = rateLimit({
   message: 'Too many authentication attempts, please try again later.',
   standardHeaders: true,
   legacyHeaders: false,
-  trustProxy: true,
 });
 
 /**
@@ -37,5 +34,4 @@ export const adminLimiter = rateLimit({
   message: 'Too many admin requests, please try again later.',
   standardHeaders: true,
   legacyHeaders: false,
-  trustProxy: true,
 });

@@ -36,6 +36,9 @@ app.use((req, res, next) => {
   next();
 });
 
+// Trust Railway proxy (for rate limiting to work correctly)
+app.set('trust proxy', 1);
+
 // Middleware
 app.use(cors({
   origin: FRONTEND_URL,

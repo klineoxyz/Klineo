@@ -60,22 +60,27 @@ copySetupsRouter.get('/', async (req: AuthenticatedRequest, res) => {
       return res.status(500).json({ error: 'Failed to fetch copy setups' });
     }
 
-    const result = setups?.map((setup: any) => ({
-      id: setup.id,
-      traderId: setup.trader_id,
-      trader: setup.traders ? {
-        id: setup.traders.id,
-        name: setup.traders.display_name,
-        slug: setup.traders.slug,
-        avatarUrl: setup.traders.avatar_url,
-        status: setup.traders.status,
-      } : null,
-      allocationPct: parseFloat(setup.allocation_pct?.toString() || '100'),
-      maxPositionPct: setup.max_position_pct ? parseFloat(setup.max_position_pct.toString()) : null,
-      status: setup.status,
-      createdAt: setup.created_at,
-      updatedAt: setup.updated_at,
-    })) || [];
+    const result = setups?.map((setup: any) => {
+      // Handle traders relation (can be object or array, but should be single object for this relation)
+      const traderData = Array.isArray(setup.traders) ? setup.traders[0] : setup.traders;
+      
+      return {
+        id: setup.id,
+        traderId: setup.trader_id,
+        trader: traderData ? {
+          id: traderData.id,
+          name: traderData.display_name,
+          slug: traderData.slug,
+          avatarUrl: traderData.avatar_url,
+          status: traderData.status,
+        } : null,
+        allocationPct: parseFloat(setup.allocation_pct?.toString() || '100'),
+        maxPositionPct: setup.max_position_pct ? parseFloat(setup.max_position_pct.toString()) : null,
+        status: setup.status,
+        createdAt: setup.created_at,
+        updatedAt: setup.updated_at,
+      };
+    }) || [];
 
     res.json({ copySetups: result });
   } catch (err) {
@@ -164,15 +169,18 @@ copySetupsRouter.post('/',
         return res.status(500).json({ error: 'Failed to create copy setup' });
       }
 
+      // Handle traders relation (can be object or array, but should be single object for this relation)
+      const traderData = Array.isArray(setup.traders) ? setup.traders[0] : setup.traders;
+
       res.status(201).json({
         id: setup.id,
         traderId: setup.trader_id,
-        trader: setup.traders ? {
-          id: setup.traders.id,
-          name: setup.traders.display_name,
-          slug: setup.traders.slug,
-          avatarUrl: setup.traders.avatar_url,
-          status: setup.traders.status,
+        trader: traderData ? {
+          id: traderData.id,
+          name: traderData.display_name,
+          slug: traderData.slug,
+          avatarUrl: traderData.avatar_url,
+          status: traderData.status,
         } : null,
         allocationPct: parseFloat(setup.allocation_pct?.toString() || '100'),
         maxPositionPct: setup.max_position_pct ? parseFloat(setup.max_position_pct.toString()) : null,
@@ -259,15 +267,18 @@ copySetupsRouter.put('/:id',
         return res.status(500).json({ error: 'Failed to update copy setup' });
       }
 
+      // Handle traders relation (can be object or array, but should be single object for this relation)
+      const traderData = Array.isArray(setup.traders) ? setup.traders[0] : setup.traders;
+
       res.json({
         id: setup.id,
         traderId: setup.trader_id,
-        trader: setup.traders ? {
-          id: setup.traders.id,
-          name: setup.traders.display_name,
-          slug: setup.traders.slug,
-          avatarUrl: setup.traders.avatar_url,
-          status: setup.traders.status,
+        trader: traderData ? {
+          id: traderData.id,
+          name: traderData.display_name,
+          slug: traderData.slug,
+          avatarUrl: traderData.avatar_url,
+          status: traderData.status,
         } : null,
         allocationPct: parseFloat(setup.allocation_pct?.toString() || '100'),
         maxPositionPct: setup.max_position_pct ? parseFloat(setup.max_position_pct.toString()) : null,
