@@ -6,6 +6,7 @@ import { Footer } from "@/app/components/layout/Footer";
 import { MobileMenu } from "@/app/components/layout/MobileMenu";
 import { ChatWidget } from "@/app/components/ui/chat-widget";
 import heroImage from "@/assets/27a5e37b3de43f564e5875751799a9ee08284de6.png";
+import klineoLogoDark from "@/assets/klineo-logo-dark-bg.png";
 import { 
   TrendingUp, 
   Users, 
@@ -35,12 +36,17 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
       {/* Navigation */}
       <nav className="container flex items-center justify-between px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
         <div className="flex items-center gap-2">
-          <div className="relative">
-            <span className="font-bold text-2xl sm:text-3xl tracking-wider text-foreground">
-              KLINEO
-            </span>
-            <div className="absolute -bottom-1 left-0 right-0 h-0.5 bg-accent"></div>
-          </div>
+          <button
+            onClick={() => onNavigate("landing")}
+            className="relative focus:outline-none focus:ring-2 focus:ring-accent rounded transition-opacity hover:opacity-80"
+            aria-label="KLINEO Home"
+          >
+            <img
+              src={klineoLogoDark}
+              alt="KLINEO"
+              className="h-8 sm:h-10 w-auto object-contain"
+            />
+          </button>
         </div>
         <div className="hidden md:flex items-center gap-6">
           <button 

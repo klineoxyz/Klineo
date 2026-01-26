@@ -16,6 +16,8 @@ import {
   Users
 } from "lucide-react";
 import klineoLogo from "@/assets/6c13e9a600576bf702d05a5cf77f566f05f5c6a4.png";
+import klineoIcon from "@/assets/klineo-icon-64.png";
+import klineoLogoDark from "@/assets/klineo-logo-dark-bg.png";
 
 interface HowItWorksPageProps {
   onNavigate: (view: string) => void;
@@ -30,12 +32,14 @@ export function HowItWorksPage({ onNavigate }: HowItWorksPageProps) {
           <div className="flex items-center gap-8">
             <button
               onClick={() => onNavigate("landing")}
-              className="flex items-center gap-2"
+              className="flex items-center gap-2 focus:outline-none focus:ring-2 focus:ring-accent rounded transition-opacity hover:opacity-80"
+              aria-label="KLINEO Home"
             >
-              <div className="size-8 bg-gradient-to-br from-accent to-amber-600 rounded flex items-center justify-center font-bold text-background shadow-lg">
-                K
-              </div>
-              <span className="text-xl font-bold tracking-tight">KLINEO</span>
+              <img
+                src={klineoLogoDark}
+                alt="KLINEO"
+                className="h-8 sm:h-10 w-auto object-contain"
+              />
             </button>
             <div className="hidden md:flex items-center gap-6">
               <button 

@@ -11,6 +11,7 @@
 
 import { useState } from "react";
 import { Button } from "@/app/components/ui/button";
+import klineoIcon from "@/assets/klineo-icon-64.png";
 import { Card } from "@/app/components/ui/card";
 import { Badge } from "@/app/components/ui/badge";
 import { Progress } from "@/app/components/ui/progress";
@@ -178,9 +179,11 @@ export function OnboardingWizard({ onComplete, onSkip }: OnboardingWizardProps) 
         {/* Header */}
         <div className="text-center mb-8">
           <div className="flex items-center justify-center gap-2 mb-4">
-            <div className="size-10 bg-accent rounded-lg flex items-center justify-center">
-              <span className="text-xl font-bold text-background">K</span>
-            </div>
+            <img
+              src={klineoIcon}
+              alt="KLINEO"
+              className="size-10 object-contain"
+            />
             <h1 className="text-2xl font-bold">KLINEO</h1>
           </div>
           <p className="text-sm text-muted-foreground">

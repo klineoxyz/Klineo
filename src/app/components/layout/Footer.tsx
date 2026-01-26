@@ -2,6 +2,7 @@ import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { Twitter, Github, MessageSquare, Mail } from "lucide-react";
 import { useState } from "react";
+import klineoLogoDark from "@/assets/klineo-logo-dark-bg.png";
 
 interface FooterProps {
   onNavigate?: (view: string) => void;
@@ -24,10 +25,11 @@ export function Footer({ onNavigate }: FooterProps) {
           {/* Brand */}
           <div className="md:col-span-2">
             <div className="flex items-center gap-2 mb-4">
-              <div className="size-8 bg-gradient-to-br from-primary to-amber-600 rounded flex items-center justify-center font-bold text-background shadow-lg">
-                K
-              </div>
-              <span className="font-bold text-lg">KLINEO</span>
+              <img
+                src={klineoLogoDark}
+                alt="KLINEO"
+                className="h-8 w-auto object-contain"
+              />
             </div>
             <p className="text-sm text-muted-foreground leading-relaxed mb-6">
               Professional copy trading terminal for centralized exchanges. Built for serious traders who 

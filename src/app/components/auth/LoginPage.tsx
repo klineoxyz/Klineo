@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Button } from "@/app/components/ui/button";
+import klineoIcon from "@/assets/klineo-icon-64.png";
 import { Card } from "@/app/components/ui/card";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
@@ -64,9 +65,11 @@ export function LoginPage({ onNavigate }: LoginPageProps) {
 
         <Card className="p-8">
           <div className="flex items-center justify-center mb-8">
-            <div className="size-12 bg-gradient-to-br from-accent to-amber-600 rounded flex items-center justify-center font-bold text-xl text-background shadow-lg">
-              K
-            </div>
+            <img
+              src={klineoIcon}
+              alt="KLINEO"
+              className="size-12 object-contain"
+            />
           </div>
 
           <div className="text-center mb-8">

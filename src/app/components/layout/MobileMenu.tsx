@@ -1,4 +1,5 @@
 import { Button } from "@/app/components/ui/button";
+import klineoIcon from "@/assets/klineo-icon-64.png";
 import { X, Menu, Home, DollarSign, BookOpen, Info, HelpCircle, Mail, FileText } from "lucide-react";
 import { useState, useEffect } from "react";
 
@@ -66,9 +67,11 @@ export function MobileMenu({ onNavigate, currentView }: MobileMenuProps) {
           {/* Header */}
           <div className="flex items-center justify-between p-6 border-b border-border">
             <div className="flex items-center gap-2">
-              <div className="size-8 bg-gradient-to-br from-primary to-amber-600 rounded flex items-center justify-center font-bold text-background shadow-lg">
-                K
-              </div>
+              <img
+                src={klineoIcon}
+                alt="KLINEO"
+                className="size-8 object-contain"
+              />
               <span className="font-bold text-lg">KLINEO</span>
             </div>
             <button

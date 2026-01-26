@@ -1,6 +1,7 @@
 import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
 import { ArrowLeft, Target, Shield, Zap, Users, TrendingUp, Globe } from "lucide-react";
+import klineoIcon from "@/assets/klineo-icon-64.png";
 
 interface AboutPageProps {
   onNavigate: (view: string) => void;
@@ -20,9 +21,11 @@ export function AboutPage({ onNavigate }: AboutPageProps) {
               </Button>
               <div className="h-8 w-px bg-border" />
               <div className="flex items-center gap-3">
-                <div className="size-8 bg-primary/10 border border-primary/30 rounded flex items-center justify-center">
-                  <span className="text-primary font-bold text-sm">K</span>
-                </div>
+                <img
+                  src={klineoIcon}
+                  alt="KLINEO"
+                  className="size-8 object-contain"
+                />
                 <div>
                   <h1 className="text-xl font-semibold">About KLINEO</h1>
                   <p className="text-xs text-muted-foreground">Professional copy trading, reimagined</p>
