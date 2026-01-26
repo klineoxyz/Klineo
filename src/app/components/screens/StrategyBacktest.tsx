@@ -46,6 +46,8 @@ import {
   Bar,
   Line,
   Brush,
+  ReferenceLine,
+  ReferenceArea,
 } from "recharts";
 import {
   Play,
@@ -99,10 +101,11 @@ const calculateBollingerBands = (data: any[], period: number = 20, stdDev: numbe
   });
 };
 
-// Generate realistic candlestick data for backtest
+// Generate realistic candlestick data for backtest with trade signals
 const generateBacktestCandlesticks = (count: number) => {
   const data = [];
   let currentPrice = 45000;
+  const trades: Array<{ entryIndex: number; exitIndex: number; entryPrice: number; exitPrice: number; direction: 'long' | 'short' }> = [];
   
   for (let i = 0; i < count; i++) {
     const change = (Math.random() - 0.5) * 500;
@@ -111,26 +114,55 @@ const generateBacktestCandlesticks = (count: number) => {
     const high = Math.max(open, close) + Math.random() * 200;
     const low = Math.min(open, close) - Math.random() * 200;
     
+    const timestamp = new Date(Date.now() - (count - i) * 86400000);
+    
     data.push({
-      time: new Date(Date.now() - (count - i) * 86400000).toLocaleDateString("en-US", {
+      time: timestamp.toLocaleDateString("en-US", {
         month: "short",
         day: "numeric",
       }),
+      timestamp: timestamp.getTime(),
       open,
       high,
       low,
       close,
-      entry: i % 8 === 0 ? close : null,
-      exit: i % 8 === 5 ? close : null,
+      buySignal: null as number | null,
+      sellSignal: null as number | null,
+      tradeId: null as number | null,
     });
     
     currentPrice = close;
   }
   
-  return data;
+  // Generate realistic trades with entry/exit points
+  let tradeId = 1;
+  for (let i = 0; i < count - 10; i += Math.floor(Math.random() * 8) + 5) {
+    const entryIndex = i;
+    const exitIndex = Math.min(i + Math.floor(Math.random() * 8) + 3, count - 1);
+    const entryPrice = data[entryIndex].close;
+    const exitPrice = data[exitIndex].close;
+    const direction = Math.random() > 0.3 ? 'long' : 'short';
+    
+    trades.push({ entryIndex, exitIndex, entryPrice, exitPrice, direction });
+    
+    // Mark buy/sell signals
+    data[entryIndex].buySignal = direction === 'long' ? entryPrice : null;
+    data[entryIndex].sellSignal = direction === 'short' ? entryPrice : null;
+    data[exitIndex].sellSignal = direction === 'long' ? exitPrice : null;
+    data[exitIndex].buySignal = direction === 'short' ? exitPrice : null;
+    
+    // Mark trade ID for shaded regions
+    for (let j = entryIndex; j <= exitIndex; j++) {
+      data[j].tradeId = tradeId;
+    }
+    
+    tradeId++;
+  }
+  
+  return { data, trades };
 };
 
-const backtestCandles = generateBacktestCandlesticks(50);
+const { data: backtestCandles, trades: generatedTrades } = generateBacktestCandlesticks(50);
 const sma20Backtest = calculateSMA(backtestCandles, 20, "close");
 const bbBacktest = calculateBollingerBands(backtestCandles, 20, 2);
 
@@ -141,6 +173,33 @@ const backtestChartData = backtestCandles.map((item, index) => ({
   bb_middle: bbBacktest[index].middle,
   bb_lower: bbBacktest[index].lower,
 }));
+
+// Calculate trade statistics from generated trades
+const calculateTradeStats = () => {
+  let totalTrades = generatedTrades.length;
+  let winningTrades = 0;
+  let totalPnl = 0;
+  let totalPnlPercent = 0;
+  
+  generatedTrades.forEach(trade => {
+    const pnl = trade.direction === 'long' 
+      ? trade.exitPrice - trade.entryPrice 
+      : trade.entryPrice - trade.exitPrice;
+    const pnlPercent = (pnl / trade.entryPrice) * 100;
+    
+    totalPnl += pnl;
+    totalPnlPercent += pnlPercent;
+    if (pnl > 0) winningTrades++;
+  });
+  
+  return {
+    totalTrades,
+    winRate: totalTrades > 0 ? (winningTrades / totalTrades) * 100 : 0,
+    totalPnl,
+    totalPnlPercent,
+    avgPnl: totalTrades > 0 ? totalPnl / totalTrades : 0,
+  };
+};
 
 // Custom Candlestick Component
 const Candlestick = (props: any) => {
@@ -225,13 +284,14 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
   const [launchCapital, setLaunchCapital] = useState("10000");
   const [exchange, setExchange] = useState("binance");
 
-  // Mock KPIs
+  // Calculate KPIs from generated trades
+  const tradeStats = calculateTradeStats();
   const kpis = {
-    totalTrades: 47,
-    winRate: 63.83,
-    netPnl: 12450.67,
-    roi: 24.5,
-    avgPnl: 265.12,
+    totalTrades: tradeStats.totalTrades,
+    winRate: tradeStats.winRate,
+    netPnl: tradeStats.totalPnl,
+    roi: tradeStats.totalPnlPercent,
+    avgPnl: tradeStats.avgPnl,
     maxDrawdown: -8.34,
     sharpeRatio: 1.87,
     profitFactor: 2.34,
@@ -539,210 +599,331 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
             )}
           </div>
 
-          {/* KPI Cards */}
+          {/* Summary Statistics Header - Matching Screenshot */}
           {hasResults && (
             <div className="space-y-6">
-              <div className="grid grid-cols-4 gap-3">
-                <Card className="p-3 bg-card/50">
-                  <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-xs text-muted-foreground">Total Trades</span>
-                    <Activity className="h-3.5 w-3.5 text-muted-foreground" />
-                  </div>
-                  <div className="text-xl font-mono font-bold">{kpis.totalTrades}</div>
-                  <div className="text-[10px] text-muted-foreground mt-0.5">
-                    Win Rate: {kpis.winRate}%
-                  </div>
-                </Card>
-
-                <Card className="p-3 bg-card/50">
-                  <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-xs text-muted-foreground">Net PnL</span>
-                    <DollarSign className="h-3.5 w-3.5 text-muted-foreground" />
-                  </div>
-                  <div className="text-xl font-mono font-bold text-green-500">
-                    +${kpis.netPnl.toLocaleString()}
-                  </div>
-                  <div className="text-[10px] text-green-500 mt-0.5">+{kpis.roi}% ROI</div>
-                </Card>
-
-                <Card className="p-3 bg-card/50">
-                  <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-xs text-muted-foreground">Avg PnL/Trade</span>
-                    <Target className="h-3.5 w-3.5 text-muted-foreground" />
-                  </div>
-                  <div className="text-xl font-mono font-bold text-green-500">
-                    +${kpis.avgPnl}
-                  </div>
-                  <div className="text-[10px] text-muted-foreground mt-0.5">
-                    Profit Factor: {kpis.profitFactor}
-                  </div>
-                </Card>
-
-                <Card className="p-3 bg-card/50">
-                  <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-xs text-muted-foreground">Max Drawdown</span>
-                    <TrendingDown className="h-3.5 w-3.5 text-muted-foreground" />
-                  </div>
-                  <div className="text-xl font-mono font-bold text-red-500">
-                    {kpis.maxDrawdown}%
-                  </div>
-                  <div className="text-[10px] text-muted-foreground mt-0.5">
-                    Sharpe: {kpis.sharpeRatio}
-                  </div>
-                </Card>
-              </div>
-
-              {/* Price Chart with Indicators */}
-              <Card className="p-6 bg-card/50">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-2">
-                    <TrendingUp className="h-4 w-4 text-primary" />
-                    <h3 className="font-semibold">Strategy Performance Chart</h3>
-                  </div>
-                  <div className="flex gap-2 text-xs">
-                    <Badge variant="outline" className="bg-green-500/10 text-green-500 border-green-500/20">
-                      Entry Points
-                    </Badge>
-                    <Badge variant="outline" className="bg-red-500/10 text-red-500 border-red-500/20">
-                      Exit Points
-                    </Badge>
-                    <Badge variant="outline" className="bg-purple-500/10 text-purple-500 border-purple-500/20">
-                      Bollinger Bands
-                    </Badge>
-                    <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20">
-                      SMA 20
-                    </Badge>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <Badge className="bg-[#FFB000] text-black font-semibold px-2 py-1">
+                    {kpis.totalTrades}
+                  </Badge>
+                  <div>
+                    <h2 className="text-xl font-semibold">Backtest results</h2>
+                    <p className="text-sm text-muted-foreground">
+                      {selectedStrategy?.name || 'Strategy'} • {symbol.replace('/', '')} • {timeframe} • {new Date(dateFrom).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} - {new Date(dateTo).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                    </p>
                   </div>
                 </div>
-                <div className="h-80">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <ComposedChart data={backtestChartData}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
-                      <XAxis dataKey="time" stroke="#6b7280" tick={{ fontSize: 11 }} />
-                      <YAxis
-                        stroke="#6b7280"
-                        tick={{ fontSize: 11 }}
-                        tickFormatter={(value) => `$${value.toLocaleString()}`}
-                      />
-                      <Tooltip
-                        contentStyle={{
-                          backgroundColor: "#1f2937",
-                          border: "1px solid #374151",
-                          borderRadius: "6px",
-                          fontSize: "12px",
-                        }}
-                        formatter={(value: any, name: string) => [
-                          `$${parseFloat(value).toLocaleString()}`,
-                          name.toUpperCase()
-                        ]}
-                        cursor={{ stroke: "#6b7280", strokeWidth: 1, strokeDasharray: "3 3" }}
-                      />
-                      
-                      {/* Candlesticks */}
-                      <Bar
-                        dataKey="high"
-                        shape={(props: any) => {
-                          const item = backtestChartData[props.index];
-                          return (
-                            <Candlestick
-                              {...props}
-                              open={item.open}
-                              close={item.close}
-                              high={item.high}
-                              low={item.low}
-                              yScale={(val: number) => {
-                                const { y, height } = props;
-                                const domain = [
-                                  Math.min(...backtestChartData.map(d => d.low)),
-                                  Math.max(...backtestChartData.map(d => d.high))
-                                ];
-                                const range = domain[1] - domain[0];
-                                return y + height - ((val - domain[0]) / range) * height;
-                              }}
-                            />
-                          );
-                        }}
-                      />
-                      
-                      {/* Bollinger Bands */}
-                      <Line
-                        type="monotone"
-                        dataKey="bb_upper"
-                        stroke="#9333EA"
-                        strokeWidth={1}
-                        dot={false}
-                        strokeDasharray="3 3"
-                      />
-                      <Line
-                        type="monotone"
-                        dataKey="bb_middle"
-                        stroke="#9333EA"
-                        strokeWidth={1}
-                        dot={false}
-                      />
-                      <Line
-                        type="monotone"
-                        dataKey="bb_lower"
-                        stroke="#9333EA"
-                        strokeWidth={1}
-                        dot={false}
-                        strokeDasharray="3 3"
-                      />
-                      
-                      {/* SMA 20 */}
-                      <Line
-                        type="monotone"
-                        dataKey="sma20"
-                        stroke="#FFB000"
-                        strokeWidth={2}
-                        dot={false}
-                      />
-                      
-                      {/* Entry/Exit Markers */}
-                      <Scatter
-                        dataKey="entry"
-                        fill="#10B981"
-                        shape={(props: any) => {
-                          if (!props.payload.entry) return null;
-                          return (
-                            <circle
-                              cx={props.cx}
-                              cy={props.cy}
-                              r={5}
-                              fill="#10B981"
-                              stroke="#fff"
-                              strokeWidth={2}
-                            />
-                          );
-                        }}
-                      />
-                      <Scatter
-                        dataKey="exit"
-                        fill="#EF4444"
-                        shape={(props: any) => {
-                          if (!props.payload.exit) return null;
-                          return (
-                            <circle
-                              cx={props.cx}
-                              cy={props.cy}
-                              r={5}
-                              fill="#EF4444"
-                              stroke="#fff"
-                              strokeWidth={2}
-                            />
-                          );
-                        }}
-                      />
-                      
-                      {/* Brush for zooming */}
-                      <Brush
-                        dataKey="time"
-                        height={30}
-                        stroke="#FFB000"
-                        fill="#1f2937"
-                      />
-                    </ComposedChart>
-                  </ResponsiveContainer>
+                <Button variant="outline" size="sm">
+                  <Share2 className="h-4 w-4 mr-2" />
+                  Share
+                </Button>
+              </div>
+
+              {/* KPI Cards - Matching Screenshot Layout */}
+              <div className="grid grid-cols-5 gap-4">
+                <div>
+                  <div className="text-xs text-muted-foreground mb-1">Total trades</div>
+                  <div className="text-2xl font-bold">{kpis.totalTrades}</div>
+                </div>
+                <div>
+                  <div className="text-xs text-muted-foreground mb-1">Win rate</div>
+                  <div className="text-2xl font-bold text-green-500">{kpis.winRate.toFixed(1)}%</div>
+                </div>
+                <div>
+                  <div className="text-xs text-muted-foreground mb-1">PnL (USDT)</div>
+                  <div className={`text-2xl font-bold ${kpis.netPnl >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                    {kpis.netPnl >= 0 ? '+' : ''}${kpis.netPnl.toFixed(2)}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-xs text-muted-foreground mb-1">PnL (%)</div>
+                  <div className={`text-2xl font-bold ${kpis.roi >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                    {kpis.roi >= 0 ? '+' : ''}{kpis.roi.toFixed(2)}%
+                  </div>
+                </div>
+                <div>
+                  <div className="text-xs text-muted-foreground mb-1">Avg Profit/Trade</div>
+                  <div className={`text-2xl font-bold ${kpis.avgPnl >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                    {kpis.avgPnl >= 0 ? '+' : ''}${kpis.avgPnl.toFixed(2)}
+                  </div>
+                </div>
+              </div>
+
+              {/* Optimize Button */}
+              <div className="flex justify-end">
+                <Button className="bg-[#FFB000] hover:bg-[#FFB000]/90 text-black font-semibold">
+                  Optimize
+                </Button>
+              </div>
+
+              {/* Price Chart with Buy/Sell Labels and Shaded Regions */}
+              <Card className="p-6 bg-card/50">
+                <div className="flex gap-4">
+                  {/* Chart Toolbar (Left Side) */}
+                  <div className="flex flex-col gap-2 border-r border-border pr-4">
+                    <Button variant="ghost" size="icon" className="h-8 w-8" title="Trend Line">
+                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                      </svg>
+                    </Button>
+                    <Button variant="ghost" size="icon" className="h-8 w-8" title="Horizontal Line">
+                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14" />
+                      </svg>
+                    </Button>
+                    <Button variant="ghost" size="icon" className="h-8 w-8" title="Zoom">
+                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v6m6-6v6" />
+                      </svg>
+                    </Button>
+                    <Button variant="ghost" size="icon" className="h-8 w-8" title="Pan">
+                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16l-4-4m0 0l4-4m-4 4h18" />
+                      </svg>
+                    </Button>
+                    <Button variant="ghost" size="icon" className="h-8 w-8" title="Vertical Pan">
+                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7l4-4m0 0l4 4m-4-4v18" />
+                      </svg>
+                    </Button>
+                    <Button variant="ghost" size="icon" className="h-8 w-8" title="Parallel Lines">
+                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 5h16M4 9h16M4 13h16M4 17h16" />
+                      </svg>
+                    </Button>
+                    <Button variant="ghost" size="icon" className="h-8 w-8" title="Rectangle">
+                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                      </svg>
+                    </Button>
+                    <Button variant="ghost" size="icon" className="h-8 w-8" title="Triangle">
+                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v18m-9-9l9-9 9 9" />
+                      </svg>
+                    </Button>
+                  </div>
+
+                  {/* Chart Area */}
+                  <div className="flex-1">
+                    <div className="h-96 relative">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <ComposedChart data={backtestChartData} margin={{ top: 20, right: 20, bottom: 60, left: 20 }}>
+                          <defs>
+                            {/* Gradient for long positions (green) */}
+                            <linearGradient id="longGradient" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="0%" stopColor="#10B981" stopOpacity={0.3} />
+                              <stop offset="100%" stopColor="#10B981" stopOpacity={0.05} />
+                            </linearGradient>
+                            {/* Gradient for short positions (red) */}
+                            <linearGradient id="shortGradient" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="0%" stopColor="#EF4444" stopOpacity={0.3} />
+                              <stop offset="100%" stopColor="#EF4444" stopOpacity={0.05} />
+                            </linearGradient>
+                          </defs>
+                          
+                          <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.3} />
+                          <XAxis 
+                            dataKey="time" 
+                            stroke="#9CA3AF" 
+                            tick={{ fontSize: 11 }}
+                            angle={-45}
+                            textAnchor="end"
+                            height={60}
+                          />
+                          <YAxis
+                            stroke="#9CA3AF"
+                            tick={{ fontSize: 11 }}
+                            tickFormatter={(value) => `$${value.toLocaleString()}`}
+                            domain={['dataMin - 100', 'dataMax + 100']}
+                          />
+                          <Tooltip
+                            contentStyle={{
+                              backgroundColor: "#1F2937",
+                              border: "1px solid #374151",
+                              borderRadius: "6px",
+                              fontSize: "12px",
+                            }}
+                            formatter={(value: any, name: string) => [
+                              `$${parseFloat(value).toLocaleString()}`,
+                              name.toUpperCase()
+                            ]}
+                            cursor={{ stroke: "#6B7280", strokeWidth: 1, strokeDasharray: "3 3" }}
+                          />
+                          
+                          {/* Shaded Trade Regions - Using ReferenceArea for proper positioning */}
+                          {generatedTrades.map((trade, idx) => {
+                            const entryData = backtestChartData[trade.entryIndex];
+                            const exitData = backtestChartData[trade.exitIndex];
+                            if (!entryData || !exitData) return null;
+                            
+                            const minPrice = Math.min(...backtestChartData.map(d => d.low));
+                            const maxPrice = Math.max(...backtestChartData.map(d => d.high));
+                            
+                            return (
+                              <ReferenceArea
+                                key={`trade-${idx}`}
+                                x1={entryData.time}
+                                x2={exitData.time}
+                                y1={minPrice}
+                                y2={maxPrice}
+                                fill={trade.direction === 'long' ? '#10B981' : '#EF4444'}
+                                fillOpacity={0.15}
+                                stroke="none"
+                              />
+                            );
+                          })}
+                          
+                          {/* Candlesticks */}
+                          <Bar
+                            dataKey="high"
+                            shape={(props: any) => {
+                              const item = backtestChartData[props.index];
+                              if (!item) return null;
+                              return (
+                                <Candlestick
+                                  {...props}
+                                  open={item.open}
+                                  close={item.close}
+                                  high={item.high}
+                                  low={item.low}
+                                  yScale={(val: number) => {
+                                    const { y, height } = props;
+                                    const domain = [
+                                      Math.min(...backtestChartData.map(d => d.low)),
+                                      Math.max(...backtestChartData.map(d => d.high))
+                                    ];
+                                    const range = domain[1] - domain[0];
+                                    return y + height - ((val - domain[0]) / range) * height;
+                                  }}
+                                />
+                              );
+                            }}
+                          />
+                          
+                          {/* Bollinger Bands */}
+                          <Line
+                            type="monotone"
+                            dataKey="bb_upper"
+                            stroke="#9333EA"
+                            strokeWidth={1}
+                            dot={false}
+                            strokeDasharray="3 3"
+                            opacity={0.7}
+                          />
+                          <Line
+                            type="monotone"
+                            dataKey="bb_middle"
+                            stroke="#9333EA"
+                            strokeWidth={1}
+                            dot={false}
+                            opacity={0.7}
+                          />
+                          <Line
+                            type="monotone"
+                            dataKey="bb_lower"
+                            stroke="#9333EA"
+                            strokeWidth={1}
+                            dot={false}
+                            strokeDasharray="3 3"
+                            opacity={0.7}
+                          />
+                          
+                          {/* SMA 20 */}
+                          <Line
+                            type="monotone"
+                            dataKey="sma20"
+                            stroke="#FFB000"
+                            strokeWidth={2}
+                            dot={false}
+                          />
+                          
+                          {/* Buy/Sell Labels */}
+                          <Scatter
+                            dataKey="buySignal"
+                            fill="#10B981"
+                            shape={(props: any) => {
+                              if (!props.payload.buySignal) return null;
+                              const yPos = props.cy - 20; // Position above the price
+                              return (
+                                <g>
+                                  <rect
+                                    x={props.cx - 10}
+                                    y={yPos - 10}
+                                    width={20}
+                                    height={20}
+                                    rx={4}
+                                    fill="#10B981"
+                                    stroke="#fff"
+                                    strokeWidth={1.5}
+                                  />
+                                  <text
+                                    x={props.cx}
+                                    y={yPos + 4}
+                                    textAnchor="middle"
+                                    fill="#fff"
+                                    fontSize={12}
+                                    fontWeight="bold"
+                                  >
+                                    B
+                                  </text>
+                                </g>
+                              );
+                            }}
+                          />
+                          <Scatter
+                            dataKey="sellSignal"
+                            fill="#EF4444"
+                            shape={(props: any) => {
+                              if (!props.payload.sellSignal) return null;
+                              const yPos = props.cy + 20; // Position below the price
+                              return (
+                                <g>
+                                  <rect
+                                    x={props.cx - 10}
+                                    y={yPos - 10}
+                                    width={20}
+                                    height={20}
+                                    rx={4}
+                                    fill="#EF4444"
+                                    stroke="#fff"
+                                    strokeWidth={1.5}
+                                  />
+                                  <text
+                                    x={props.cx}
+                                    y={yPos + 4}
+                                    textAnchor="middle"
+                                    fill="#fff"
+                                    fontSize={12}
+                                    fontWeight="bold"
+                                  >
+                                    S
+                                  </text>
+                                </g>
+                              );
+                            }}
+                          />
+                          
+                          {/* Reference Price Line */}
+                          <ReferenceLine 
+                            y={backtestChartData[Math.floor(backtestChartData.length / 2)]?.close} 
+                            stroke="#EF4444" 
+                            strokeDasharray="3 3"
+                            opacity={0.5}
+                            label={{ value: `${backtestChartData[Math.floor(backtestChartData.length / 2)]?.close.toFixed(2)}`, position: "right" }}
+                          />
+                          
+                          {/* Brush for zooming */}
+                          <Brush
+                            dataKey="time"
+                            height={30}
+                            stroke="#FFB000"
+                            fill="#1F2937"
+                          />
+                        </ComposedChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
                 </div>
               </Card>
             </div>
