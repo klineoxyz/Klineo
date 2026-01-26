@@ -85,7 +85,7 @@ adminRouter.get('/users', async (req, res) => {
 
     let query = client
       .from('user_profiles')
-      .select('id, email, role, created_at, full_name, username')
+      .select('id, email, role, created_at, full_name, username, status')
       .order('created_at', { ascending: false });
 
     if (search) {
