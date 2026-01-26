@@ -1,7 +1,7 @@
 // Generate 32-byte encryption key in hex format
 // Run with: node generate-encryption-key.js
 
-const crypto = require('crypto');
+import crypto from 'crypto';
 const key = crypto.randomBytes(32).toString('hex');
 console.log('\n🔑 Your ENCRYPTION_KEY:');
 console.log(key);
