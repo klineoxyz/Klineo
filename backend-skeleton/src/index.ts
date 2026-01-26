@@ -32,6 +32,18 @@ if (!FRONTEND_URL) {
   process.exit(1);
 }
 
+// Log environment variable status (development only)
+if (process.env.NODE_ENV !== 'production') {
+  console.log('[Config] Environment variables loaded:');
+  console.log(`  SUPABASE_URL: ${process.env.SUPABASE_URL ? '✓' : '✗'}`);
+  console.log(`  SUPABASE_SERVICE_ROLE_KEY: ${process.env.SUPABASE_SERVICE_ROLE_KEY ? '✓' : '✗'}`);
+  console.log(`  SUPABASE_ANON_KEY: ${process.env.SUPABASE_ANON_KEY ? '✓' : '✗'}`);
+  if (!process.env.SUPABASE_ANON_KEY) {
+    console.warn('[Config] WARNING: SUPABASE_ANON_KEY not set - RLS self-test endpoint will fail');
+    console.warn('[Config] Add SUPABASE_ANON_KEY to backend-skeleton/.env for RLS testing');
+  }
+}
+
 // Support both www and non-www domains for CORS
 // If FRONTEND_URL is https://klineo.xyz, also allow https://www.klineo.xyz
 const corsOrigins: string[] = [FRONTEND_URL];

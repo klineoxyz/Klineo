@@ -21,6 +21,14 @@ function getSupabaseAnon(): SupabaseClient | null {
   const url = process.env.SUPABASE_URL;
   const key = process.env.SUPABASE_ANON_KEY;
   if (!url || !key) {
+    // Debug logging in development
+    if (process.env.NODE_ENV !== 'production') {
+      console.warn('[self-test] SUPABASE_ANON_KEY not configured:', {
+        hasUrl: !!url,
+        hasKey: !!key,
+        keyLength: key?.length || 0
+      });
+    }
     return null;
   }
   supabaseAnon = createClient(url, key);
