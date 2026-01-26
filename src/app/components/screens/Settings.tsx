@@ -6,10 +6,12 @@ import { Button } from "@/app/components/ui/button";
 import { Switch } from "@/app/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/app/components/ui/tabs";
 import { Alert, AlertDescription } from "@/app/components/ui/alert";
-import { AlertTriangle, Key, Shield, Wifi } from "lucide-react";
+import { AlertTriangle, Key, Shield, Wifi, Trash2, CheckCircle2, XCircle, Loader2, Plus } from "lucide-react";
 import { useAuth } from "@/app/contexts/AuthContext";
-import { api } from "@/lib/api";
+import { api, exchangeConnections, type ExchangeConnection } from "@/lib/api";
 import { toast } from "@/app/lib/toast";
+import { Badge } from "@/app/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/app/components/ui/select";
 
 export function Settings() {
   const { user } = useAuth();
@@ -23,6 +25,20 @@ export function Settings() {
   const [connectionTestLoading, setConnectionTestLoading] = useState(false);
   const [connectionTestResult, setConnectionTestResult] = useState<string | null>(null);
   const [backendStatus, setBackendStatus] = useState<{ connected: boolean; url?: string; latency?: number } | null>(null);
+  
+  // Exchange Connections state
+  const [exchangeConnectionsList, setExchangeConnectionsList] = useState<ExchangeConnection[]>([]);
+  const [exchangeConnectionsLoading, setExchangeConnectionsLoading] = useState(true);
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [formData, setFormData] = useState({
+    exchange: 'binance' as const,
+    environment: 'production' as 'production' | 'testnet',
+    label: '',
+    apiKey: '',
+    apiSecret: '',
+  });
+  const [formLoading, setFormLoading] = useState(false);
+  const [testingId, setTestingId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user?.id) {
@@ -144,6 +160,82 @@ export function Settings() {
     };
     checkBackend();
   }, []);
+
+  // Load exchange connections
+  useEffect(() => {
+    if (!user?.id) {
+      setExchangeConnectionsLoading(false);
+      return;
+    }
+    setExchangeConnectionsLoading(true);
+    exchangeConnections.list()
+      .then((data) => {
+        setExchangeConnectionsList(data.connections);
+        setExchangeConnectionsLoading(false);
+      })
+      .catch((err: any) => {
+        toast.error('Failed to load connections', { description: err?.message });
+        setExchangeConnectionsLoading(false);
+      });
+  }, [user?.id]);
+
+  const handleSaveConnection = async () => {
+    if (!formData.apiKey || !formData.apiSecret) {
+      toast.error('API Key and Secret are required');
+      return;
+    }
+    setFormLoading(true);
+    try {
+      await exchangeConnections.create(formData);
+      toast.success('Connection saved');
+      setShowAddForm(false);
+      setFormData({ exchange: 'binance', environment: 'production', label: '', apiKey: '', apiSecret: '' });
+      // Reload connections
+      const data = await exchangeConnections.list();
+      setExchangeConnectionsList(data.connections);
+    } catch (err: any) {
+      toast.error('Failed to save connection', { description: err?.message });
+    } finally {
+      setFormLoading(false);
+    }
+  };
+
+  const handleTestConnection = async (id: string) => {
+    setTestingId(id);
+    try {
+      const result = await exchangeConnections.test(id);
+      if (result.ok) {
+        toast.success('Connection test passed', { description: `Latency: ${result.latencyMs}ms` });
+      } else {
+        toast.error('Connection test failed', { description: result.message });
+      }
+      // Reload connections to get updated status
+      const data = await exchangeConnections.list();
+      setExchangeConnectionsList(data.connections);
+    } catch (err: any) {
+      toast.error('Test failed', { description: err?.message });
+    } finally {
+      setTestingId(null);
+    }
+  };
+
+  const handleDeleteConnection = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this connection?')) return;
+    try {
+      await exchangeConnections.delete(id);
+      toast.success('Connection deleted');
+      // Reload connections
+      const data = await exchangeConnections.list();
+      setExchangeConnectionsList(data.connections);
+    } catch (err: any) {
+      toast.error('Failed to delete connection', { description: err?.message });
+    }
+  };
+
+  const maskKey = (key: string) => {
+    if (!key || key.length < 4) return '****';
+    return `${key.slice(0, 2)}***${key.slice(-2)}`;
+  };
 
   return (
     <div className="p-6 space-y-6">
@@ -363,57 +455,190 @@ export function Settings() {
             <Key className="size-4 text-primary" />
             <AlertDescription className="text-sm">
               Your API keys are encrypted and stored securely. KLINEO never has withdrawal permissions.
+              <br />
+              <strong>Recommended permissions:</strong> Enable Reading, Enable Spot & Margin Trading. <strong>Do NOT</strong> enable Withdrawals.
             </AlertDescription>
           </Alert>
 
-          <Card className="p-6 space-y-6">
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-semibold">Exchange API Connection</h3>
-              <div className="flex items-center gap-2">
-                <div className="size-2 rounded-full bg-[#10B981]" />
-                <span className="text-sm font-medium">Connected</span>
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label>Exchange</Label>
-                <Input value="Binance" readOnly />
-              </div>
-              <div className="space-y-2">
-                <Label>API Key</Label>
-                <Input type="password" value="••••••••••••••••••••" readOnly className="font-mono" />
-              </div>
-              <div className="space-y-2">
-                <Label>Secret Key</Label>
-                <Input type="password" value="••••••••••••••••••••" readOnly className="font-mono" />
-              </div>
-            </div>
-
-            <div className="flex gap-2">
-              <Button variant="outline">Update API Keys</Button>
-              <Button variant="outline" className="text-[#EF4444] border-[#EF4444]/50 hover:bg-[#EF4444]/10">
-                Disconnect
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-semibold">Exchange Connections (Binance)</h3>
+            {!showAddForm && (
+              <Button onClick={() => setShowAddForm(true)} className="gap-2">
+                <Plus className="size-4" />
+                Add Connection
               </Button>
+            )}
+          </div>
+
+          {showAddForm && (
+            <Card className="p-6 space-y-4">
+              <h4 className="font-semibold">Add Binance Connection</h4>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Label (optional)</Label>
+                  <Input
+                    placeholder="My Binance Account"
+                    value={formData.label}
+                    onChange={(e) => setFormData({ ...formData, label: e.target.value })}
+                    maxLength={40}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Environment</Label>
+                  <Select
+                    value={formData.environment}
+                    onValueChange={(value: 'production' | 'testnet') => setFormData({ ...formData, environment: value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="production">Production</SelectItem>
+                      <SelectItem value="testnet">Testnet</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Use Testnet for testing with fake funds. Get testnet keys from{" "}
+                    <a href="https://testnet.binance.vision/" target="_blank" rel="noopener noreferrer" className="text-primary underline">
+                      Binance Spot Testnet
+                    </a>
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label>API Key</Label>
+                  <Input
+                    type="password"
+                    placeholder="Enter your Binance API key"
+                    value={formData.apiKey}
+                    onChange={(e) => setFormData({ ...formData, apiKey: e.target.value })}
+                    className="font-mono"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>API Secret</Label>
+                  <Input
+                    type="password"
+                    placeholder="Enter your Binance API secret"
+                    value={formData.apiSecret}
+                    onChange={(e) => setFormData({ ...formData, apiSecret: e.target.value })}
+                    className="font-mono"
+                  />
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Button onClick={handleSaveConnection} disabled={formLoading}>
+                  {formLoading ? <Loader2 className="size-4 animate-spin mr-2" /> : null}
+                  Save Connection
+                </Button>
+                <Button variant="outline" onClick={() => {
+                  setShowAddForm(false);
+                  setFormData({ exchange: 'binance', environment: 'production', label: '', apiKey: '', apiSecret: '' });
+                }}>
+                  Cancel
+                </Button>
+              </div>
+            </Card>
+          )}
+
+          {exchangeConnectionsLoading ? (
+            <Card className="p-6">
+              <div className="flex items-center gap-2">
+                <Loader2 className="size-4 animate-spin" />
+                <span>Loading connections...</span>
+              </div>
+            </Card>
+          ) : exchangeConnectionsList.length === 0 ? (
+            <Card className="p-6 text-center">
+              <Key className="size-12 mx-auto mb-4 text-muted-foreground" />
+              <p className="text-muted-foreground">No exchange connections yet</p>
+              <p className="text-sm text-muted-foreground mt-2">Add a connection to get started</p>
+            </Card>
+          ) : (
+            <div className="space-y-4">
+              {exchangeConnectionsList.map((conn) => (
+                <Card key={conn.id} className="p-6">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1 space-y-2">
+                      <div className="flex items-center gap-3">
+                        <h4 className="font-semibold">{conn.label || 'Binance Connection'}</h4>
+                        <Badge variant={conn.environment === 'production' ? 'default' : 'secondary'}>
+                          {conn.environment}
+                        </Badge>
+                        {conn.last_test_status === 'ok' && (
+                          <Badge className="bg-[#10B981] text-white">
+                            <CheckCircle2 className="size-3 mr-1" />
+                            Connected
+                          </Badge>
+                        )}
+                        {conn.last_test_status === 'fail' && (
+                          <Badge variant="destructive">
+                            <XCircle className="size-3 mr-1" />
+                            Failed
+                          </Badge>
+                        )}
+                        {!conn.last_test_status && (
+                          <Badge variant="outline">Never tested</Badge>
+                        )}
+                      </div>
+                      <div className="text-sm text-muted-foreground space-y-1">
+                        <div>Exchange: {conn.exchange}</div>
+                        {conn.last_tested_at && (
+                          <div>Last tested: {new Date(conn.last_tested_at).toLocaleString()}</div>
+                        )}
+                        {conn.last_error_message && (
+                          <div className="text-[#EF4444]">Error: {conn.last_error_message}</div>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleTestConnection(conn.id)}
+                        disabled={testingId === conn.id}
+                      >
+                        {testingId === conn.id ? (
+                          <Loader2 className="size-4 animate-spin" />
+                        ) : (
+                          'Test'
+                        )}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleDeleteConnection(conn.id)}
+                        className="text-[#EF4444] border-[#EF4444]/50 hover:bg-[#EF4444]/10"
+                      >
+                        <Trash2 className="size-4" />
+                      </Button>
+                    </div>
+                  </div>
+                </Card>
+              ))}
             </div>
-          </Card>
+          )}
 
           <Card className="p-6 space-y-4">
-            <h3 className="text-lg font-semibold">API Permissions</h3>
+            <h3 className="text-lg font-semibold">API Permissions Guide</h3>
             <div className="space-y-3">
               <div className="flex items-center justify-between p-3 bg-secondary/30 rounded">
                 <span className="text-sm">Read Account Data</span>
                 <Shield className="size-4 text-[#10B981]" />
               </div>
               <div className="flex items-center justify-between p-3 bg-secondary/30 rounded">
-                <span className="text-sm">Enable Trading</span>
+                <span className="text-sm">Enable Spot & Margin Trading</span>
                 <Shield className="size-4 text-[#10B981]" />
               </div>
               <div className="flex items-center justify-between p-3 bg-secondary/30 rounded">
                 <span className="text-sm">Enable Withdrawals</span>
                 <Shield className="size-4 text-[#EF4444]" />
+                <span className="text-xs text-[#EF4444] ml-2">Never enable</span>
               </div>
             </div>
+            <p className="text-xs text-muted-foreground">
+              When creating your Binance API key, only enable the permissions shown with green checkmarks.
+              KLINEO will never request withdrawal permissions.
+            </p>
           </Card>
         </TabsContent>
 

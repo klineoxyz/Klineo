@@ -61,3 +61,61 @@ export const api = {
     apiRequest<T>(path, { method: 'PUT', body: body ? JSON.stringify(body) : undefined }),
   delete: <T = unknown>(path: string) => apiRequest<T>(path, { method: 'DELETE' }),
 };
+
+// Exchange Connections API
+export interface ExchangeConnection {
+  id: string;
+  exchange: string;
+  label: string | null;
+  environment: 'production' | 'testnet';
+  created_at: string;
+  updated_at: string;
+  last_tested_at: string | null;
+  last_test_status: 'ok' | 'fail' | null;
+  last_error_message: string | null;
+}
+
+export interface CreateConnectionRequest {
+  exchange: 'binance';
+  environment?: 'production' | 'testnet';
+  label?: string;
+  apiKey: string;
+  apiSecret: string;
+}
+
+export interface TestConnectionResponse {
+  ok: boolean;
+  latencyMs: number;
+  message: string;
+  requestId: string;
+}
+
+export const exchangeConnections = {
+  /**
+   * List all exchange connections for current user
+   */
+  list: async (): Promise<{ connections: ExchangeConnection[]; requestId: string }> => {
+    return api.get('/api/exchange-connections');
+  },
+
+  /**
+   * Create or update exchange connection
+   */
+  create: async (data: CreateConnectionRequest): Promise<{ connection: ExchangeConnection; message: string; requestId: string }> => {
+    return api.post('/api/exchange-connections', data);
+  },
+
+  /**
+   * Test exchange connection
+   */
+  test: async (id: string): Promise<TestConnectionResponse> => {
+    return api.post(`/api/exchange-connections/${id}/test`);
+  },
+
+  /**
+   * Delete exchange connection
+   */
+  delete: async (id: string): Promise<{ message: string; requestId: string }> => {
+    return api.delete(`/api/exchange-connections/${id}`);
+  },
+};

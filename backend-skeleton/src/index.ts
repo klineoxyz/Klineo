@@ -14,6 +14,7 @@ import { ordersRouter } from './routes/orders.js';
 import { tradesRouter } from './routes/trades.js';
 import { notificationsRouter } from './routes/notifications.js';
 import { selfTestRouter } from './routes/self-test.js';
+import { exchangeConnectionsRouter } from './routes/exchange-connections.js';
 import { apiLimiter, authLimiter, adminLimiter } from './middleware/rateLimit.js';
 
 dotenv.config();
@@ -41,6 +42,11 @@ if (process.env.NODE_ENV !== 'production') {
   if (!process.env.SUPABASE_ANON_KEY) {
     console.warn('[Config] WARNING: SUPABASE_ANON_KEY not set - RLS self-test endpoint will fail');
     console.warn('[Config] Add SUPABASE_ANON_KEY to backend-skeleton/.env for RLS testing');
+  }
+  console.log(`  ENCRYPTION_KEY: ${process.env.ENCRYPTION_KEY ? '✓' : '✗'}`);
+  if (!process.env.ENCRYPTION_KEY) {
+    console.warn('[Config] WARNING: ENCRYPTION_KEY not set - Exchange connections will fail');
+    console.warn('[Config] Generate a 32-byte key: openssl rand -hex 32');
   }
 }
 
@@ -102,6 +108,7 @@ app.use('/api/orders', ordersRouter);
 app.use('/api/trades', tradesRouter);
 app.use('/api/notifications', notificationsRouter);
 app.use('/api/self-test', selfTestRouter);
+app.use('/api/exchange-connections', exchangeConnectionsRouter);
 
 // 404 handler
 app.use((req, res) => {
