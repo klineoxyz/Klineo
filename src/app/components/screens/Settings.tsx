@@ -248,7 +248,14 @@ export function Settings() {
         <TabsList>
           <TabsTrigger value="profile">Profile</TabsTrigger>
           <TabsTrigger value="security">Security</TabsTrigger>
-          <TabsTrigger value="exchange">Exchange API</TabsTrigger>
+          <TabsTrigger value="exchange">
+            Exchange API
+            {exchangeConnectionsList.length > 0 && (
+              <Badge variant="secondary" className="ml-2 text-xs">
+                {exchangeConnectionsList.length}
+              </Badge>
+            )}
+          </TabsTrigger>
           <TabsTrigger value="notifications">Notifications</TabsTrigger>
         </TabsList>
 
@@ -548,10 +555,19 @@ export function Settings() {
               </div>
             </Card>
           ) : exchangeConnectionsList.length === 0 ? (
-            <Card className="p-6 text-center">
-              <Key className="size-12 mx-auto mb-4 text-muted-foreground" />
-              <p className="text-muted-foreground">No exchange connections yet</p>
-              <p className="text-sm text-muted-foreground mt-2">Add a connection to get started</p>
+            <Card className="p-6 text-center border-primary/20 bg-primary/5">
+              <Key className="size-12 mx-auto mb-4 text-primary" />
+              <h4 className="font-semibold mb-2">Connect Your Binance Account</h4>
+              <p className="text-muted-foreground mb-4">
+                Connect your Binance API keys to enable copy trading and portfolio tracking
+              </p>
+              <Button onClick={() => setShowAddForm(true)} className="gap-2">
+                <Plus className="size-4" />
+                Add Your First Connection
+              </Button>
+              <p className="text-xs text-muted-foreground mt-4">
+                Your API keys are encrypted and stored securely. KLINEO never has withdrawal permissions.
+              </p>
             </Card>
           ) : (
             <div className="space-y-4">
