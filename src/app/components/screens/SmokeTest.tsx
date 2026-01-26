@@ -12,27 +12,25 @@ import { toast } from "sonner";
 
 export function SmokeTest() {
   const { user, isAdmin } = useAuth();
-  const navigate = useNavigate();
   
-  // Access control: dev OR (prod + env flag + admin)
+  // Access control: dev OR (prod + admin)
   const isDev = import.meta.env.DEV;
-  const enableSmokeTest = import.meta.env.VITE_ENABLE_SMOKE_TEST_PAGE === 'true';
   const isProduction = import.meta.env.PROD;
   
   useEffect(() => {
-    if (isProduction && (!enableSmokeTest || !isAdmin)) {
+    if (isProduction && !isAdmin) {
       // Redirect to dashboard and show toast
       setTimeout(() => {
         toast.error("Smoke test disabled in production", {
-          description: "This page is only available in development or when explicitly enabled for admins."
+          description: "This page is only available in development or for admins."
         });
       }, 100);
       // App.tsx will handle redirect
     }
-  }, [isProduction, enableSmokeTest, isAdmin]);
+  }, [isProduction, isAdmin]);
   
   // If production and not allowed, don't render
-  if (isProduction && (!enableSmokeTest || !isAdmin)) {
+  if (isProduction && !isAdmin) {
     return null; // App.tsx will handle redirect
   }
   const [results, setResults] = useState<SmokeTestResult[]>([]);

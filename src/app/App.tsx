@@ -163,14 +163,13 @@ export default function App() {
         if (import.meta.env.PROD) return <Dashboard />;
         return <UIStatesDemo onNavigate={handleNavigate} />;
       case "smoke-test":
-        const enableSmokeTest = import.meta.env.VITE_ENABLE_SMOKE_TEST_PAGE === 'true';
         const isDev = import.meta.env.DEV;
-        // Access control: dev OR (prod + env flag + admin)
-        if (import.meta.env.PROD && (!enableSmokeTest || !isAdmin)) {
+        // Access control: dev OR (prod + admin)
+        if (import.meta.env.PROD && !isAdmin) {
           // Redirect to dashboard and show toast
           setTimeout(() => {
             toast.error("Smoke test disabled in production", {
-              description: "This page is only available in development or when explicitly enabled for admins."
+              description: "This page is only available in development or for admins."
             });
           }, 100);
           return <Dashboard />;
