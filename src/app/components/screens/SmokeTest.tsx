@@ -1,0 +1,305 @@
+import { useState, useEffect } from "react";
+import { Card } from "@/app/components/ui/card";
+import { Button } from "@/app/components/ui/button";
+import { Badge } from "@/app/components/ui/badge";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/app/components/ui/table";
+import { Alert, AlertDescription } from "@/app/components/ui/alert";
+import { Loader2, Copy, Trash2, CheckCircle2, XCircle, MinusCircle, ChevronDown, ChevronUp } from "lucide-react";
+import { useAuth } from "@/app/contexts/AuthContext";
+import { api } from "@/lib/api";
+import { runAllTests, runTestByName, smokeTests, type SmokeTestResult } from "@/lib/smokeTests";
+import { toast } from "@/app/lib/toast";
+
+export function SmokeTest() {
+  const { user, isAdmin } = useAuth();
+  const [results, setResults] = useState<SmokeTestResult[]>([]);
+  const [isRunning, setIsRunning] = useState(false);
+  const [expandedTest, setExpandedTest] = useState<string | null>(null);
+  const [userInfo, setUserInfo] = useState<{ email: string; role: string } | null>(null);
+
+  // Get environment info
+  const apiBaseURL = import.meta.env.VITE_API_BASE_URL || '';
+  const supabaseURL = import.meta.env.VITE_SUPABASE_URL || '';
+  const enableSmokeTest = import.meta.env.VITE_ENABLE_SMOKE_TEST_PAGE === 'true';
+
+  // Mask URLs for display
+  const maskedApiDomain = apiBaseURL ? new URL(apiBaseURL).hostname : 'Not configured';
+  const maskedSupabaseDomain = supabaseURL ? new URL(supabaseURL).hostname : 'Not configured';
+
+  useEffect(() => {
+    // Load current user info
+    const loadUserInfo = async () => {
+      try {
+        const data = await api.get<{ id: string; email: string; role: string }>('/api/auth/me');
+        setUserInfo({ email: data.email, role: data.role });
+      } catch {
+        setUserInfo(null);
+      }
+    };
+    loadUserInfo();
+  }, []);
+
+  const handleRunAll = async () => {
+    setIsRunning(true);
+    setResults([]);
+    try {
+      const testResults = await runAllTests();
+      setResults(testResults);
+    } catch (err: any) {
+      toast.error("Failed to run tests", { description: err?.message });
+    } finally {
+      setIsRunning(false);
+    }
+  };
+
+  const handleRunSingle = async (testName: string) => {
+    setIsRunning(true);
+    try {
+      const result = await runTestByName(testName);
+      if (result) {
+        setResults(prev => {
+          const existing = prev.find(r => r.name === testName);
+          if (existing) {
+            return prev.map(r => r.name === testName ? result : r);
+          }
+          return [...prev, result];
+        });
+      }
+    } catch (err: any) {
+      toast.error("Failed to run test", { description: err?.message });
+    } finally {
+      setIsRunning(false);
+    }
+  };
+
+  const handleCopyReport = () => {
+    const report = {
+      timestamp: new Date().toISOString(),
+      environment: {
+        api_domain: maskedApiDomain,
+        supabase_domain: maskedSupabaseDomain,
+        user_email: userInfo?.email || 'Not logged in',
+        user_role: userInfo?.role || 'none'
+      },
+      results: results.map(r => ({
+        name: r.name,
+        status: r.status,
+        httpCode: r.httpCode,
+        latency: r.latency,
+        message: r.message
+      }))
+    };
+
+    navigator.clipboard.writeText(JSON.stringify(report, null, 2));
+    toast.success("Report copied to clipboard");
+  };
+
+  const handleClear = () => {
+    setResults([]);
+    setExpandedTest(null);
+  };
+
+  const getStatusBadge = (status: SmokeTestResult['status']) => {
+    switch (status) {
+      case 'PASS':
+        return <Badge className="bg-[#10B981] text-white">PASS</Badge>;
+      case 'FAIL':
+        return <Badge className="bg-[#EF4444] text-white">FAIL</Badge>;
+      case 'SKIP':
+        return <Badge variant="secondary">SKIP</Badge>;
+    }
+  };
+
+  const getOverallStatus = () => {
+    if (results.length === 0) return { status: 'NOT RUN', badge: <Badge variant="outline">NOT RUN</Badge> };
+    const passed = results.filter(r => r.status === 'PASS').length;
+    const failed = results.filter(r => r.status === 'FAIL').length;
+    if (failed === 0) {
+      return { status: 'ALL PASS', badge: <Badge className="bg-[#10B981] text-white">ALL PASS</Badge> };
+    }
+    return { status: 'SOME FAIL', badge: <Badge className="bg-[#EF4444] text-white">SOME FAIL</Badge> };
+  };
+
+  const overallStatus = getOverallStatus();
+
+  return (
+    <div className="p-6 space-y-6">
+      <div>
+        <h1 className="text-2xl font-semibold mb-1">KLINEO Smoke Test</h1>
+        <p className="text-sm text-muted-foreground">Test backend endpoints and production setup</p>
+      </div>
+
+      {/* Environment Info */}
+      <Card className="p-4">
+        <h3 className="font-semibold mb-3">Environment</h3>
+        <div className="grid grid-cols-2 gap-4 text-sm">
+          <div>
+            <span className="text-muted-foreground">API Domain:</span>
+            <span className="ml-2 font-mono">{maskedApiDomain}</span>
+          </div>
+          <div>
+            <span className="text-muted-foreground">Supabase Domain:</span>
+            <span className="ml-2 font-mono">{maskedSupabaseDomain}</span>
+          </div>
+          <div>
+            <span className="text-muted-foreground">User Email:</span>
+            <span className="ml-2">{userInfo?.email || 'Not logged in'}</span>
+          </div>
+          <div>
+            <span className="text-muted-foreground">User Role:</span>
+            <span className="ml-2">{userInfo?.role || 'none'}</span>
+          </div>
+        </div>
+      </Card>
+
+      {/* Overall Status */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <span className="text-sm font-medium">Overall Status:</span>
+          {overallStatus.badge}
+          <span className="text-sm text-muted-foreground">
+            ({results.filter(r => r.status === 'PASS').length}/{results.length} passed)
+          </span>
+        </div>
+        <div className="flex gap-2">
+          <Button onClick={handleRunAll} disabled={isRunning} className="gap-2">
+            {isRunning ? <Loader2 className="size-4 animate-spin" /> : <CheckCircle2 className="size-4" />}
+            Run All Tests
+          </Button>
+          <Button onClick={handleCopyReport} variant="outline" disabled={results.length === 0} className="gap-2">
+            <Copy className="size-4" />
+            Copy Report
+          </Button>
+          <Button onClick={handleClear} variant="outline" disabled={results.length === 0} className="gap-2">
+            <Trash2 className="size-4" />
+            Clear Results
+          </Button>
+        </div>
+      </div>
+
+      {/* Test Buttons */}
+      <Card className="p-4">
+        <h3 className="font-semibold mb-3">Individual Tests</h3>
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
+          {smokeTests.map((test) => {
+            const result = results.find(r => r.name === test.name);
+            const isRunningThis = isRunning && !result;
+            return (
+              <Button
+                key={test.name}
+                variant="outline"
+                size="sm"
+                onClick={() => handleRunSingle(test.name)}
+                disabled={isRunningThis}
+                className="justify-start gap-2"
+              >
+                {isRunningThis ? (
+                  <Loader2 className="size-3 animate-spin" />
+                ) : result?.status === 'PASS' ? (
+                  <CheckCircle2 className="size-3 text-[#10B981]" />
+                ) : result?.status === 'FAIL' ? (
+                  <XCircle className="size-3 text-[#EF4444]" />
+                ) : result?.status === 'SKIP' ? (
+                  <MinusCircle className="size-3 text-muted-foreground" />
+                ) : null}
+                <span className="truncate">{test.name}</span>
+              </Button>
+            );
+          })}
+        </div>
+      </Card>
+
+      {/* Results Table */}
+      {results.length > 0 && (
+        <Card>
+          <div className="p-4 border-b">
+            <h3 className="font-semibold">Test Results</h3>
+          </div>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Test Name</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>HTTP Code</TableHead>
+                <TableHead>Latency</TableHead>
+                <TableHead>Message</TableHead>
+                <TableHead className="text-right">Details</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {results.map((result) => (
+                <>
+                  <TableRow key={result.name}>
+                    <TableCell className="font-medium">{result.name}</TableCell>
+                    <TableCell>{getStatusBadge(result.status)}</TableCell>
+                    <TableCell className="font-mono text-sm">
+                      {result.httpCode || '—'}
+                    </TableCell>
+                    <TableCell className="font-mono text-sm">
+                      {result.latency ? `${result.latency}ms` : '—'}
+                    </TableCell>
+                    <TableCell className="text-sm">{result.message}</TableCell>
+                    <TableCell className="text-right">
+                      {result.details && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setExpandedTest(expandedTest === result.name ? null : result.name)}
+                        >
+                          {expandedTest === result.name ? (
+                            <ChevronUp className="size-4" />
+                          ) : (
+                            <ChevronDown className="size-4" />
+                          )}
+                        </Button>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                  {expandedTest === result.name && result.details && (
+                    <TableRow>
+                      <TableCell colSpan={6} className="bg-muted/50">
+                        <div className="p-4 space-y-2">
+                          {result.details.requestPath && (
+                            <div>
+                              <span className="text-sm font-medium">Request Path:</span>
+                              <code className="ml-2 text-xs font-mono">{result.details.requestPath}</code>
+                            </div>
+                          )}
+                          {result.details.response && (
+                            <div>
+                              <span className="text-sm font-medium">Response:</span>
+                              <pre className="mt-1 p-2 bg-background rounded text-xs overflow-auto max-h-48">
+                                {JSON.stringify(result.details.response, null, 2)}
+                              </pre>
+                            </div>
+                          )}
+                          {result.details.error && (
+                            <div>
+                              <span className="text-sm font-medium text-[#EF4444]">Error:</span>
+                              <pre className="mt-1 p-2 bg-background rounded text-xs overflow-auto max-h-48 text-[#EF4444]">
+                                {result.details.error}
+                              </pre>
+                            </div>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </>
+              ))}
+            </TableBody>
+          </Table>
+        </Card>
+      )}
+
+      {/* Info Alert */}
+      {!userInfo && (
+        <Alert>
+          <AlertDescription>
+            Some tests require authentication. Please log in to run all tests.
+          </AlertDescription>
+        </Alert>
+      )}
+    </div>
+  );
+}

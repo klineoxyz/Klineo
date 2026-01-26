@@ -25,6 +25,7 @@ import { MasterTraderApplication } from "@/app/components/screens/MasterTraderAp
 import { NotificationsCenter } from "@/app/components/screens/NotificationsCenter";
 import { UIStatesDemo } from "@/app/components/screens/UIStatesDemo";
 import { OnboardingWizard } from "@/app/components/screens/OnboardingWizard";
+import { SmokeTest } from "@/app/components/screens/SmokeTest";
 
 import { LandingPage } from "@/app/components/public/LandingPage";
 import { PricingPage } from "@/app/components/public/PricingPage";
@@ -160,6 +161,10 @@ export default function App() {
       case "ui-states-demo":
         if (import.meta.env.PROD) return <Dashboard />;
         return <UIStatesDemo onNavigate={handleNavigate} />;
+      case "smoke-test":
+        const enableSmokeTest = import.meta.env.VITE_ENABLE_SMOKE_TEST_PAGE === 'true';
+        if (import.meta.env.PROD && !enableSmokeTest) return <Dashboard />;
+        return <SmokeTest />;
       case "onboarding-wizard":
         return (
           <OnboardingWizard

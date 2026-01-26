@@ -254,6 +254,50 @@ VITE_SUPABASE_ANON_KEY=<anon_key>
 
 ---
 
+## RLS Self-Test Endpoint
+
+### How to Run RLS Self-Test
+
+The backend provides an admin-only endpoint to verify RLS policies and backend isolation:
+
+**Endpoint**: `GET /api/self-test/rls`
+
+**Requirements**:
+- Admin Bearer token (login as admin first)
+- Backend env var `SUPABASE_ANON_KEY` must be set (separate from frontend)
+
+**Usage**:
+```bash
+# Get admin token (login via frontend or Supabase)
+curl -H "Authorization: Bearer <admin-token>" \
+  https://klineo-production-1dfe.up.railway.app/api/self-test/rls
+```
+
+**Response Format**:
+```json
+{
+  "status": "ok" | "fail",
+  "timestamp": "ISO",
+  "request_id": "...",
+  "checks": [
+    { "name": "auth_sanity", "pass": true, "details": {...} },
+    { "name": "rls_user_profiles_self_row", "pass": true, "details": {...} },
+    { "name": "rls_user_profiles_other_row_behavior", "pass": true, "details": { "mode": "admin_can_read_all" | "users_only" } },
+    { "name": "service_role_visibility_expected", "pass": true, "details": {...} },
+    { "name": "admin_gate", "pass": true, "details": {...} }
+  ]
+}
+```
+
+**Interpretation**:
+- All checks should be `"pass": true` for a healthy system
+- `rls_user_profiles_other_row_behavior` mode indicates RLS policy type:
+  - `"users_only"`: Users can only read own profiles (strict)
+  - `"admin_can_read_all"`: Admins can read all profiles (expected if admin policy exists)
+- `service_role_visibility_expected` confirms service role can see all rows (expected, endpoint is admin-only)
+
+**Frontend Access**: Use the Smoke Test page (`/#smoke-test`) - includes RLS test button.
+
 ## 📝 Notes
 
 - No exchange trading execution in MVP (copy setup + tracking only)

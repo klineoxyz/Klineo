@@ -198,6 +198,34 @@ export function Sidebar({ activeView, onNavigate, isCollapsed, onToggleCollapse,
                 )}
               </button>
             )}
+            {/* Smoke Test - Dev only or if VITE_ENABLE_SMOKE_TEST_PAGE=true */}
+            {(!import.meta.env.PROD || import.meta.env.VITE_ENABLE_SMOKE_TEST_PAGE === 'true') && (
+              <button
+                onClick={() => onNavigate("smoke-test")}
+                className={cn(
+                  "w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors hover:bg-secondary/50 relative",
+                  activeView === "smoke-test" && "bg-secondary text-primary",
+                  isCollapsed && "justify-center px-2"
+                )}
+                title={isCollapsed ? "Smoke Test" : undefined}
+              >
+                {activeView === "smoke-test" && <div className="absolute left-0 top-0 bottom-0 w-1 bg-accent" />}
+                <Zap className={cn(
+                  "size-4 shrink-0",
+                  activeView === "smoke-test" ? "text-accent" : "text-muted-foreground"
+                )} />
+                {!isCollapsed && (
+                  <span className={cn("flex items-center gap-2", activeView === "smoke-test" && "font-medium")}>
+                    Smoke Test
+                    {import.meta.env.PROD && (
+                      <span className="text-[10px] px-1.5 py-0.5 bg-accent/20 text-accent rounded-full font-medium">
+                        PROD
+                      </span>
+                    )}
+                  </span>
+                )}
+              </button>
+            )}
           </>
         )}
       </div>
