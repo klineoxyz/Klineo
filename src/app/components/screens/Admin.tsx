@@ -1194,28 +1194,42 @@ export function Admin() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="audit" className="space-y-4">
+        <TabsContent value="audit" className="space-y-4" onFocus={loadAuditLogs}>
           <Card>
-            <div className="p-6 border-b border-border">
+            <div className="p-6 border-b border-border flex items-center justify-between">
               <h3 className="text-lg font-semibold">Audit Logs</h3>
+              <Button variant="outline" size="sm" onClick={loadAuditLogs}>
+                <RefreshCw className="size-4 mr-2" />
+                Refresh
+              </Button>
             </div>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Timestamp</TableHead>
-                  <TableHead>Admin</TableHead>
-                  <TableHead>Action</TableHead>
-                  <TableHead>Reason</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {auditLogs.map((log, i) => (
-                  <TableRow key={i}>
-                    <TableCell className="font-mono text-xs">{log.timestamp}</TableCell>
-                    <TableCell className="text-sm">{log.admin}</TableCell>
-                    <TableCell className="font-medium">{log.action}</TableCell>
-                    <TableCell className="text-muted-foreground text-sm">{log.reason}</TableCell>
+            {auditLogsLoading ? (
+              <div className="p-8 text-center text-muted-foreground">Loading audit logs...</div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Timestamp</TableHead>
+                    <TableHead>Admin</TableHead>
+                    <TableHead>Action</TableHead>
+                    <TableHead>Reason</TableHead>
                   </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {auditLogs.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={4} className="text-center text-muted-foreground py-8">
+                        No audit logs found.
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    auditLogs.map((log, i) => (
+                      <TableRow key={i}>
+                        <TableCell className="font-mono text-xs">{log.timestamp}</TableCell>
+                        <TableCell className="text-sm">{log.admin}</TableCell>
+                        <TableCell className="font-medium">{log.action}</TableCell>
+                        <TableCell className="text-muted-foreground text-sm">{log.reason}</TableCell>
+                      </TableRow>
                     ))
                   )}
                 </TableBody>
