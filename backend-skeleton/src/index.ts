@@ -3,6 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import { healthRouter } from './routes/health.js';
 import { authRouter } from './routes/auth-with-supabase.js';
+import { adminRouter } from './routes/admin.js';
 
 dotenv.config();
 
@@ -27,6 +28,7 @@ if (process.env.NODE_ENV !== 'production') {
 // Routes
 app.use('/health', healthRouter);
 app.use('/api/auth', authRouter);
+app.use('/api/admin', adminRouter);
 
 // 404 handler
 app.use((req, res) => {

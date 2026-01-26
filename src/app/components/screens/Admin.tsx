@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { api } from "@/lib/api";
 import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
 import { Badge } from "@/app/components/ui/badge";
@@ -13,76 +14,7 @@ import { toast } from "@/app/lib/toast";
 import { copyToClipboard } from "@/app/lib/clipboard";
 import { Search, Shield, ChevronLeft, ChevronRight, Download, Filter, Settings2, Percent, Calendar, Save, Copy, Link2, Trash2, RefreshCw, Ticket } from "lucide-react";
 
-const users = [
-  { id: "USER-001", email: "user1@example.com", plan: "Pro", status: "Active", joined: "Jan 15, 2026", copiedTraders: 4, totalPnL: 4523.45 },
-  { id: "USER-002", email: "user2@example.com", plan: "Starter", status: "Active", joined: "Jan 10, 2026", copiedTraders: 2, totalPnL: 1234.20 },
-  { id: "USER-003", email: "user3@example.com", plan: "Unlimited", status: "Suspended", joined: "Dec 28, 2025", copiedTraders: 8, totalPnL: -234.50 },
-  { id: "USER-004", email: "trader_pro@example.com", plan: "Pro", status: "Active", joined: "Dec 22, 2025", copiedTraders: 3, totalPnL: 8934.23 },
-  { id: "USER-005", email: "crypto_master@example.com", plan: "Unlimited", status: "Active", joined: "Dec 18, 2025", copiedTraders: 12, totalPnL: 15234.89 },
-  { id: "USER-006", email: "newbie123@example.com", plan: "Starter", status: "Active", joined: "Jan 20, 2026", copiedTraders: 1, totalPnL: 345.00 },
-  { id: "USER-007", email: "alpha_trader@example.com", plan: "Pro", status: "Active", joined: "Dec 5, 2025", copiedTraders: 5, totalPnL: 6782.34 },
-  { id: "USER-008", email: "moonshot_investor@example.com", plan: "Unlimited", status: "Active", joined: "Nov 28, 2025", copiedTraders: 15, totalPnL: 23456.78 },
-  { id: "USER-009", email: "daytrader_99@example.com", plan: "Starter", status: "Active", joined: "Jan 18, 2026", copiedTraders: 2, totalPnL: 892.45 },
-  { id: "USER-010", email: "btc_whale@example.com", plan: "Unlimited", status: "Active", joined: "Oct 15, 2025", copiedTraders: 20, totalPnL: 45678.92 },
-  { id: "USER-011", email: "swing_trader@example.com", plan: "Pro", status: "Active", joined: "Jan 5, 2026", copiedTraders: 4, totalPnL: 3456.78 },
-  { id: "USER-012", email: "hodler_forever@example.com", plan: "Starter", status: "Active", joined: "Dec 30, 2025", copiedTraders: 1, totalPnL: 567.23 },
-  { id: "USER-013", email: "scalper_elite@example.com", plan: "Pro", status: "Suspended", joined: "Nov 20, 2025", copiedTraders: 3, totalPnL: -1234.56 },
-  { id: "USER-014", email: "risk_taker@example.com", plan: "Unlimited", status: "Active", joined: "Sep 12, 2025", copiedTraders: 18, totalPnL: 34567.89 },
-  { id: "USER-015", email: "conservative_trader@example.com", plan: "Starter", status: "Active", joined: "Jan 22, 2026", copiedTraders: 2, totalPnL: 234.56 },
-];
-
-const traders = [
-  { name: "ProTrader_XYZ", status: "Approved", followers: 342, roi: 24.3, joined: "Aug 12, 2025", trades: 1245, winRate: 68.5 },
-  { name: "AlphaStrategist", status: "Approved", followers: 587, roi: 18.7, joined: "Jul 3, 2025", trades: 2134, winRate: 62.3 },
-  { name: "CryptoWhale_Pro", status: "Approved", followers: 892, roi: 32.1, joined: "Jun 15, 2025", trades: 876, winRate: 71.2 },
-  { name: "SwingMaster_99", status: "Approved", followers: 445, roi: 15.4, joined: "Sep 8, 2025", trades: 534, winRate: 59.8 },
-  { name: "DayTrader_Elite", status: "Approved", followers: 673, roi: 27.8, joined: "Aug 22, 2025", trades: 3421, winRate: 64.7 },
-  { name: "NewTrader_ABC", status: "Pending", followers: 0, roi: 0, joined: "Jan 22, 2026", trades: 0, winRate: 0 },
-  { name: "Scalper_King", status: "Pending", followers: 0, roi: 0, joined: "Jan 21, 2026", trades: 0, winRate: 0 },
-  { name: "Bitcoin_Maximalist", status: "Approved", followers: 1234, roi: 41.2, joined: "May 10, 2025", trades: 432, winRate: 74.3 },
-  { name: "AltCoin_Hunter", status: "Approved", followers: 567, roi: 19.6, joined: "Jul 28, 2025", trades: 987, winRate: 61.4 },
-  { name: "Risk_Reward_Pro", status: "Pending", followers: 0, roi: 0, joined: "Jan 23, 2026", trades: 0, winRate: 0 },
-  { name: "Momentum_Trader", status: "Approved", followers: 789, roi: 22.9, joined: "Aug 3, 2025", trades: 1567, winRate: 66.8 },
-  { name: "BreakOut_Specialist", status: "Approved", followers: 412, roi: 16.7, joined: "Sep 18, 2025", trades: 743, winRate: 58.9 },
-];
-
-const subscriptionPayments = [
-  { userId: "USER-001", email: "user1@example.com", plan: "Pro", amount: 79.00, status: "Paid", date: "Jan 15, 2026", nextRenewal: "Feb 15, 2026", txHash: "0x7f8a2..." },
-  { userId: "USER-002", email: "user2@example.com", plan: "Starter", amount: 29.00, status: "Paid", date: "Jan 10, 2026", nextRenewal: "Feb 10, 2026", txHash: "0x3b9f1..." },
-  { userId: "USER-004", email: "trader_pro@example.com", plan: "Pro", amount: 426.00, status: "Paid", date: "Dec 22, 2025", nextRenewal: "Jun 22, 2026", txHash: "0x9c4d8..." },
-  { userId: "USER-005", email: "crypto_master@example.com", plan: "Unlimited", amount: 1074.00, status: "Paid", date: "Dec 18, 2025", nextRenewal: "Jun 18, 2026", txHash: "0x2e7a3..." },
-  { userId: "USER-006", email: "newbie123@example.com", plan: "Starter", amount: 29.00, status: "Paid", date: "Jan 20, 2026", nextRenewal: "Feb 20, 2026", txHash: "0x5f1c9..." },
-  { userId: "USER-007", email: "alpha_trader@example.com", plan: "Pro", amount: 79.00, status: "Failed", date: "Jan 5, 2026", nextRenewal: "—", txHash: "—" },
-  { userId: "USER-008", email: "moonshot_investor@example.com", plan: "Unlimited", amount: 199.00, status: "Paid", date: "Nov 28, 2025", nextRenewal: "Dec 28, 2025", txHash: "0x8a2f4..." },
-  { userId: "USER-009", email: "daytrader_99@example.com", plan: "Starter", amount: 156.00, status: "Paid", date: "Jan 18, 2026", nextRenewal: "Jul 18, 2026", txHash: "0x1d6b8..." },
-  { userId: "USER-010", email: "btc_whale@example.com", plan: "Unlimited", amount: 1074.00, status: "Paid", date: "Oct 15, 2025", nextRenewal: "Apr 15, 2026", txHash: "0x4c9e2..." },
-  { userId: "USER-011", email: "swing_trader@example.com", plan: "Pro", amount: 79.00, status: "Paid", date: "Jan 5, 2026", nextRenewal: "Feb 5, 2026", txHash: "0x6f8d1..." },
-];
-
-const feeTransactions = [
-  { userId: "USER-010", trade: "BTC/USDT", profit: 2345.67, fee: 234.57, date: "Jan 23, 2026 14:23", trader: "Bitcoin_Maximalist" },
-  { userId: "USER-005", trade: "ETH/USDT", profit: 1523.45, fee: 152.35, date: "Jan 23, 2026 12:15", trader: "CryptoWhale_Pro" },
-  { userId: "USER-008", trade: "BTC/USDT", profit: 3421.89, fee: 342.19, date: "Jan 23, 2026 10:42", trader: "Bitcoin_Maximalist" },
-  { userId: "USER-001", trade: "ETH/USDT", profit: 892.34, fee: 89.23, date: "Jan 23, 2026 09:18", trader: "AlphaStrategist" },
-  { userId: "USER-014", trade: "SOL/USDT", profit: 1678.90, fee: 167.89, date: "Jan 22, 2026 18:32", trader: "AltCoin_Hunter" },
-  { userId: "USER-007", trade: "BTC/USDT", profit: 987.65, fee: 98.77, date: "Jan 22, 2026 16:54", trader: "DayTrader_Elite" },
-  { userId: "USER-004", trade: "AVAX/USDT", profit: 567.23, fee: 56.72, date: "Jan 22, 2026 14:21", trader: "Momentum_Trader" },
-  { userId: "USER-011", trade: "ETH/USDT", profit: 1234.56, fee: 123.46, date: "Jan 22, 2026 11:08", trader: "ProTrader_XYZ" },
-  { userId: "USER-002", trade: "BNB/USDT", profit: 432.10, fee: 43.21, date: "Jan 22, 2026 09:45", trader: "SwingMaster_99" },
-  { userId: "USER-005", trade: "BTC/USDT", profit: 2789.45, fee: 278.95, date: "Jan 21, 2026 17:23", trader: "Bitcoin_Maximalist" },
-];
-
-const referralPayouts = [
-  { userId: "USER-004", referrer: "USER-001", tier: "Tier 1", commission: 45.67, status: "Pending", date: "Jan 23, 2026", referralFees: 456.70 },
-  { userId: "USER-006", referrer: "USER-004", tier: "Tier 2", commission: 12.34, status: "Pending", date: "Jan 23, 2026", referralFees: 246.80 },
-  { userId: "USER-011", referrer: "USER-005", tier: "Tier 1", commission: 67.89, status: "Paid", date: "Jan 22, 2026", referralFees: 678.90 },
-  { userId: "USER-009", referrer: "USER-001", tier: "Tier 1", commission: 23.45, status: "Paid", date: "Jan 22, 2026", referralFees: 234.50 },
-  { userId: "USER-012", referrer: "USER-007", tier: "Tier 1", commission: 34.56, status: "Pending", date: "Jan 21, 2026", referralFees: 345.60 },
-  { userId: "USER-015", referrer: "USER-009", tier: "Tier 2", commission: 8.92, status: "Pending", date: "Jan 21, 2026", referralFees: 178.40 },
-  { userId: "USER-007", referrer: "USER-010", tier: "Tier 1", commission: 89.34, status: "Paid", date: "Jan 20, 2026", referralFees: 893.40 },
-  { userId: "USER-013", referrer: "USER-005", tier: "Tier 1", commission: 56.78, status: "Failed", date: "Jan 20, 2026", referralFees: 567.80 },
-];
-
+// Mock data for audit logs and coupons (not yet implemented in backend)
 const auditLogs = [
   { timestamp: "Jan 23, 2026 14:30", admin: "admin@klineo.xyz", action: "Suspended user USER-003", reason: "ToS violation - Market manipulation" },
   { timestamp: "Jan 23, 2026 11:22", admin: "admin@klineo.xyz", action: "Approved trader Risk_Reward_Pro", reason: "Verification complete" },
@@ -96,7 +28,7 @@ const auditLogs = [
   { timestamp: "Jan 17, 2026 14:22", admin: "admin@klineo.xyz", action: "Manual fee adjustment USER-010", reason: "Correction applied -$23.45" },
 ];
 
-// Active coupon codes
+// Active coupon codes (TODO: Load from API when coupons table exists)
 const activeCoupons = [
   { 
     id: 1, 
@@ -166,6 +98,28 @@ const activeCoupons = [
 ];
 
 export function Admin() {
+  // Data state
+  const [stats, setStats] = useState({
+    totalUsers: 0,
+    activeTraders: 0,
+    monthlyRevenue: 0,
+    platformFees: 0,
+    referralPayouts: 0,
+  });
+  const [users, setUsers] = useState<any[]>([]);
+  const [traders, setTraders] = useState<any[]>([]);
+  const [subscriptionPayments, setSubscriptionPayments] = useState<any[]>([]);
+  const [subscriptionStats, setSubscriptionStats] = useState({ starter: 0, pro: 0, unlimited: 0 });
+  const [feeTransactions, setFeeTransactions] = useState<any[]>([]);
+  const [feeSummary, setFeeSummary] = useState({ totalFees: 0, referralPayouts: 0, netRevenue: 0 });
+  const [referralPayouts, setReferralPayouts] = useState<any[]>([]);
+  const [referralStats, setReferralStats] = useState({ totalCommissions: 0, pendingPayouts: 0, activeReferrers: 0 });
+
+  // Loading states
+  const [loading, setLoading] = useState(true);
+  const [usersLoading, setUsersLoading] = useState(false);
+  const [tradersLoading, setTradersLoading] = useState(false);
+
   // Platform settings state
   const [starterFee, setStarterFee] = useState("20");
   const [proFee, setProFee] = useState("20");
@@ -179,6 +133,82 @@ export function Admin() {
   const [durationMonths, setDurationMonths] = useState("");
   const [couponExpiry, setCouponExpiry] = useState("");
   const [couponDescription, setCouponDescription] = useState("");
+
+  // Load stats on mount
+  useEffect(() => {
+    loadStats();
+  }, []);
+
+  const loadStats = async () => {
+    try {
+      const data = await api.get('/api/admin/stats');
+      setStats(data as any);
+    } catch (err: any) {
+      console.error('Failed to load stats:', err);
+      toast.error('Failed to load dashboard stats');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadUsers = async () => {
+    setUsersLoading(true);
+    try {
+      const data = await api.get('/api/admin/users');
+      setUsers((data as any).users || []);
+    } catch (err: any) {
+      console.error('Failed to load users:', err);
+      toast.error('Failed to load users');
+    } finally {
+      setUsersLoading(false);
+    }
+  };
+
+  const loadTraders = async () => {
+    setTradersLoading(true);
+    try {
+      const data = await api.get('/api/admin/traders');
+      setTraders((data as any).traders || []);
+    } catch (err: any) {
+      console.error('Failed to load traders:', err);
+      toast.error('Failed to load traders');
+    } finally {
+      setTradersLoading(false);
+    }
+  };
+
+  const loadSubscriptions = async () => {
+    try {
+      const data = await api.get('/api/admin/subscriptions');
+      setSubscriptionPayments((data as any).subscriptionPayments || []);
+      setSubscriptionStats((data as any).stats || { starter: 0, pro: 0, unlimited: 0 });
+    } catch (err: any) {
+      console.error('Failed to load subscriptions:', err);
+      toast.error('Failed to load subscriptions');
+    }
+  };
+
+  const loadFees = async () => {
+    try {
+      const data = await api.get('/api/admin/fees');
+      setFeeTransactions((data as any).transactions || []);
+      setFeeSummary((data as any).summary || { totalFees: 0, referralPayouts: 0, netRevenue: 0 });
+    } catch (err: any) {
+      console.error('Failed to load fees:', err);
+      toast.error('Failed to load fees');
+    }
+  };
+
+  const loadReferrals = async () => {
+    try {
+      const data = await api.get('/api/admin/referrals');
+      setReferralPayouts((data as any).payouts || []);
+      setReferralStats((data as any).summary || { totalCommissions: 0, pendingPayouts: 0, activeReferrers: 0 });
+    } catch (err: any) {
+      console.error('Failed to load referrals:', err);
+      toast.error('Failed to load referrals');
+    }
+  };
 
   const handleSaveFeeSettings = () => {
     setShowFeeConfirm(false);
@@ -197,7 +227,7 @@ export function Admin() {
     toast.info("Coupon code generated", { description: code });
   };
 
-  const handleCreateCoupon = () => {
+  const handleCreateCoupon = async () => {
     if (!couponCode || !discountPercent || !maxRedemptions || !durationMonths) {
       toast.error("Missing required fields", {
         description: "Please fill in code, discount, max uses, and duration",
@@ -205,17 +235,50 @@ export function Admin() {
       return;
     }
 
-    toast.success("Coupon created successfully", {
-      description: `${couponCode} - ${discountPercent}% off for ${durationMonths} months`,
-    });
+    try {
+      await api.post('/api/admin/coupons', {
+        code: couponCode,
+        discount: parseFloat(discountPercent),
+        maxRedemptions: parseInt(maxRedemptions),
+        durationMonths: parseInt(durationMonths),
+        expiresAt: couponExpiry || null,
+        description: couponDescription || '',
+      });
+      toast.success("Coupon created successfully", {
+        description: `${couponCode} - ${discountPercent}% off for ${durationMonths} months`,
+      });
+      // Reset form
+      setCouponCode("");
+      setDiscountPercent("");
+      setMaxRedemptions("");
+      setDurationMonths("");
+      setCouponExpiry("");
+      setCouponDescription("");
+    } catch (err: any) {
+      toast.error("Failed to create coupon", {
+        description: err.message || "Please try again",
+      });
+    }
+  };
 
-    // Reset form
-    setCouponCode("");
-    setDiscountPercent("");
-    setMaxRedemptions("");
-    setDurationMonths("");
-    setCouponExpiry("");
-    setCouponDescription("");
+  const handleApproveTrader = async (traderId: string) => {
+    try {
+      await api.put(`/api/admin/traders/${traderId}`, { status: 'approved' });
+      toast.success("Trader approved");
+      loadTraders();
+    } catch (err: any) {
+      toast.error("Failed to approve trader", { description: err.message });
+    }
+  };
+
+  const handleRejectTrader = async (traderId: string) => {
+    try {
+      await api.put(`/api/admin/traders/${traderId}`, { status: 'rejected' });
+      toast.success("Trader rejected");
+      loadTraders();
+    } catch (err: any) {
+      toast.error("Failed to reject trader", { description: err.message });
+    }
   };
 
   const copyCouponURL = (code: string) => {
@@ -240,27 +303,27 @@ export function Admin() {
       <div className="grid grid-cols-5 gap-4">
         <Card className="p-4 space-y-2">
           <div className="text-xs text-muted-foreground uppercase tracking-wide">Total Users</div>
-          <div className="text-2xl font-semibold">1,247</div>
+          <div className="text-2xl font-semibold">{loading ? "—" : stats.totalUsers.toLocaleString()}</div>
         </Card>
 
         <Card className="p-4 space-y-2">
           <div className="text-xs text-muted-foreground uppercase tracking-wide">Active Traders</div>
-          <div className="text-2xl font-semibold">156</div>
+          <div className="text-2xl font-semibold">{loading ? "—" : stats.activeTraders.toLocaleString()}</div>
         </Card>
 
         <Card className="p-4 space-y-2">
           <div className="text-xs text-muted-foreground uppercase tracking-wide">Monthly Revenue</div>
-          <div className="text-2xl font-semibold">$45,823</div>
+          <div className="text-2xl font-semibold">{loading ? "—" : `$${stats.monthlyRevenue.toLocaleString()}`}</div>
         </Card>
 
         <Card className="p-4 space-y-2">
           <div className="text-xs text-muted-foreground uppercase tracking-wide">Platform Fees</div>
-          <div className="text-2xl font-semibold">$12,456</div>
+          <div className="text-2xl font-semibold">{loading ? "—" : `$${stats.platformFees.toLocaleString()}`}</div>
         </Card>
 
         <Card className="p-4 space-y-2">
           <div className="text-xs text-muted-foreground uppercase tracking-wide">Referral Payouts</div>
-          <div className="text-2xl font-semibold">$2,134</div>
+          <div className="text-2xl font-semibold">{loading ? "—" : `$${stats.referralPayouts.toLocaleString()}`}</div>
         </Card>
       </div>
 
@@ -277,7 +340,7 @@ export function Admin() {
           <TabsTrigger value="audit">Audit Logs</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="users" className="space-y-4">
+        <TabsContent value="users" className="space-y-4" onFocus={loadUsers}>
           <Card className="p-4">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
@@ -286,23 +349,33 @@ export function Admin() {
           </Card>
 
           <Card>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>User ID</TableHead>
-                  <TableHead>Email</TableHead>
-                  <TableHead>Plan</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Joined</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {users.map((user, i) => (
+            {usersLoading ? (
+              <div className="p-8 text-center text-muted-foreground">Loading users...</div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>User ID</TableHead>
+                    <TableHead>Email</TableHead>
+                    <TableHead>Plan</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Joined</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {users.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                        No users found. <Button variant="link" onClick={loadUsers} className="p-0 h-auto">Refresh</Button>
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    users.map((user, i) => (
                   <TableRow key={i}>
-                    <TableCell className="font-mono text-xs">{user.id}</TableCell>
+                    <TableCell className="font-mono text-xs">{user.id?.substring(0, 8)}...</TableCell>
                     <TableCell className="font-medium">{user.email}</TableCell>
-                    <TableCell><Badge variant="outline">{user.plan}</Badge></TableCell>
+                    <TableCell><Badge variant="outline">{user.plan || "None"}</Badge></TableCell>
                     <TableCell>
                       <Badge 
                         variant={user.status === "Active" ? "default" : "destructive"}
@@ -319,37 +392,49 @@ export function Admin() {
                       </div>
                     </TableCell>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            )}
           </Card>
         </TabsContent>
 
-        <TabsContent value="traders" className="space-y-4">
+        <TabsContent value="traders" className="space-y-4" onFocus={loadTraders}>
           <Card className="p-4 flex items-center justify-between">
             <div className="relative flex-1 max-w-md">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
               <Input placeholder="Search traders..." className="pl-9" />
             </div>
             <Badge variant="outline" className="border-primary/50 text-primary">
-              3 Pending Approval
+              {traders.filter((t) => t.status === "Pending").length} Pending Approval
             </Badge>
           </Card>
 
           <Card>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Trader Name</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Followers</TableHead>
-                  <TableHead>ROI</TableHead>
-                  <TableHead>Joined</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {traders.map((trader, i) => (
+            {tradersLoading ? (
+              <div className="p-8 text-center text-muted-foreground">Loading traders...</div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Trader Name</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Followers</TableHead>
+                    <TableHead>ROI</TableHead>
+                    <TableHead>Joined</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {traders.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                        No traders found. <Button variant="link" onClick={loadTraders} className="p-0 h-auto">Refresh</Button>
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    traders.map((trader, i) => (
                   <TableRow key={i}>
                     <TableCell className="font-semibold">{trader.name}</TableCell>
                     <TableCell>
@@ -366,37 +451,51 @@ export function Admin() {
                     <TableCell className="text-right">
                       {trader.status === "Pending" ? (
                         <div className="flex gap-2 justify-end">
-                          <Button variant="outline" size="sm" className="bg-[#10B981]/10 text-[#10B981] border-[#10B981]/50">
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="bg-[#10B981]/10 text-[#10B981] border-[#10B981]/50"
+                            onClick={() => handleApproveTrader(trader.id)}
+                          >
                             Approve
                           </Button>
-                          <Button variant="outline" size="sm" className="text-[#EF4444]">Reject</Button>
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="text-[#EF4444]"
+                            onClick={() => handleRejectTrader(trader.id)}
+                          >
+                            Reject
+                          </Button>
                         </div>
                       ) : (
                         <Button variant="outline" size="sm">View</Button>
                       )}
                     </TableCell>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            )}
           </Card>
         </TabsContent>
 
-        <TabsContent value="subscriptions" className="space-y-4">
+        <TabsContent value="subscriptions" className="space-y-4" onFocus={loadSubscriptions}>
           <div className="grid grid-cols-3 gap-4 mb-4">
             <Card className="p-4 space-y-2">
               <div className="text-xs text-muted-foreground uppercase tracking-wide">Starter</div>
-              <div className="text-2xl font-semibold">456</div>
+              <div className="text-2xl font-semibold">{subscriptionStats.starter}</div>
               <div className="text-xs text-muted-foreground">Active subscriptions</div>
             </Card>
             <Card className="p-4 space-y-2">
               <div className="text-xs text-muted-foreground uppercase tracking-wide">Pro</div>
-              <div className="text-2xl font-semibold">634</div>
+              <div className="text-2xl font-semibold">{subscriptionStats.pro}</div>
               <div className="text-xs text-muted-foreground">Active subscriptions</div>
             </Card>
             <Card className="p-4 space-y-2">
               <div className="text-xs text-muted-foreground uppercase tracking-wide">Unlimited</div>
-              <div className="text-2xl font-semibold">157</div>
+              <div className="text-2xl font-semibold">{subscriptionStats.unlimited}</div>
               <div className="text-xs text-muted-foreground">Active subscriptions</div>
             </Card>
           </div>
@@ -424,7 +523,14 @@ export function Admin() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {subscriptionPayments.map((payment, i) => (
+                {subscriptionPayments.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
+                      No subscription payments found.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  subscriptionPayments.map((payment, i) => (
                   <TableRow key={i}>
                     <TableCell className="font-mono text-xs">{payment.userId}</TableCell>
                     <TableCell className="text-sm">{payment.email}</TableCell>
@@ -448,21 +554,21 @@ export function Admin() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="fees" className="space-y-4">
+        <TabsContent value="fees" className="space-y-4" onFocus={loadFees}>
           <Card className="p-6">
             <h3 className="text-lg font-semibold mb-4">Platform Fee Summary (This Month)</h3>
             <div className="grid grid-cols-3 gap-4 mb-6">
               <div className="p-4 bg-secondary/30 rounded">
                 <div className="text-sm text-muted-foreground mb-1">Total Fees Collected</div>
-                <div className="text-2xl font-semibold text-primary">$12,456.80</div>
+                <div className="text-2xl font-semibold text-primary">${feeSummary.totalFees.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
               </div>
               <div className="p-4 bg-secondary/30 rounded">
                 <div className="text-sm text-muted-foreground mb-1">Referral Commission Paid</div>
-                <div className="text-2xl font-semibold">$2,134.20</div>
+                <div className="text-2xl font-semibold">${feeSummary.referralPayouts.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
               </div>
               <div className="p-4 bg-secondary/30 rounded">
                 <div className="text-sm text-muted-foreground mb-1">Net Platform Revenue</div>
-                <div className="text-2xl font-semibold text-[#10B981]">$10,322.60</div>
+                <div className="text-2xl font-semibold text-[#10B981]">${feeSummary.netRevenue.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
               </div>
             </div>
           </Card>
@@ -488,37 +594,48 @@ export function Admin() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {feeTransactions.map((tx, i) => (
-                  <TableRow key={i}>
-                    <TableCell className="font-mono text-xs">{tx.userId}</TableCell>
-                    <TableCell className="font-mono text-sm">{tx.trade}</TableCell>
-                    <TableCell className="font-mono text-[#10B981]">+${tx.profit.toFixed(2)}</TableCell>
-                    <TableCell className="font-mono text-primary">${tx.fee.toFixed(2)}</TableCell>
-                    <TableCell className="text-muted-foreground text-xs">{tx.date}</TableCell>
-                    <TableCell className="text-sm">{tx.trader}</TableCell>
+                {feeTransactions.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                      No fee transactions found.
+                    </TableCell>
                   </TableRow>
-                ))}
+                ) : (
+                  feeTransactions.map((tx, i) => (
+                    <TableRow key={i}>
+                      <TableCell className="font-mono text-xs">{tx.userId?.substring(0, 8)}...</TableCell>
+                      <TableCell className="font-mono text-sm">{tx.trade}</TableCell>
+                      <TableCell className="font-mono text-[#10B981]">+${tx.profit?.toFixed(2) || '0.00'}</TableCell>
+                      <TableCell className="font-mono text-primary">${tx.fee?.toFixed(2) || '0.00'}</TableCell>
+                      <TableCell className="text-muted-foreground text-xs">{tx.date}</TableCell>
+                      <TableCell className="text-sm">{tx.trader}</TableCell>
+                    </TableRow>
+                  ))
+                )}
               </TableBody>
             </Table>
           </Card>
         </TabsContent>
 
-        <TabsContent value="referrals" className="space-y-4">
+        <TabsContent value="referrals" className="space-y-4" onFocus={loadReferrals}>
           <Card className="p-6 space-y-4">
             <div>
               <h3 className="text-lg font-semibold mb-2">Referral Payout Queue</h3>
               <div className="text-sm text-muted-foreground">
-                4 pending payout requests totaling $101.49
+                {referralStats.pendingPayouts} pending payout requests totaling ${referralPayouts
+                  .filter((p) => p.status === "Pending")
+                  .reduce((sum, p) => sum + p.commission, 0)
+                  .toLocaleString(undefined, { minimumFractionDigits: 2 })}
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="p-4 bg-secondary/30 rounded">
                 <div className="text-sm text-muted-foreground mb-1">Total Commissions Paid</div>
-                <div className="text-2xl font-semibold">$2,134.20</div>
+                <div className="text-2xl font-semibold">${referralStats.totalCommissions.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
               </div>
               <div className="p-4 bg-secondary/30 rounded">
                 <div className="text-sm text-muted-foreground mb-1">Active Referrers</div>
-                <div className="text-2xl font-semibold">47</div>
+                <div className="text-2xl font-semibold">{referralStats.activeReferrers}</div>
               </div>
             </div>
           </Card>
@@ -546,7 +663,14 @@ export function Admin() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {referralPayouts.map((payout, i) => (
+                {referralPayouts.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+                      No referral payouts found.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  referralPayouts.map((payout, i) => (
                   <TableRow key={i}>
                     <TableCell className="font-mono text-xs">{payout.userId}</TableCell>
                     <TableCell className="font-mono text-xs">{payout.referrer}</TableCell>

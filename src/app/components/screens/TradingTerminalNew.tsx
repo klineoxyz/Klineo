@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
@@ -16,6 +16,7 @@ import {
   Star,
   Search,
   BarChart3,
+  Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { TradingViewChart } from "@/app/components/TradingViewChart";
@@ -24,6 +25,8 @@ import {
   TradingViewMarketOverview,
   TradingViewAdvancedChart 
 } from "@/app/components/TradingViewWidgets";
+import { fetchKlines } from "@/lib/binance";
+import type { OhlcvItem } from "@/app/components/charts/LightweightChartsWidget";
 
 type Timeframe = '1m' | '5m' | '15m' | '30m' | '1h' | '2h' | '4h' | '12h' | '1D' | '5D' | '1W' | '1M';
 
@@ -66,8 +69,8 @@ const getCandleCount = (timeframe: Timeframe): number => {
 };
 
 // Mock data generator with timeframe support
-const generateMockData = (basePrice: number, timeframe: Timeframe) => {
-  const data = [];
+const generateMockData = (basePrice: number, timeframe: Timeframe): OhlcvItem[] => {
+  const data: OhlcvItem[] = [];
   let price = basePrice;
   const intervalMs = getTimeframeMs(timeframe);
   const candleCount = getCandleCount(timeframe);
@@ -155,26 +158,54 @@ export function TradingTerminalNew({ onNavigate }: TradingTerminalProps) {
   const [showMACD, setShowMACD] = useState(false);
   const [showVolume, setShowVolume] = useState(true);
 
-  // Get current pair data
+  // Get current pair data (fallback for order book, trades, 24h stats)
   const currentPairData = tradingPairs.find(p => p.symbol === selectedPair) || tradingPairs[0];
-  const basePrice = parseFloat(currentPairData.price.replace(/,/g, ''));
+  const basePrice = parseFloat(currentPairData.price.replace(/,/g, ""));
   const priceChange = parseFloat(currentPairData.change);
   const isPositiveChange = priceChange >= 0;
 
-  // Generate data based on selected pair and timeframe
-  const chartData = generateMockData(basePrice, selectedTimeframe);
+  // Chart: real Binance klines (fallback to mock on error)
+  const [chartData, setChartData] = useState<OhlcvItem[]>([]);
+  const [chartLoading, setChartLoading] = useState(true);
+  const [chartError, setChartError] = useState<string | null>(null);
+
+  const loadChartData = useCallback(async () => {
+    setChartLoading(true);
+    setChartError(null);
+    setChartData([]);
+    try {
+      const data = await fetchKlines(selectedPair, selectedTimeframe, 500);
+      setChartData(data);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Failed to load Binance data";
+      setChartError(msg);
+      const mock = generateMockData(basePrice, selectedTimeframe);
+      setChartData(mock);
+      toast.error("Chart using sample data — Binance fetch failed");
+    } finally {
+      setChartLoading(false);
+    }
+  }, [selectedPair, selectedTimeframe, basePrice]);
+
+  useEffect(() => {
+    loadChartData();
+  }, [loadChartData]);
+
   const orderBookData = generateOrderBook(basePrice);
   const recentTrades = generateRecentTrades(basePrice);
-  const currentPrice = chartData[chartData.length - 1]?.close || basePrice;
+  const currentPrice = chartData.length ? chartData[chartData.length - 1].close : basePrice;
   const priceChange24h = priceChange;
   const volume24h = currentPairData.volume;
-  const high24h = (basePrice * 1.035).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const low24h = (basePrice * 0.975).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const high24h = chartData.length
+    ? Math.max(...chartData.map((d) => d.high)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    : (basePrice * 1.035).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const low24h = chartData.length
+    ? Math.min(...chartData.map((d) => d.low)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    : (basePrice * 0.975).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-  // Handle timeframe change from chart
-  const handleTimeframeChange = (timeframe: Timeframe) => {
+  const handleTimeframeChange = useCallback((timeframe: Timeframe) => {
     setSelectedTimeframe(timeframe);
-  };
+  }, []);
 
   const handleBuyOrder = () => {
     if (!buyAmount || (orderType === "limit" && !buyPrice)) {
@@ -428,18 +459,27 @@ export function TradingTerminalNew({ onNavigate }: TradingTerminalProps) {
             {/* Chart Area */}
             <div className="flex-1 min-h-0 p-2">
               {chartMode === "lightweight" ? (
-                <TradingViewChart
-                  data={chartData}
-                  showVolume={showVolume}
-                  showRSI={showRSI}
-                  showMACD={showMACD}
-                  showBB={showBB}
-                  showSMA20={showSMA20}
-                  showSMA50={showSMA50}
-                  showEMA9={showEMA9}
-                  showEMA21={showEMA21}
-                  onTimeframeChange={handleTimeframeChange}
-                />
+                chartLoading && !chartData.length ? (
+                  <div className="h-full flex items-center justify-center bg-[#0a0e13]">
+                    <div className="flex flex-col items-center gap-3 text-muted-foreground">
+                      <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                      <div className="text-sm">Loading Binance data...</div>
+                    </div>
+                  </div>
+                ) : (
+                  <TradingViewChart
+                    data={chartData}
+                    showVolume={showVolume}
+                    showRSI={showRSI}
+                    showMACD={showMACD}
+                    showBB={showBB}
+                    showSMA20={showSMA20}
+                    showSMA50={showSMA50}
+                    showEMA9={showEMA9}
+                    showEMA21={showEMA21}
+                    onTimeframeChange={handleTimeframeChange}
+                  />
+                )
               ) : (
                 <div className="h-full">
                   <TradingViewAdvancedChart symbol="BINANCE:BTCUSDT" />
