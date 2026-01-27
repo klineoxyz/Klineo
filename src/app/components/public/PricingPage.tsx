@@ -120,7 +120,7 @@ export function PricingPage({ onNavigate }: PricingPageProps) {
               </Badge>
               <h2 className="text-3xl font-bold mb-3"><span className="font-mono">20%</span> on Profitable Trades Only</h2>
               <p className="text-muted-foreground text-lg">
-                We charge <span className="font-mono font-semibold">20%</span> commission exclusively on trades that make you money
+                We charge <span className="font-mono font-semibold">20%</span> only on trades that make you money
               </p>
             </div>
 
@@ -356,95 +356,47 @@ export function PricingPage({ onNavigate }: PricingPageProps) {
         </div>
       </section>
 
-      {/* Referral Program */}
+      {/* Referral & Revenue Split (onboarding + package purchases only) */}
       <section className="border-b border-border">
         <div className="max-w-5xl mx-auto px-6 py-16">
           <Card className="p-8 bg-accent/5 border-accent/20">
             <div className="text-center mb-6">
               <Badge variant="outline" className="mb-3 bg-accent/10 text-accent border-accent/30">
-                Earn Passive Income
+                Transparent economics
               </Badge>
-              <h2 className="text-2xl font-bold mb-2">2-Tier Referral Program</h2>
+              <h2 className="text-2xl font-bold mb-2">70% Referral Rewards Pool (7 Levels)</h2>
               <p className="text-muted-foreground">
-                Get paid for introducing traders to KLINEO
+                From every onboarding fee and package (credit) purchase: 70% goes to your upline referral rewards, 20% to platform revenue, 10% to marketing.
               </p>
             </div>
 
-            {/* Visual Diagram - Compact */}
-            <div className="mb-8 max-w-3xl mx-auto">
-              <div className="flex flex-col items-center">
-                {/* YOU at the top */}
-                <div className="flex flex-col items-center">
-                  <div className="size-20 rounded-full bg-accent/30 border-3 border-accent flex items-center justify-center shadow-md shadow-accent/20">
-                    <User className="size-10 text-accent" strokeWidth={2.5} />
-                  </div>
-                  <span className="text-sm font-bold mt-1.5">YOU</span>
-                </div>
-
-                {/* Vertical line from YOU down */}
-                <div className="w-0.5 h-8 bg-gradient-to-b from-accent to-accent/60 my-2" />
-
-                {/* Connecting lines layout */}
-                <div className="relative w-full flex justify-center">
-                  {/* Horizontal distribution line */}
-                  <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[280px] h-0.5 bg-gradient-to-r from-accent/60 via-accent to-accent/60" />
-                  
-                  {/* Three vertical lines down to Tier 1 */}
-                  <div className="absolute top-0 left-1/2 -translate-x-1/2 -ml-[140px] w-0.5 h-8 bg-gradient-to-b from-accent/60 to-accent" />
-                  <div className="absolute top-0 left-1/2 -translate-x-1/2 w-0.5 h-8 bg-gradient-to-b from-accent to-accent" />
-                  <div className="absolute top-0 left-1/2 -translate-x-1/2 ml-[140px] w-0.5 h-8 bg-gradient-to-b from-accent/60 to-accent" />
-                </div>
-
-                {/* Tier 1 Users */}
-                <div className="flex gap-16 mt-8">
-                  {[1, 2, 3].map((i) => (
-                    <div key={i} className="flex flex-col items-center">
-                      <div className="size-16 rounded-full bg-accent/20 border-2 border-accent flex items-center justify-center shadow-md shadow-accent/10">
-                        <User className="size-8 text-accent" strokeWidth={2.5} />
-                      </div>
-                      <div className="text-base font-bold text-accent mt-1.5">10%</div>
-                      <span className="text-xs font-semibold text-center">Tier 1</span>
-                      <span className="text-[10px] text-muted-foreground text-center">Direct</span>
-                      
-                      {/* Vertical line to Tier 2 */}
-                      <div className="w-0.5 h-8 bg-gradient-to-b from-accent/60 to-accent/40 my-2" />
-                      
-                      {/* Tier 2 under each Tier 1 */}
-                      <div className="flex flex-col items-center">
-                        <div className="size-12 rounded-full bg-accent/15 border-2 border-accent/60 flex items-center justify-center shadow-sm shadow-accent/10">
-                          <User className="size-6 text-accent/80" strokeWidth={2.5} />
-                        </div>
-                        <div className="text-sm font-bold text-accent/80 mt-1">5%</div>
-                        <span className="text-xs font-semibold text-center">Tier 2</span>
-                        <span className="text-[10px] text-muted-foreground text-center">Sub</span>
-                      </div>
-                    </div>
-                  ))}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-3xl mx-auto mb-6">
+              <div className="text-center p-5 rounded-lg bg-card border border-border">
+                <div className="text-3xl font-mono font-bold text-accent mb-2">70%</div>
+                <div className="font-semibold mb-1.5 text-sm">Referral rewards pool</div>
+                <div className="text-xs text-muted-foreground">
+                  Distributed across 7 levels (L1–L7) when someone you referred—or in your upline—pays an onboarding fee or buys a package
                 </div>
               </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-2xl mx-auto mb-6">
+              <div className="text-center p-5 rounded-lg bg-card border border-border">
+                <div className="text-3xl font-mono font-bold text-accent mb-2">20%</div>
+                <div className="font-semibold mb-1.5 text-sm">Platform revenue</div>
+                <div className="text-xs text-muted-foreground">
+                  Klineo platform share from each eligible purchase
+                </div>
+              </div>
               <div className="text-center p-5 rounded-lg bg-card border border-border">
                 <div className="text-3xl font-mono font-bold text-accent mb-2">10%</div>
-                <div className="font-semibold mb-1.5 text-sm">Tier 1 Commission</div>
+                <div className="font-semibold mb-1.5 text-sm">Marketing</div>
                 <div className="text-xs text-muted-foreground">
-                  Earn <span className="font-mono">10%</span> of platform fees from users you directly refer
-                </div>
-              </div>
-
-              <div className="text-center p-5 rounded-lg bg-card border border-border">
-                <div className="text-3xl font-mono font-bold text-accent mb-2">5%</div>
-                <div className="font-semibold mb-1.5 text-sm">Tier 2 Commission</div>
-                <div className="text-xs text-muted-foreground">
-                  Earn <span className="font-mono">5%</span> from users referred by your direct referrals
+                  Marketing pool; unused referral levels also roll here
                 </div>
               </div>
             </div>
 
             <div className="text-center">
               <p className="text-xs text-muted-foreground mb-4">
-                Example: Your referral makes <span className="font-mono font-semibold">$1,000</span> profit → Platform fee is <span className="font-mono font-semibold">$200</span> → You earn <span className="font-mono font-semibold">$20</span>
+                Rewards are based on onboarding and package purchases only, not on trading PnL or balances.
               </p>
               <Button
                 onClick={() => onNavigate("signup")}

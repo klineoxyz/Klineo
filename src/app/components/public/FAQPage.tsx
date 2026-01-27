@@ -101,19 +101,19 @@ const faqCategories = [
     questions: [
       {
         q: "How does the referral program work?",
-        a: "KLINEO operates a 2-tier system: earn 10% commission on platform fees from your direct referrals (Tier 1), and 5% on fees from users they refer (Tier 2). Commissions are calculated on performance fees collected by KLINEO."
+        a: "From every onboarding fee and package (credit) purchase, 70% goes to a 7-level referral rewards pool (L1 30%, L2 20%, L3 10%, L4 8%, L5 6%, L6 4%, L7 2% of that pool), 20% to platform revenue, and 10% to marketing. Rewards are based only on purchases—not on trading PnL or balances."
       },
       {
         q: "How do I get my referral link?",
         a: "Navigate to the Referrals page in your dashboard to access your unique referral link and tracking code. Share this link with friends, on social media, or via your website."
       },
       {
-        q: "When do I receive referral commissions?",
-        a: "Referral commissions are calculated monthly and paid out on the 1st of each month for the previous month's activity. Minimum payout threshold is $50."
+        q: "When do I receive referral rewards?",
+        a: "Referral rewards from the 70% pool are paid out according to your referral level when referred users complete onboarding or buy packages. Minimum payout threshold is $50."
       },
       {
         q: "Is there a limit to how much I can earn?",
-        a: "No! There is no cap on referral earnings. The more active users you refer who generate platform fees, the more you earn."
+        a: "No. There is no cap on referral earnings. You can have unlimited direct referrals, and each eligible purchase allocates 70% across up to 7 levels."
       }
     ]
   },

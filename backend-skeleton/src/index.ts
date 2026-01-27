@@ -15,6 +15,7 @@ import { tradesRouter } from './routes/trades.js';
 import { notificationsRouter } from './routes/notifications.js';
 import { selfTestRouter } from './routes/self-test.js';
 import { exchangeConnectionsRouter } from './routes/exchange-connections.js';
+import { purchasesRouter } from './routes/purchases.js';
 import { apiLimiter, authLimiter, adminLimiter } from './middleware/rateLimit.js';
 
 dotenv.config();
@@ -109,6 +110,7 @@ app.use('/api/trades', tradesRouter);
 app.use('/api/notifications', notificationsRouter);
 app.use('/api/self-test', selfTestRouter);
 app.use('/api/exchange-connections', exchangeConnectionsRouter);
+app.use('/api/purchases', purchasesRouter);
 
 // 404 handler
 app.use((req, res) => {
