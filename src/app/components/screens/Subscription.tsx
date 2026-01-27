@@ -219,7 +219,7 @@ function SubscriptionContent({
         </div>
       </Card>
 
-      {/* Revenue split */}
+      {/* Revenue allocation */}
       <Collapsible open={revenueOpen} onOpenChange={onRevenueOpenChange}>
         <CollapsibleTrigger asChild>
           <button
@@ -227,14 +227,13 @@ function SubscriptionContent({
             className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition"
           >
             <Info className="size-4" />
-            Revenue split
+            Revenue Allocation: {revenueSplit.mlmPct}% Community Rewards · {revenueSplit.platformPct}% Platform · {revenueSplit.marketingPct}% Marketing
             {revenueOpen ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
           </button>
         </CollapsibleTrigger>
         <CollapsibleContent>
           <p className="text-sm text-muted-foreground mt-1">
-            {revenueSplit.mlmPct}% referral rewards, {revenueSplit.platformPct}% platform,{" "}
-            {revenueSplit.marketingPct}% marketing.
+            Revenue Allocation: {revenueSplit.mlmPct}% Community Rewards · {revenueSplit.platformPct}% Platform · {revenueSplit.marketingPct}% Marketing
           </p>
         </CollapsibleContent>
       </Collapsible>

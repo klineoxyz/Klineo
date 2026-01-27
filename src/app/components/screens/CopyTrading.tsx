@@ -31,6 +31,7 @@ interface CopySetup {
   status: "active" | "paused" | "stopped";
   createdAt: string;
   updatedAt: string;
+  pnlUsd?: number;
 }
 
 export function CopyTrading({ onNavigate }: CopyTradingProps) {
@@ -184,6 +185,7 @@ export function CopyTrading({ onNavigate }: CopyTradingProps) {
               <TableRow>
                 <TableHead>Trader</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead>PnL</TableHead>
                 <TableHead>Allocation</TableHead>
                 <TableHead>Max Position</TableHead>
                 <TableHead>Created</TableHead>
@@ -226,6 +228,11 @@ export function CopyTrading({ onNavigate }: CopyTradingProps) {
                         <><StopCircle className="size-3" /> Stopped</>
                       )}
                     </Badge>
+                  </TableCell>
+                  <TableCell className="font-mono tabular-nums">
+                    {typeof setup.pnlUsd === "number"
+                      ? (setup.pnlUsd >= 0 ? "+" : "") + setup.pnlUsd.toFixed(2)
+                      : "—"}
                   </TableCell>
                   <TableCell className="font-mono">{setup.allocationPct.toFixed(1)}%</TableCell>
                   <TableCell className="font-mono">

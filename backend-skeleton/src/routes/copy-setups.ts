@@ -61,6 +61,23 @@ copySetupsRouter.get('/', async (req: AuthenticatedRequest, res) => {
       return res.status(500).json({ error: 'Failed to fetch copy setups' });
     }
 
+    // PnL per copy setup: sum unrealized_pnl from positions (open + closed) for this user
+    const setupIds = (setups || []).map((s: any) => s.id).filter(Boolean);
+    const pnlBySetup: Record<string, number> = {};
+    if (setupIds.length > 0) {
+      const { data: positions } = await client
+        .from('positions')
+        .select('copy_setup_id, unrealized_pnl')
+        .eq('user_id', req.user!.id)
+        .in('copy_setup_id', setupIds);
+      for (const p of positions || []) {
+        const id = p.copy_setup_id;
+        if (!id) continue;
+        const val = parseFloat(String(p.unrealized_pnl ?? 0));
+        pnlBySetup[id] = (pnlBySetup[id] ?? 0) + val;
+      }
+    }
+
     const result = setups?.map((setup: any) => {
       // Handle traders relation (can be object or array, but should be single object for this relation)
       const traderData = Array.isArray(setup.traders) ? setup.traders[0] : setup.traders;
@@ -80,6 +97,7 @@ copySetupsRouter.get('/', async (req: AuthenticatedRequest, res) => {
         status: setup.status,
         createdAt: setup.created_at,
         updatedAt: setup.updated_at,
+        pnlUsd: Math.round((pnlBySetup[setup.id] ?? 0) * 100) / 100,
       };
     }) || [];
 
