@@ -25,7 +25,8 @@ import {
   TradingViewMarketOverview,
   TradingViewAdvancedChart 
 } from "@/app/components/TradingViewWidgets";
-import { fetchKlines } from "@/lib/binance";
+import { fetchKlines, fetchOrderBook } from "@/lib/binance";
+import type { OrderBookLevel } from "@/lib/binance";
 import type { OhlcvItem } from "@/app/components/charts/LightweightChartsWidget";
 
 type Timeframe = '1m' | '5m' | '15m' | '30m' | '1h' | '2h' | '4h' | '12h' | '1D' | '5D' | '1W' | '1M';
@@ -108,18 +109,26 @@ const tradingPairs = [
   { symbol: "XRP/USDT", price: "0.5678", change: "+3.21", volume: "678M" },
 ];
 
-// Mock order book data
-const generateOrderBook = (basePrice: number) => ({
-  bids: Array.from({ length: 20 }, (_, i) => ({
-    price: (basePrice - i * (basePrice * 0.0001)).toFixed(2),
-    amount: (Math.random() * 5 + 0.1).toFixed(4),
-    total: ((basePrice - i * (basePrice * 0.0001)) * (Math.random() * 5 + 0.1)).toFixed(2),
-  })),
-  asks: Array.from({ length: 20 }, (_, i) => ({
-    price: (basePrice + (i + 1) * (basePrice * 0.0001)).toFixed(2),
-    amount: (Math.random() * 5 + 0.1).toFixed(4),
-    total: ((basePrice + (i + 1) * (basePrice * 0.0001)) * (Math.random() * 5 + 0.1)).toFixed(2),
-  })),
+// Fallback when Binance order book fetch fails
+const generateOrderBook = (basePrice: number): { bids: OrderBookLevel[]; asks: OrderBookLevel[] } => ({
+  bids: Array.from({ length: 20 }, (_, i) => {
+    const price = basePrice - i * (basePrice * 0.0001);
+    const amount = Math.random() * 5 + 0.1;
+    return {
+      price: price.toFixed(2),
+      amount: amount.toFixed(4),
+      total: (price * amount).toFixed(2),
+    };
+  }),
+  asks: Array.from({ length: 20 }, (_, i) => {
+    const price = basePrice + (i + 1) * (basePrice * 0.0001);
+    const amount = Math.random() * 5 + 0.1;
+    return {
+      price: price.toFixed(2),
+      amount: amount.toFixed(4),
+      total: (price * amount).toFixed(2),
+    };
+  }),
 });
 
 // Mock recent trades
@@ -191,7 +200,39 @@ export function TradingTerminalNew({ onNavigate }: TradingTerminalProps) {
     loadChartData();
   }, [loadChartData]);
 
-  const orderBookData = generateOrderBook(basePrice);
+  // Live Binance order book (fallback to mock on error)
+  const [orderBook, setOrderBook] = useState<{ bids: OrderBookLevel[]; asks: OrderBookLevel[] } | null>(null);
+  const [orderBookLoading, setOrderBookLoading] = useState(true);
+  const [orderBookLive, setOrderBookLive] = useState(false);
+
+  const loadOrderBook = useCallback(async (opts?: { silent?: boolean }) => {
+    try {
+      const data = await fetchOrderBook(selectedPair, 50);
+      setOrderBook(data);
+      setOrderBookLive(true);
+    } catch {
+      setOrderBook(generateOrderBook(basePrice));
+      setOrderBookLive(false);
+      if (!opts?.silent) {
+        toast.error("Order book using sample data — Binance fetch failed");
+      }
+    } finally {
+      setOrderBookLoading(false);
+    }
+  }, [selectedPair, basePrice]);
+
+  useEffect(() => {
+    setOrderBookLoading(true);
+    loadOrderBook();
+  }, [loadOrderBook]);
+
+  useEffect(() => {
+    if (!orderBookLive) return;
+    const interval = setInterval(() => loadOrderBook({ silent: true }), 3000);
+    return () => clearInterval(interval);
+  }, [loadOrderBook, orderBookLive]);
+
+  const orderBookData = orderBook ?? generateOrderBook(basePrice);
   const recentTrades = generateRecentTrades(basePrice);
   const currentPrice = chartData.length ? chartData[chartData.length - 1].close : basePrice;
   const priceChange24h = priceChange;
@@ -284,30 +325,48 @@ export function TradingTerminalNew({ onNavigate }: TradingTerminalProps) {
 
       {/* Main Content */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Left - Order Book */}
+        {/* Left - Order Book (live from Binance when available) */}
         <div className="w-[280px] border-r border-border bg-card/30 overflow-hidden flex flex-col">
-          <div className="p-3 border-b border-border">
+          <div className="p-3 border-b border-border flex items-center justify-between gap-2">
             <div className="text-sm font-semibold">Order Book</div>
+            <div className="flex items-center gap-1.5 shrink-0">
+              {orderBookLoading && (
+                <Loader2 className="size-3.5 text-muted-foreground animate-spin" aria-hidden />
+              )}
+              <span
+                className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${
+                  orderBookLive
+                    ? "bg-green-500/15 text-green-500 border border-green-500/30"
+                    : "bg-muted/80 text-muted-foreground"
+                }`}
+              >
+                {orderBookLive ? "Live" : "Sample"}
+              </span>
+            </div>
           </div>
           
           <div className="flex-1 overflow-y-auto">
             <div className="text-xs font-mono">
-              {orderBookData.asks.reverse().map((ask, i) => (
-                <div
-                  key={i}
-                  className="grid grid-cols-3 gap-2 px-3 py-0.5 hover:bg-red-500/5 relative"
-                >
+              {(() => {
+                const asks = [...orderBookData.asks].reverse();
+                const maxAskTotal = Math.max(...asks.map((a) => parseFloat(a.total)), 1);
+                return asks.map((ask, i) => (
                   <div
-                    className="absolute inset-0 bg-red-500/10"
-                    style={{ width: `${Math.random() * 60 + 20}%`, right: 0 }}
-                  />
-                  <div className="text-red-500 relative z-10">{ask.price}</div>
-                  <div className="text-right relative z-10">{ask.amount}</div>
-                  <div className="text-right text-muted-foreground relative z-10 text-[10px]">
-                    {ask.total}
+                    key={`ask-${i}`}
+                    className="grid grid-cols-3 gap-2 px-3 py-0.5 hover:bg-red-500/5 relative"
+                  >
+                    <div
+                      className="absolute inset-0 bg-red-500/10"
+                      style={{ width: `${Math.min(100, (parseFloat(ask.total) / maxAskTotal) * 80 + 10)}%`, right: 0 }}
+                    />
+                    <div className="text-red-500 relative z-10">{ask.price}</div>
+                    <div className="text-right relative z-10">{ask.amount}</div>
+                    <div className="text-right text-muted-foreground relative z-10 text-[10px]">
+                      {ask.total}
+                    </div>
                   </div>
-                </div>
-              ))}
+                ));
+              })()}
             </div>
           </div>
 
@@ -324,22 +383,25 @@ export function TradingTerminalNew({ onNavigate }: TradingTerminalProps) {
 
           <div className="flex-1 overflow-y-auto">
             <div className="text-xs font-mono">
-              {orderBookData.bids.map((bid, i) => (
-                <div
-                  key={i}
-                  className="grid grid-cols-3 gap-2 px-3 py-0.5 hover:bg-green-500/5 relative"
-                >
+              {(() => {
+                const maxBidTotal = Math.max(...orderBookData.bids.map((b) => parseFloat(b.total)), 1);
+                return orderBookData.bids.map((bid, i) => (
                   <div
-                    className="absolute inset-0 bg-green-500/10"
-                    style={{ width: `${Math.random() * 60 + 20}%`, right: 0 }}
-                  />
-                  <div className="text-green-500 relative z-10">{bid.price}</div>
-                  <div className="text-right relative z-10">{bid.amount}</div>
-                  <div className="text-right text-muted-foreground relative z-10 text-[10px]">
-                    {bid.total}
+                    key={`bid-${i}`}
+                    className="grid grid-cols-3 gap-2 px-3 py-0.5 hover:bg-green-500/5 relative"
+                  >
+                    <div
+                      className="absolute inset-0 bg-green-500/10"
+                      style={{ width: `${Math.min(100, (parseFloat(bid.total) / maxBidTotal) * 80 + 10)}%`, right: 0 }}
+                    />
+                    <div className="text-green-500 relative z-10">{bid.price}</div>
+                    <div className="text-right relative z-10">{bid.amount}</div>
+                    <div className="text-right text-muted-foreground relative z-10 text-[10px]">
+                      {bid.total}
+                    </div>
                   </div>
-                </div>
-              ))}
+                ));
+              })()}
             </div>
           </div>
         </div>

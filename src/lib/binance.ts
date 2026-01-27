@@ -64,3 +64,51 @@ export async function fetchKlines(
     volume: parseFloat(v),
   }));
 }
+
+/** Order book level: price, amount, total (price × amount) */
+export interface OrderBookLevel {
+  price: string;
+  amount: string;
+  total: string;
+}
+
+/** Binance depth response */
+interface BinanceDepthResponse {
+  lastUpdateId: number;
+  bids: [string, string][];
+  asks: [string, string][];
+}
+
+/**
+ * Fetch live order book from Binance (public, no API key).
+ * Returns top `limit` bids and asks. limit 5–100 recommended for UI.
+ */
+export async function fetchOrderBook(
+  pair: string,
+  limit = 50
+): Promise<{ bids: OrderBookLevel[]; asks: OrderBookLevel[] }> {
+  const symbol = pairToSymbol(pair);
+  const url = `${BINANCE_API}/depth?symbol=${encodeURIComponent(symbol)}&limit=${Math.min(Math.max(limit, 5), 100)}`;
+  const res = await fetch(url);
+  if (!res.ok) {
+    const t = await res.text();
+    throw new Error(`Binance depth error ${res.status}: ${t || res.statusText}`);
+  }
+  const raw = (await res.json()) as BinanceDepthResponse;
+
+  const bids: OrderBookLevel[] = raw.bids.map(([p, q]) => {
+    const price = parseFloat(p);
+    const amount = parseFloat(q);
+    const total = price * amount;
+    return { price: p, amount: q, total: total.toFixed(2) };
+  });
+
+  const asks: OrderBookLevel[] = raw.asks.map(([p, q]) => {
+    const price = parseFloat(p);
+    const amount = parseFloat(q);
+    const total = price * amount;
+    return { price: p, amount: q, total: total.toFixed(2) };
+  });
+
+  return { bids, asks };
+}
