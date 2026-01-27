@@ -59,7 +59,7 @@ export function TradingViewChart({
   };
 
   return (
-    <div className="relative">
+    <div className="relative flex flex-col h-full min-h-[320px]">
       {/* Drawing Tools */}
       <div className="absolute top-2 left-2 z-10 flex gap-2">
         <Button
@@ -103,7 +103,7 @@ export function TradingViewChart({
       </div>
 
       {/* Timeframe Selector */}
-      <div className="flex gap-0.5 p-0.5">
+      <div className="flex gap-0.5 p-0.5 shrink-0">
         <div className="flex items-center gap-1 px-2 py-1.5 border-r border-border">
           <Clock className="h-3.5 w-3.5 text-primary" />
           <span className="text-xs font-semibold text-muted-foreground">TF</span>
@@ -125,12 +125,14 @@ export function TradingViewChart({
         </div>
       </div>
 
-      <LightweightChartsWidget
-        data={data}
-        showVolume={showVolume}
-        height={500}
-        className="w-full"
-      />
+      <div className="flex-1 min-h-[300px] w-full relative overflow-hidden">
+        <LightweightChartsWidget
+          data={data}
+          showVolume={showVolume}
+          autoSize
+          className="w-full h-full"
+        />
+      </div>
 
       {/* RSI Panel */}
       {showRSI && (

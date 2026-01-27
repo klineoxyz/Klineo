@@ -10,8 +10,10 @@ import {
   createChart,
   CandlestickSeries,
   HistogramSeries,
+  TickMarkType,
   type IChartApi,
   type ISeriesApi,
+  type UTCTimestamp,
 } from "lightweight-charts";
 
 const THEME = {
@@ -29,8 +31,41 @@ const THEME = {
   },
   timeScale: {
     borderColor: "#374151",
+    visible: true,
     timeVisible: true,
-    secondsVisible: false,
+    secondsVisible: true,
+    borderVisible: true,
+    ticksVisible: true,
+    minimumHeight: 32,
+    tickMarkMaxCharacterLength: 18,
+    tickMarkFormatter: (time: UTCTimestamp, tickMarkType: TickMarkType, _locale: string) => {
+      const d = new Date((time as number) * 1000);
+      const pad = (n: number) => String(n).padStart(2, "0");
+      const dd = pad(d.getUTCDate());
+      const mo = d.toLocaleString("en-US", { month: "short", timeZone: "UTC" });
+      const yy = d.getUTCFullYear();
+      const hh = pad(d.getUTCHours());
+      const mm = pad(d.getUTCMinutes());
+      const ss = pad(d.getUTCSeconds());
+      switch (tickMarkType) {
+        case TickMarkType.Year:
+          return `${yy}`;
+        case TickMarkType.Month:
+          return `${mo} ${yy}`;
+        case TickMarkType.DayOfMonth:
+          return `${dd} ${mo}`;
+        case TickMarkType.Time:
+          return `${hh}:${mm}`;
+        case TickMarkType.TimeWithSeconds:
+          return `${hh}:${mm}:${ss}`;
+        default:
+          return `${dd} ${mo} ${yy}, ${hh}:${mm}`;
+      }
+    },
+  },
+  localization: {
+    dateFormat: "dd MMM yyyy",
+    locale: "en-US",
   },
   crosshair: {
     vertLine: { color: "#6b7280", labelBackgroundColor: "#FFB000" },
@@ -52,7 +87,10 @@ export interface OhlcvItem {
 interface LightweightChartsWidgetProps {
   data: OhlcvItem[];
   showVolume?: boolean;
+  /** Fixed height in px. Ignored when autoSize is true. */
   height?: number;
+  /** When true, chart fills container (use with a sized parent). Ensures time scale is not clipped. */
+  autoSize?: boolean;
   className?: string;
 }
 
@@ -64,6 +102,7 @@ export function LightweightChartsWidget({
   data,
   showVolume = true,
   height = 500,
+  autoSize = false,
   className = "",
 }: LightweightChartsWidgetProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -92,13 +131,16 @@ export function LightweightChartsWidget({
     if (!el || !candleData.length) return;
 
     const w = Math.max(100, el.clientWidth || el.offsetWidth || 400);
+    const h = autoSize ? 0 : height;
     const chart = createChart(el, {
-      width: w,
-      height,
+      width: autoSize ? 0 : w,
+      height: h,
+      autoSize,
       layout: THEME.layout,
       grid: THEME.grid,
       rightPriceScale: THEME.rightPriceScale,
       timeScale: THEME.timeScale,
+      localization: THEME.localization,
       crosshair: THEME.crosshair,
       attributionLogo: false,
     });
@@ -128,21 +170,28 @@ export function LightweightChartsWidget({
     chart.timeScale().fitContent();
     chartRef.current = chart;
 
-    const ro = new ResizeObserver((entries) => {
-      const { width } = entries[0]?.contentRect ?? {};
-      const next = Math.max(100, width ?? el.clientWidth ?? el.offsetWidth ?? 400);
-      chart.applyOptions({ width: next });
-    });
-    ro.observe(el);
-
+    if (!autoSize) {
+      const ro = new ResizeObserver((entries) => {
+        const rect = entries[0]?.contentRect;
+        const nextW = Math.max(100, rect?.width ?? el.clientWidth ?? el.offsetWidth ?? 400);
+        chart.applyOptions({ width: nextW });
+      });
+      ro.observe(el);
+      return () => {
+        ro.disconnect();
+        chart.remove();
+        chartRef.current = null;
+        candlestickRef.current = null;
+        volumeRef.current = null;
+      };
+    }
     return () => {
-      ro.disconnect();
       chart.remove();
       chartRef.current = null;
       candlestickRef.current = null;
       volumeRef.current = null;
     };
-  }, [height, showVolume]);
+  }, [height, showVolume, autoSize]);
 
   useEffect(() => {
     const candlestick = candlestickRef.current;
@@ -157,7 +206,7 @@ export function LightweightChartsWidget({
     return (
       <div
         className={`flex items-center justify-center bg-[#0a0e13] text-muted-foreground text-sm ${className}`}
-        style={{ height }}
+        style={autoSize ? { minHeight: 200 } : { height }}
       >
         No chart data
       </div>
@@ -168,7 +217,7 @@ export function LightweightChartsWidget({
     <div
       ref={containerRef}
       className={`w-full ${className}`}
-      style={{ height }}
+      style={autoSize ? { minHeight: 200, height: "100%" } : { height }}
     />
   );
 }
