@@ -10,6 +10,7 @@ import {
   DropdownMenuTrigger,
 } from "@/app/components/ui/dropdown-menu";
 import { ConnectionStatus } from "@/app/components/ui/error-state";
+import { useDemo } from "@/app/contexts/DemoContext";
 import { useState, useEffect } from "react";
 import {
   Dialog,
@@ -39,6 +40,7 @@ export function TopBar({
   activeCopies = 3,
   exchangeLatency = 45
 }: TopBarProps) {
+  const { isDemoMode, clearDemo } = useDemo();
   const [currentTime, setCurrentTime] = useState(new Date());
   const [showPauseModal, setShowPauseModal] = useState(false);
 
@@ -67,6 +69,11 @@ export function TopBar({
     <>
       <div className="h-14 border-b border-border bg-card flex items-center justify-between gap-2 px-3 sm:px-4 md:px-6 shrink-0">
         <div className="flex items-center gap-2 sm:gap-4 md:gap-6 min-w-0">
+          {isDemoMode && (
+            <Badge variant="secondary" className="bg-primary/15 text-primary border-primary/30 shrink-0 text-xs">
+              Demo
+            </Badge>
+          )}
           {/* Mobile menu trigger */}
           {onOpenMobileNav && (
             <Button

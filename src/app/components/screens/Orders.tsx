@@ -7,6 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/app/components/ui/ta
 import { X, Loader2 } from "lucide-react";
 import { api } from "@/lib/api";
 import { toast } from "@/app/lib/toast";
+import { useDemo } from "@/app/contexts/DemoContext";
 import { LoadingWrapper } from "@/app/components/ui/loading-wrapper";
 import { EmptyState } from "@/app/components/ui/empty-state";
 import { ErrorState } from "@/app/components/ui/error-state";
@@ -35,12 +36,15 @@ interface OrdersResponse {
 }
 
 export function Orders() {
+  const { isDemoMode, demoOrders, clearDemo } = useDemo();
   const [orders, setOrders] = useState<Order[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
+
+  const displayOrders = isDemoMode ? demoOrders : orders;
 
   const loadOrders = async (pageNum: number = 1) => {
     setIsLoading(true);
@@ -63,15 +67,16 @@ export function Orders() {
   };
 
   useEffect(() => {
-    loadOrders(1);
-  }, []);
+    if (!isDemoMode) loadOrders(1);
+    else setIsLoading(false);
+  }, [isDemoMode]);
 
   // Categorize orders
-  const openOrders = orders.filter((o) => o.status === "pending");
-  const filledOrders = orders.filter((o) => o.status === "filled");
-  const cancelledOrders = orders.filter((o) => o.status === "cancelled");
+  const openOrders = displayOrders.filter((o) => o.status === "pending");
+  const filledOrders = displayOrders.filter((o) => o.status === "filled");
+  const cancelledOrders = displayOrders.filter((o) => o.status === "cancelled");
 
-  if (isLoading) {
+  if (!isDemoMode && isLoading) {
     return (
       <div className="p-4 sm:p-6">
         <div className="animate-pulse space-y-6">
@@ -87,7 +92,7 @@ export function Orders() {
     );
   }
 
-  if (error && orders.length === 0) {
+  if (!isDemoMode && error && orders.length === 0) {
     return (
       <div className="p-4 sm:p-6">
         <ErrorState
@@ -107,9 +112,17 @@ export function Orders() {
 
   return (
     <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
-      <div>
-        <h1 className="text-xl sm:text-2xl font-semibold mb-1">Orders</h1>
-        <p className="text-sm text-muted-foreground">View and manage your trading orders</p>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h1 className="text-xl sm:text-2xl font-semibold mb-1">Orders</h1>
+          <p className="text-sm text-muted-foreground">View and manage your trading orders</p>
+        </div>
+        {isDemoMode && (
+          <div className="flex items-center gap-2">
+            <Badge variant="secondary" className="bg-primary/15 text-primary border-primary/30">Demo</Badge>
+            <Button variant="ghost" size="sm" onClick={clearDemo}>Exit demo</Button>
+          </div>
+        )}
       </div>
 
       {/* Summary */}
@@ -131,12 +144,12 @@ export function Orders() {
 
         <Card className="p-3 sm:p-4 space-y-2">
           <div className="text-xs text-muted-foreground uppercase tracking-wide">Total Orders</div>
-          <div className="text-xl sm:text-2xl font-semibold">{total}</div>
+          <div className="text-xl sm:text-2xl font-semibold">{isDemoMode ? displayOrders.length : total}</div>
         </Card>
       </div>
 
       {/* Orders Tabs */}
-      {orders.length === 0 ? (
+      {displayOrders.length === 0 ? (
         <Card className="p-6 sm:p-12">
           <EmptyState
             icon={X}

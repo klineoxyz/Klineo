@@ -6,6 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { X, Loader2 } from "lucide-react";
 import { api } from "@/lib/api";
 import { toast } from "@/app/lib/toast";
+import { useDemo } from "@/app/contexts/DemoContext";
 import { LoadingWrapper } from "@/app/components/ui/loading-wrapper";
 import { EmptyState } from "@/app/components/ui/empty-state";
 import { ErrorState } from "@/app/components/ui/error-state";
@@ -41,12 +42,15 @@ interface PositionsResponse {
 }
 
 export function Positions() {
+  const { isDemoMode, demoPositions, clearDemo } = useDemo();
   const [positions, setPositions] = useState<Position[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
+
+  const displayPositions = isDemoMode ? (demoPositions as Position[]) : positions;
 
   const loadPositions = async (pageNum: number = 1) => {
     setIsLoading(true);
@@ -69,14 +73,15 @@ export function Positions() {
   };
 
   useEffect(() => {
-    loadPositions(1);
-  }, []);
+    if (!isDemoMode) loadPositions(1);
+    else setIsLoading(false);
+  }, [isDemoMode]);
 
   // Calculate summary stats
-  const openPositions = positions.filter((p) => !p.closedAt);
+  const openPositions = displayPositions.filter((p) => !p.closedAt);
   const totalUnrealizedPnl = openPositions.reduce((sum, p) => sum + (p.unrealizedPnl || 0), 0);
 
-  if (isLoading) {
+  if (!isDemoMode && isLoading) {
     return (
       <div className="p-4 sm:p-6">
         <div className="animate-pulse space-y-6">
@@ -92,7 +97,7 @@ export function Positions() {
     );
   }
 
-  if (error && positions.length === 0) {
+  if (!isDemoMode && error && positions.length === 0) {
     return (
       <div className="p-4 sm:p-6">
         <ErrorState
@@ -112,9 +117,17 @@ export function Positions() {
 
   return (
     <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
-      <div>
-        <h1 className="text-xl sm:text-2xl font-semibold mb-1">Positions</h1>
-        <p className="text-sm text-muted-foreground">Active trading positions</p>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h1 className="text-xl sm:text-2xl font-semibold mb-1">Positions</h1>
+          <p className="text-sm text-muted-foreground">Active trading positions</p>
+        </div>
+        {isDemoMode && (
+          <div className="flex items-center gap-2">
+            <Badge variant="secondary" className="bg-primary/15 text-primary border-primary/30">Demo</Badge>
+            <Button variant="ghost" size="sm" onClick={clearDemo}>Exit demo</Button>
+          </div>
+        )}
       </div>
 
       {/* Summary */}
@@ -122,7 +135,7 @@ export function Positions() {
         <Card className="p-3 sm:p-4 space-y-2">
           <div className="text-xs text-muted-foreground uppercase tracking-wide">Open Positions</div>
           <div className="text-xl sm:text-2xl font-semibold">{openPositions.length}</div>
-          <div className="text-xs text-muted-foreground">of {total} total</div>
+          <div className="text-xs text-muted-foreground">of {isDemoMode ? displayPositions.length : total} total</div>
         </Card>
 
         <Card className="p-3 sm:p-4 space-y-2">
@@ -137,19 +150,19 @@ export function Positions() {
 
         <Card className="p-3 sm:p-4 space-y-2">
           <div className="text-xs text-muted-foreground uppercase tracking-wide">Closed Positions</div>
-          <div className="text-xl sm:text-2xl font-semibold">{positions.length - openPositions.length}</div>
+          <div className="text-xl sm:text-2xl font-semibold">{displayPositions.length - openPositions.length}</div>
           <div className="text-xs text-muted-foreground">Total</div>
         </Card>
 
         <Card className="p-3 sm:p-4 space-y-2">
           <div className="text-xs text-muted-foreground uppercase tracking-wide">Total Positions</div>
-          <div className="text-xl sm:text-2xl font-semibold">{total}</div>
+          <div className="text-xl sm:text-2xl font-semibold">{isDemoMode ? displayPositions.length : total}</div>
           <div className="text-xs text-muted-foreground">All time</div>
         </Card>
       </div>
 
       {/* Positions Table */}
-      {positions.length === 0 ? (
+      {displayPositions.length === 0 ? (
         <Card className="p-12">
           <EmptyState
             icon={X}
@@ -177,7 +190,7 @@ export function Positions() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {positions.map((position) => (
+              {displayPositions.map((position) => (
                 <TableRow key={position.id}>
                   <TableCell className="font-mono font-semibold">{position.symbol}</TableCell>
                   <TableCell>

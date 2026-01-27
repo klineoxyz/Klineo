@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Download, Search, Loader2 } from "lucide-react";
 import { api } from "@/lib/api";
 import { toast } from "@/app/lib/toast";
+import { useDemo } from "@/app/contexts/DemoContext";
 import { LoadingWrapper } from "@/app/components/ui/loading-wrapper";
 import { EmptyState } from "@/app/components/ui/empty-state";
 import { ErrorState } from "@/app/components/ui/error-state";
@@ -35,6 +36,7 @@ interface TradesResponse {
 }
 
 export function TradeHistory() {
+  const { isDemoMode, demoTrades, clearDemo } = useDemo();
   const [trades, setTrades] = useState<Trade[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -42,6 +44,8 @@ export function TradeHistory() {
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   const [searchTerm, setSearchTerm] = useState("");
+
+  const displayTrades = isDemoMode ? demoTrades : trades;
 
   const loadTrades = async (pageNum: number = 1) => {
     setIsLoading(true);
@@ -64,11 +68,12 @@ export function TradeHistory() {
   };
 
   useEffect(() => {
-    loadTrades(1);
-  }, []);
+    if (!isDemoMode) loadTrades(1);
+    else setIsLoading(false);
+  }, [isDemoMode]);
 
   // Filter trades by search term
-  const filteredTrades = trades.filter((trade) => {
+  const filteredTrades = displayTrades.filter((trade) => {
     if (!searchTerm) return true;
     const term = searchTerm.toLowerCase();
     return (
@@ -78,16 +83,16 @@ export function TradeHistory() {
   });
 
   // Calculate summary stats
-  const todayTrades = trades.filter((t) => {
+  const todayTrades = displayTrades.filter((t) => {
     const today = new Date();
     const tradeDate = new Date(t.executedAt);
     return tradeDate.toDateString() === today.toDateString();
   });
 
-  const totalVolume = trades.reduce((sum, t) => sum + (t.amount * t.price), 0);
-  const totalFees = trades.reduce((sum, t) => sum + t.fee, 0);
+  const totalVolume = displayTrades.reduce((sum, t) => sum + (t.amount * t.price), 0);
+  const totalFees = displayTrades.reduce((sum, t) => sum + t.fee, 0);
 
-  if (isLoading) {
+  if (!isDemoMode && isLoading) {
     return (
       <div className="p-4 sm:p-6">
         <div className="animate-pulse space-y-6">
@@ -103,7 +108,7 @@ export function TradeHistory() {
     );
   }
 
-  if (error && trades.length === 0) {
+  if (!isDemoMode && error && trades.length === 0) {
     return (
       <div className="p-4 sm:p-6">
         <ErrorState
@@ -123,9 +128,17 @@ export function TradeHistory() {
 
   return (
     <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
-      <div>
-        <h1 className="text-xl sm:text-2xl font-semibold mb-1">Trade History</h1>
-        <p className="text-sm text-muted-foreground">Complete history of executed trades</p>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h1 className="text-xl sm:text-2xl font-semibold mb-1">Trade History</h1>
+          <p className="text-sm text-muted-foreground">Complete history of executed trades</p>
+        </div>
+        {isDemoMode && (
+          <div className="flex items-center gap-2">
+            <Badge variant="secondary" className="bg-primary/15 text-primary border-primary/30">Demo</Badge>
+            <Button variant="ghost" size="sm" onClick={clearDemo}>Exit demo</Button>
+          </div>
+        )}
       </div>
 
       {/* Summary */}

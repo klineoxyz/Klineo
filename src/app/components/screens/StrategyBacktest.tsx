@@ -72,6 +72,7 @@ import {
   ListOrdered,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useDemo } from "@/app/contexts/DemoContext";
 
 // Helper: Calculate SMA
 const calculateSMA = (data: any[], period: number, key: string) => {
@@ -260,6 +261,7 @@ interface StrategyBacktestProps {
 }
 
 export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
+  const { addDemoFromBacktest } = useDemo();
   const [configCollapsed, setConfigCollapsed] = useState(false);
   const [launchDialogOpen, setLaunchDialogOpen] = useState(false);
   const [isBacktesting, setIsBacktesting] = useState(false);
@@ -313,9 +315,12 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
       return;
     }
     setLaunchDialogOpen(false);
-    toast.success(
-      `Strategy launched in ${launchMode.toUpperCase()} mode with $${launchCapital} capital`
-    );
+    if (launchMode === "demo") {
+      addDemoFromBacktest(backtestTrades, symbol);
+      toast.success("Demo mode on — backtest trades are now visible in Trade History, Orders, and Positions.");
+    } else {
+      toast.success(`Strategy launched in LIVE mode with $${launchCapital} capital`);
+    }
     setTimeout(() => {
       onNavigate("copy-trading");
     }, 1500);
@@ -1221,7 +1226,14 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
               <Play className="h-4 w-4 mr-2" />
               Review & Start Trading
             </Button>
-            <Button variant="outline" className="w-full" onClick={() => toast.info("Demo mode activated")}>
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={() => {
+                addDemoFromBacktest(backtestTrades, symbol);
+                toast.success("Demo mode on — backtest trades now appear in Trade History, Orders, and Positions.");
+              }}
+            >
               Run Demo
             </Button>
           </div>
