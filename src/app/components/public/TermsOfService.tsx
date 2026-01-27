@@ -42,8 +42,7 @@ export function TermsOfService({ onNavigate }: TermsOfServiceProps) {
             </p>
             <p className="text-sm text-muted-foreground leading-relaxed">
               KLINEO is a professional copy trading terminal that enables users to copy trades from verified Master Traders 
-              on supported centralized cryptocurrency exchanges. The Platform charges performance fees only on profitable 
-              copied trades and offers subscription-based access tiers.
+              on supported centralized cryptocurrency exchanges.               The Platform uses a credit-based profit allowance and requires a joining fee plus package purchases.
             </p>
           </div>
 
@@ -75,29 +74,29 @@ export function TermsOfService({ onNavigate }: TermsOfServiceProps) {
           </div>
 
           <div className="space-y-4">
-            <h2 className="text-xl font-semibold text-primary">4. Subscription Plans & Fees</h2>
+            <h2 className="text-xl font-semibold text-primary">4. Joining Fee & Trading Packages</h2>
             
-            <h3 className="text-base font-semibold">4.1 Subscription Tiers</h3>
+            <h3 className="text-base font-semibold">4.1 Joining Fee</h3>
             <p className="text-sm text-muted-foreground leading-relaxed">
-              KLINEO offers three subscription tiers: Starter ($29/month), Pro ($79/month), and Unlimited ($199/month). 
-              6-month subscriptions receive a 10% discount. All prices are in USD and payable via cryptocurrency through CoinPayments.
+              A one-time $100 Joining Fee is required to create your profile and enable CEX API connection. 
+              All prices are in USD and payable via cryptocurrency through CoinPayments.
             </p>
 
-            <h3 className="text-base font-semibold mt-4">4.2 Performance Fees</h3>
+            <h3 className="text-base font-semibold mt-4">4.2 Trading Packages (Credit-Based Allowance)</h3>
             <p className="text-sm text-muted-foreground leading-relaxed">
-              KLINEO charges performance fees ONLY on profitable copied trades:
+              KLINEO uses a credit-based profit allowance. You buy packages to unlock a profit cap:
             </p>
             <ul className="space-y-2 ml-6">
-              <li className="text-sm text-muted-foreground">• Starter & Pro plans: 20% of net profit per trade</li>
-              <li className="text-sm text-muted-foreground">• Unlimited plan: 10% of net profit per trade</li>
-              <li className="text-sm text-muted-foreground">• Fees are calculated per closed position</li>
-              <li className="text-sm text-muted-foreground">• No fees are charged on losing trades</li>
+              <li className="text-sm text-muted-foreground">• Entry: $100 → trade until you earn up to $300 profit</li>
+              <li className="text-sm text-muted-foreground">• Level 2: $200 → trade until you earn up to $1,000 profit</li>
+              <li className="text-sm text-muted-foreground">• Level 3: $500 → trade until you earn up to $5,000 profit</li>
+              <li className="text-sm text-muted-foreground">• When you hit the cap, buy another package to continue. No per-trade fee.</li>
             </ul>
 
-            <h3 className="text-base font-semibold mt-4">4.3 Payment & Renewals</h3>
+            <h3 className="text-base font-semibold mt-4">4.3 Payment & Refunds</h3>
             <p className="text-sm text-muted-foreground leading-relaxed">
-              Subscriptions auto-renew unless cancelled before the renewal date. All payments are non-refundable except 
-              as required by law. You may cancel your subscription at any time from your account settings.
+              Joining fee and package purchases are non-refundable except as required by law. 
+              Your profit allowance is consumed as you earn from copied trades; unused allowance remains until you hit the cap.
             </p>
           </div>
 
@@ -240,7 +239,7 @@ export function TermsOfService({ onNavigate }: TermsOfServiceProps) {
               <li className="text-sm text-muted-foreground">• Any reason, with or without cause</li>
             </ul>
             <p className="text-sm text-muted-foreground leading-relaxed mt-4">
-              Upon termination, your access will cease immediately. Subscription fees already paid are non-refundable.
+              Upon termination, your access will cease immediately. Joining fee and package purchases already paid are non-refundable.
             </p>
           </div>
 

@@ -39,21 +39,21 @@ export function Fees() {
   return (
     <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
       <div>
-        <h1 className="text-xl sm:text-2xl font-semibold mb-1">Fees</h1>
-        <p className="text-sm text-muted-foreground">Platform fee ledger for copied trades</p>
+        <h1 className="text-xl sm:text-2xl font-semibold mb-1">Fees & Allowance</h1>
+        <p className="text-sm text-muted-foreground">Profit allowance usage and payment history</p>
       </div>
 
-      {/* Fee Structure Explanation */}
+      {/* Allowance / Credit-based explanation */}
       <Alert className="border-primary/20 bg-primary/5">
         <Info className="size-4 text-primary" />
         <AlertDescription>
           <div className="space-y-2 text-sm">
-            <p className="font-semibold">Platform Fee Structure</p>
+            <p className="font-semibold">Credit-based allowance</p>
             <ul className="space-y-1 text-muted-foreground">
-              <li>• Platform fees are charged at <span className="text-foreground font-medium">20% of profitable copied trades</span></li>
-              <li>• Fees are calculated on realized profits only</li>
-              <li>• No fees charged on losing trades</li>
-              <li>• Fees are settled at the end of each trading period</li>
+              <li>• Your package grants a profit allowance (e.g. $300, $1,000, $5,000)</li>
+              <li>• Trade until you earn up to that amount in profit</li>
+              <li>• When you hit the cap, buy another package to unlock more allowance</li>
+              <li>• No per-trade fee</li>
             </ul>
           </div>
         </AlertDescription>
@@ -68,13 +68,13 @@ export function Fees() {
         </Card>
 
         <Card className="p-3 sm:p-4 space-y-2">
-          <div className="text-xs text-muted-foreground uppercase tracking-wide">Platform Fee (Due)</div>
+          <div className="text-xs text-muted-foreground uppercase tracking-wide">Allowance used</div>
           <div className="text-xl sm:text-2xl font-semibold text-primary">$249.10</div>
-          <div className="text-xs text-muted-foreground">20% of profit</div>
+          <div className="text-xs text-muted-foreground">Of your profit allowance</div>
         </Card>
 
         <Card className="p-3 sm:p-4 space-y-2">
-          <div className="text-xs text-muted-foreground uppercase tracking-wide">Total Fees Paid (All Time)</div>
+          <div className="text-xs text-muted-foreground uppercase tracking-wide">Packages purchased</div>
           <div className="text-xl sm:text-2xl font-semibold">$741.12</div>
           <div className="text-xs text-muted-foreground">Since account creation</div>
         </Card>
@@ -89,15 +89,15 @@ export function Fees() {
       {/* Fee Ledger */}
       <Card>
         <div className="p-4 sm:p-6 border-b border-border">
-          <h3 className="text-base sm:text-lg font-semibold">Platform Fee Ledger</h3>
+          <h3 className="text-base sm:text-lg font-semibold">Allowance & payments</h3>
         </div>
         <Table className="min-w-[560px]">
           <TableHeader>
             <TableRow>
               <TableHead>Period</TableHead>
               <TableHead>Realized Profit</TableHead>
-              <TableHead>Platform Fee (20%)</TableHead>
-              <TableHead>Fee Status</TableHead>
+              <TableHead>Allowance used</TableHead>
+              <TableHead>Status</TableHead>
               <TableHead>Settlement Date</TableHead>
             </TableRow>
           </TableHeader>
@@ -147,7 +147,7 @@ export function Fees() {
                 <div className="text-sm text-muted-foreground">Realized Profit: <span className="text-[#10B981] font-mono">${item.profit.toFixed(2)}</span></div>
               </div>
               <div className="text-right">
-                <div className="text-xs text-muted-foreground mb-1">Platform Fee (20%)</div>
+                <div className="text-xs text-muted-foreground mb-1">Allowance used</div>
                 <div className="text-lg font-semibold text-primary">${item.fee.toFixed(2)}</div>
               </div>
             </div>

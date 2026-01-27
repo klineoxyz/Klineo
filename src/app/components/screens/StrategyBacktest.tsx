@@ -1238,14 +1238,14 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
             </Button>
           </div>
 
-          {/* Subscription Upgrade CTA */}
+          {/* Packages / Allowance CTA */}
           <Card className="p-4 bg-primary/10 border-primary/20">
             <div className="flex items-start gap-3">
               <TrendingUp className="h-5 w-5 text-primary shrink-0 mt-0.5" />
               <div className="space-y-2">
-                <div className="font-medium text-sm">Upgrade for More Strategies</div>
+                <div className="font-medium text-sm">Unlock trading allowance</div>
                 <p className="text-xs text-muted-foreground">
-                  Unlimited Plan unlocks advanced strategy templates and optimization tools
+                  Buy a package in Packages to unlock your profit allowance and start copying
                 </p>
                 <Button
                   size="sm"
@@ -1253,7 +1253,7 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
                   className="w-full border-primary text-primary hover:bg-primary/10"
                   onClick={() => onNavigate("subscription")}
                 >
-                  View Plans
+                  View Packages
                 </Button>
               </div>
             </div>

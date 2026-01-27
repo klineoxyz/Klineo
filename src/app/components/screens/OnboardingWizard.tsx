@@ -299,8 +299,8 @@ function WelcomeStep() {
         </div>
         <div className="p-4 bg-secondary/30 rounded-lg">
           <TrendingUp className="size-6 text-accent mx-auto mb-2" />
-          <div className="text-xs font-medium">Fee on Profit</div>
-          <div className="text-[10px] text-muted-foreground">Only when you win</div>
+          <div className="text-xs font-medium">Profit allowance</div>
+          <div className="text-[10px] text-muted-foreground">Buy packages to unlock</div>
         </div>
       </div>
     </div>

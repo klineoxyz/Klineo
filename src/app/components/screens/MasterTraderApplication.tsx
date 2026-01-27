@@ -212,7 +212,7 @@ export function MasterTraderApplication({ onNavigate }: MasterTraderApplicationP
                       </p>
                       <ul className="text-muted-foreground text-xs mt-2 space-y-1">
                         <li>• KLINEO will verify my trading performance before approval</li>
-                        <li>• I will earn 40% commission from copier fees (not from copier profits)</li>
+                        <li>• I will earn from the referral pool when my copiers pay joining fee or buy packages</li>
                         <li>• I can be removed from the platform for suspicious activity</li>
                         <li>• I agree to maintain transparent and ethical trading practices</li>
                       </ul>
@@ -263,16 +263,16 @@ export function MasterTraderApplication({ onNavigate }: MasterTraderApplicationP
             </Card>
 
             <Card className="p-6">
-              <h4 className="font-semibold mb-3">Commission Structure</h4>
+              <h4 className="font-semibold mb-3">Referral rewards</h4>
               <div className="p-4 bg-primary/10 rounded border border-primary/20 mb-4">
-                <div className="text-3xl font-bold text-primary mb-1">40%</div>
-                <div className="text-xs text-muted-foreground">of KLINEO's 20% platform fee</div>
+                <div className="text-3xl font-bold text-primary mb-1">70%</div>
+                <div className="text-xs text-muted-foreground">of joining fee & package revenue goes to referral pool (7 levels)</div>
               </div>
               <div className="text-xs text-muted-foreground space-y-2">
                 <p className="font-semibold text-foreground">Example:</p>
-                <p>Your copier makes $1,000 profit</p>
-                <p>→ KLINEO fee: $200 (20%)</p>
-                <p className="text-primary">→ You earn: $80 (40% of $200)</p>
+                <p>Your copier pays joining fee $100 or buys a $200 package</p>
+                <p>→ 70% is distributed across upline (L1–L7)</p>
+                <p className="text-primary">→ You earn according to your level in their referral chain</p>
               </div>
             </Card>
 

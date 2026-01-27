@@ -13,9 +13,9 @@
  * 7. Positions - Active trading positions with PnL tracking
  * 8. Orders - Open, filled, and cancelled order management
  * 9. Trade History - Complete execution history with leader/follower mapping
- * 10. Fees - Platform fee ledger (20% of profitable copied trades)
- * 11. Referrals - 2-tier referral system (10% / 5% commission)
- * 12. Subscription - Pricing plans with 6-month discount option
+ * 10. Fees - Profit allowance usage and payment history (credit-based model)
+ * 11. Referrals - 7-level referral system (70% of joining fee & package revenue)
+ * 12. Packages - Joining fee $100 + trading packages (Entry/Level 2/Level 3) with profit allowance
  * 13. Payments - Payment history and invoice management
  * 14. Settings - Profile, security, exchange API, notifications
  * 15. Support - Support tickets and help resources
@@ -25,12 +25,12 @@
  * - Professional terminal aesthetic (late-90s inspired, modernized)
  * - Dark theme with terminal black (#0B0D10) and amber accent (#FFB000)
  * - Dense, information-rich layouts optimized for desktop (1440px)
- * - Persistent top bar with subscription status and exchange connection
+ * - Persistent top bar with exchange connection
  * - Collapsible left sidebar with all navigation
  * - Complete copy trading flow (browse → profile → setup → monitor)
- * - Platform fees charged only on profitable trades
- * - 2-tier referral system funded from platform fees
- * - Monthly and 6-month subscription options with 10% discount
+ * - Credit-based profit allowance (pay packages, trade until cap, buy again)
+ * - 7-level referral system (70% of joining fee & package revenue)
+ * - Joining fee $100 + trading packages (Entry $100/$300, Level 2 $200/$1k, Level 3 $500/$5k)
  * - Comprehensive risk controls and monitoring
  * - Admin operations panel for platform management
  * 

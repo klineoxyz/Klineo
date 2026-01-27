@@ -353,42 +353,38 @@ export function HowItWorksPage({ onNavigate }: HowItWorksPageProps) {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             <Card className="p-8 border-[#10B981]/50">
               <div className="text-center mb-6">
-                <div className="text-5xl font-bold text-[#10B981] mb-2">Win</div>
-                <div className="text-sm text-muted-foreground">Profitable Trade Scenario</div>
+                <div className="text-5xl font-bold text-[#10B981] mb-2">Allowance</div>
+                <div className="text-sm text-muted-foreground">Credit-based model</div>
               </div>
               <div className="space-y-3">
                 <div className="flex justify-between items-center pb-2 border-b border-border">
-                  <span className="text-sm text-muted-foreground">Your Profit</span>
-                  <span className="font-semibold text-[#10B981]">+$500</span>
+                  <span className="text-sm text-muted-foreground">Package (e.g. $100)</span>
+                  <span className="font-semibold text-accent">$300 allowance</span>
                 </div>
                 <div className="flex justify-between items-center pb-2 border-b border-border">
-                  <span className="text-sm text-muted-foreground">Platform Fee (20%)</span>
-                  <span className="font-semibold text-accent">-$100</span>
+                  <span className="text-sm text-muted-foreground">Your profit counts toward cap</span>
+                  <span className="font-semibold text-[#10B981]">Trade until $300</span>
                 </div>
                 <div className="flex justify-between items-center pt-2">
-                  <span className="font-semibold">You Keep</span>
-                  <span className="text-xl font-bold text-[#10B981]">+$400</span>
+                  <span className="font-semibold">Then</span>
+                  <span className="text-sm text-muted-foreground">Buy another package to continue</span>
                 </div>
               </div>
             </Card>
 
-            <Card className="p-8 border-[#EF4444]/50">
+            <Card className="p-8 border-accent/50">
               <div className="text-center mb-6">
-                <div className="text-5xl font-bold text-[#EF4444] mb-2">Loss</div>
-                <div className="text-sm text-muted-foreground">Losing Trade Scenario</div>
+                <div className="text-5xl font-bold text-accent mb-2">Joining fee</div>
+                <div className="text-sm text-muted-foreground">One-time $100</div>
               </div>
               <div className="space-y-3">
                 <div className="flex justify-between items-center pb-2 border-b border-border">
-                  <span className="text-sm text-muted-foreground">Your Loss</span>
-                  <span className="font-semibold text-[#EF4444]">-$300</span>
-                </div>
-                <div className="flex justify-between items-center pb-2 border-b border-border">
-                  <span className="text-sm text-muted-foreground">Platform Fee</span>
-                  <span className="font-semibold">$0.00</span>
+                  <span className="text-sm text-muted-foreground">Enables</span>
+                  <span className="font-semibold">Profile + API</span>
                 </div>
                 <div className="flex justify-between items-center pt-2">
-                  <span className="font-semibold">You Pay</span>
-                  <span className="text-xl font-bold text-[#EF4444]">-$300</span>
+                  <span className="font-semibold">Required</span>
+                  <span className="text-sm text-muted-foreground">Before you can copy trade</span>
                 </div>
               </div>
             </Card>
@@ -396,7 +392,7 @@ export function HowItWorksPage({ onNavigate }: HowItWorksPageProps) {
 
           <div className="mt-8 text-center">
             <p className="text-sm text-muted-foreground">
-              We only profit when you profit. Our success is tied to yours.
+              Pay upfront for packages; trade until you hit your profit cap. No per-trade fee.
             </p>
           </div>
         </div>

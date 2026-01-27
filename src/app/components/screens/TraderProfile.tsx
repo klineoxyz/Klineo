@@ -250,7 +250,7 @@ export function TraderProfile({ onNavigate, traderData }: TraderProfileProps) {
             <li>• Copy trading involves significant risk of capital loss</li>
             <li>• Past performance does not guarantee future results</li>
             <li>• You maintain full control and can stop copying at any time</li>
-            <li>• Platform fees apply only to profitable copied trades</li>
+            <li>• Your profit allowance is used as you earn from copied trades; buy packages to unlock more</li>
             <li>• Ensure you understand the trader's strategy before copying</li>
           </ul>
         </Card>

@@ -217,10 +217,10 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
               <div className="size-12 rounded-lg bg-accent/10 flex items-center justify-center mb-4">
                 <DollarSign className="size-6 text-accent" />
               </div>
-              <h3 className="text-lg font-semibold mb-2">Pay Only on Profits</h3>
+              <h3 className="text-lg font-semibold mb-2">Credit-based allowance</h3>
               <p className="text-sm text-muted-foreground leading-relaxed">
-                Zero upfront fees. We only charge 20% when you make money. 
-                Lose money? Pay nothing. Our success depends on yours.
+                Pay a joining fee and buy packages to unlock a profit allowance. 
+                Trade until you earn up to that cap, then buy again. No per-trade fee.
               </p>
             </Card>
 
@@ -348,8 +348,8 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
                 </div>
               </div>
               <p className="text-sm text-muted-foreground leading-relaxed">
-                "Finally, a platform that doesn't nickel-and-dime you. Pay only on profits 
-                means they're aligned with my success. Brilliant business model."
+                "Finally, a platform with clear economics. Buy a package, trade until you hit 
+                your profit cap, then buy again. Simple and aligned with my success."
               </p>
             </Card>
 
@@ -397,7 +397,7 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
             </Button>
           </div>
           <p className="text-sm text-muted-foreground mt-6">
-            No credit card required • 20% fee only on profits • Cancel anytime
+            Joining fee $100 + packages unlock your profit allowance
           </p>
         </div>
       </section>

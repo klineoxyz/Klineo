@@ -33,24 +33,24 @@ const faqCategories = [
     category: "Pricing & Fees",
     questions: [
       {
-        q: "What are the subscription plans?",
-        a: "KLINEO offers three tiers: Starter ($29/month, copy up to 3 traders), Pro ($79/month, copy up to 10 traders), and Unlimited ($199/month, unlimited traders). All plans receive a 10% discount on 6-month subscriptions."
+        q: "What are the packages and joining fee?",
+        a: "A one-time $100 Joining Fee is required to create your profile and enable CEX API connection. Then you buy trading packages: Entry ($100 → $300 profit allowance), Level 2 ($200 → $1,000), Level 3 ($500 → $5,000). Trade until you earn up to that profit cap, then buy again to continue."
       },
       {
-        q: "What are performance fees?",
-        a: "KLINEO charges fees ONLY on profitable copied trades: 20% of net profit for Starter/Pro plans, and 10% for Unlimited plans. If a trade loses money, you pay zero fees. Fees are calculated per closed position."
+        q: "How does the profit allowance work?",
+        a: "You pay upfront for a package (e.g. $100 = $300 profit allowance). You can trade until you earn up to that amount in profit. When you hit the cap, buy another package to unlock more allowance. There is no per-trade fee."
       },
       {
-        q: "How are fees calculated?",
-        a: "Example: You copy a trade that generates $100 profit. On a Pro plan, KLINEO charges 20% × $100 = $20. Your net profit is $80. Losing trades incur no fees."
+        q: "How is allowance used?",
+        a: "Profit from your copied trades counts toward your allowance. Example: $100 Entry package gives $300 allowance. Once your realized profit from copied trades reaches $300, you need to buy another package to continue copying."
       },
       {
         q: "What payment methods do you accept?",
-        a: "All subscriptions are paid via cryptocurrency through CoinPayments. We accept Bitcoin (BTC), Ethereum (ETH), USDT, USDC, and other major cryptocurrencies."
+        a: "Joining fee and package purchases are paid via cryptocurrency through CoinPayments. We accept Bitcoin (BTC), Ethereum (ETH), USDT, USDC, and other major cryptocurrencies."
       },
       {
         q: "Are there any refunds?",
-        a: "Subscription fees are non-refundable except as required by law. You may cancel your subscription at any time to prevent future charges, but already-paid fees will not be refunded."
+        a: "Joining fee and package purchases are non-refundable except as required by law. Your profit allowance is consumed as you earn; unused allowance does not expire until you hit the cap."
       }
     ]
   },

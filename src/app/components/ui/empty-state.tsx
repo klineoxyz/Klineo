@@ -203,7 +203,7 @@ export function EmptyFees() {
     <EmptyState
       icon={DollarSign}
       title="No Fee History"
-      description="You haven't incurred any platform fees yet. Fees are only charged on profitable copied trades (20% for Pro/Starter, 10% for Unlimited)."
+      description="You haven't used any profit allowance yet. Buy a package in Packages to unlock your trading allowance."
     />
   );
 }

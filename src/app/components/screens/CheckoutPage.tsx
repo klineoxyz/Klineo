@@ -75,10 +75,10 @@ export function CheckoutPage({ onNavigate, selectedPlan = "pro", selectedDuratio
             className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-3 transition"
           >
             <ArrowLeft className="size-4" />
-            Back to Subscription
+            Back to Packages
           </button>
           <h1 className="text-2xl font-semibold mb-1">Checkout</h1>
-          <p className="text-sm text-muted-foreground">Complete your subscription payment</p>
+          <p className="text-sm text-muted-foreground">Complete your payment</p>
         </div>
         <Badge className="bg-primary text-primary-foreground">
           Secure Payment
@@ -276,7 +276,7 @@ export function CheckoutPage({ onNavigate, selectedPlan = "pro", selectedDuratio
                 </div>
                 <h3 className="text-xl font-semibold mb-2">Payment Received!</h3>
                 <p className="text-muted-foreground mb-6">
-                  Your subscription is now active. Welcome to {planDetails.name}!
+                  Your payment is complete. Welcome to {planDetails.name}!
                 </p>
                 <Button onClick={() => onNavigate("dashboard")} className="bg-primary text-primary-foreground">
                   Go to Dashboard
@@ -339,7 +339,7 @@ export function CheckoutPage({ onNavigate, selectedPlan = "pro", selectedDuratio
               <h4 className="font-semibold">Secure Payment</h4>
             </div>
             <p className="text-xs text-muted-foreground leading-relaxed">
-              All payments are processed securely through CoinPayments. Your subscription begins immediately after payment confirmation.
+              All payments are processed securely through CoinPayments. Your package or joining fee is applied immediately after payment confirmation.
             </p>
             <Button variant="link" className="text-xs p-0 h-auto mt-2 text-accent" asChild>
               <a href="#" className="flex items-center gap-1">

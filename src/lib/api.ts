@@ -90,6 +90,31 @@ export interface TestConnectionResponse {
   requestId: string;
 }
 
+// Billing / Packages (credit-based model)
+export interface BillingPlansResponse {
+  joiningFee: { priceUsd: number; currency: string };
+  packages: Array<{
+    id: string;
+    priceUsd: number;
+    multiplier: number;
+    profitAllowanceUsd: number;
+  }>;
+  revenueSplit: { mlmPct: number; platformPct: number; marketingPct: number };
+}
+
+export interface JoiningFeeCheckoutResponse {
+  status: string;
+  message: string;
+  method?: string;
+}
+
+export interface PackageCheckoutResponse {
+  status: string;
+  message: string;
+  packageId?: string;
+  method?: string;
+}
+
 export const exchangeConnections = {
   /**
    * List all exchange connections for current user

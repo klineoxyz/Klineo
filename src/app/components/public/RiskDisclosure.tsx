@@ -324,10 +324,11 @@ export function RiskDisclosure({ onNavigate }: RiskDisclosureProps) {
               be incomplete or inaccurate.
             </p>
 
-            <h3 className="text-base font-semibold mt-4">7.3 Platform Fees</h3>
+            <h3 className="text-base font-semibold mt-4">7.3 Credit-Based Allowance</h3>
             <p className="text-sm text-muted-foreground leading-relaxed">
-              Platform performance fees (20% for Starter/Pro, 10% for Unlimited) are deducted from profitable 
-              trades. These fees reduce your net returns compared to Master Traders' gross performance.
+              You pay a joining fee and buy packages to unlock a profit allowance. Your profit from copied 
+              trades counts toward that allowance until you hit the cap; then you buy another package to continue. 
+              There is no per-trade fee deducted from individual trades.
             </p>
           </div>
 

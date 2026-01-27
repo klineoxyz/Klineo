@@ -110,42 +110,42 @@ export function PricingPage({ onNavigate }: PricingPageProps) {
         </div>
       </section>
 
-      {/* Performance Fee */}
+      {/* Credit-based model */}
       <section className="border-b border-border">
         <div className="max-w-5xl mx-auto px-6 py-16">
           <Card className="p-12 border-accent/50">
             <div className="text-center mb-8">
               <Badge variant="outline" className="mb-4 bg-accent/10 text-accent border-accent/30">
-                Performance-Based
+                Credit-based allowance
               </Badge>
-              <h2 className="text-3xl font-bold mb-3"><span className="font-mono">20%</span> on Profitable Trades Only</h2>
+              <h2 className="text-3xl font-bold mb-3">Pay upfront, trade until you hit your profit cap</h2>
               <p className="text-muted-foreground text-lg">
-                We charge <span className="font-mono font-semibold">20%</span> only on trades that make you money
+                Buy a package to unlock a profit allowance. Trade until you earn up to that amount in profit, then buy again to continue.
               </p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-3xl mx-auto">
               <div className="p-6 rounded-lg bg-[#10B981]/10 border border-[#10B981]/20">
                 <div className="text-2xl font-mono font-bold text-[#10B981] mb-2">
-                  Profitable Trade: +$1,000
+                  Example: $100 package
                 </div>
                 <div className="text-sm text-muted-foreground mb-4">
-                  Platform Fee (<span className="font-mono">20%</span>): <span className="font-mono font-semibold">$200</span>
+                  Profit allowance: <span className="font-mono font-semibold">$300</span> (3x)
                 </div>
                 <div className="text-xl font-mono font-semibold">
-                  You Keep: $800
+                  Trade until you earn up to $300 profit
                 </div>
               </div>
 
-              <div className="p-6 rounded-lg bg-[#EF4444]/10 border border-[#EF4444]/20">
-                <div className="text-2xl font-mono font-bold text-[#EF4444] mb-2">
-                  Losing Trade: -$500
+              <div className="p-6 rounded-lg bg-accent/10 border border-accent/20">
+                <div className="text-2xl font-mono font-bold text-accent mb-2">
+                  Joining fee $100 (one-time)
                 </div>
                 <div className="text-sm text-muted-foreground mb-4">
-                  Platform Fee: <span className="font-mono font-semibold">$0</span>
+                  Enables profile + CEX API connection
                 </div>
                 <div className="text-xl font-mono font-semibold">
-                  No Fee Charged
+                  Required before you can copy trade
                 </div>
               </div>
             </div>
@@ -153,16 +153,16 @@ export function PricingPage({ onNavigate }: PricingPageProps) {
             <div className="mt-8 pt-8 border-t border-border">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-center">
                 <div>
-                  <div className="text-3xl font-mono font-bold text-accent mb-2">0%</div>
-                  <div className="text-sm text-muted-foreground">Monthly Subscription</div>
+                  <div className="text-3xl font-mono font-bold text-accent mb-2">70%</div>
+                  <div className="text-sm text-muted-foreground">Referral rewards pool</div>
                 </div>
                 <div>
-                  <div className="text-3xl font-mono font-bold text-accent mb-2">0%</div>
-                  <div className="text-sm text-muted-foreground">Setup Fees</div>
+                  <div className="text-3xl font-mono font-bold text-accent mb-2">20%</div>
+                  <div className="text-sm text-muted-foreground">Platform revenue</div>
                 </div>
                 <div>
-                  <div className="text-3xl font-mono font-bold text-accent mb-2">0%</div>
-                  <div className="text-sm text-muted-foreground">Withdrawal Fees</div>
+                  <div className="text-3xl font-mono font-bold text-accent mb-2">10%</div>
+                  <div className="text-sm text-muted-foreground">Marketing</div>
                 </div>
               </div>
             </div>
@@ -170,56 +170,40 @@ export function PricingPage({ onNavigate }: PricingPageProps) {
         </div>
       </section>
 
-      {/* Subscription Plans */}
+      {/* Trading Packages */}
       <section className="border-b border-border">
         <div className="max-w-6xl mx-auto px-6 py-16">
           <div className="text-center mb-12">
-            <h2 className="text-3xl font-bold mb-4">Subscription Plans</h2>
+            <h2 className="text-3xl font-bold mb-4">Trading Packages</h2>
             <p className="text-muted-foreground max-w-2xl mx-auto">
-              Choose the plan that fits your trading needs. All plans include our performance-based fee structure.
+              Buy a package to unlock a profit allowance. Trade until you earn up to the cap, then buy again.
             </p>
             <Badge variant="outline" className="mt-4 bg-accent/10 text-accent border-accent/30">
-              Save 10% with 6-month plans
+              Joining fee $100 required first
             </Badge>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-6xl mx-auto">
-            {/* Starter Plan */}
+            {/* Entry $100 */}
             <Card className="p-8 hover:border-accent/50 transition">
               <div className="mb-6">
-                <h3 className="text-2xl font-bold mb-2">Starter</h3>
-                <div className="text-4xl font-mono font-bold mb-1">$29</div>
-                <div className="text-sm text-muted-foreground">/month</div>
+                <h3 className="text-2xl font-bold mb-2">Entry</h3>
+                <div className="text-4xl font-mono font-bold mb-1">$100</div>
+                <div className="text-sm text-muted-foreground">one-time package</div>
                 <div className="text-sm text-accent flex items-center gap-2 mt-2">
                   <Zap className="size-4" />
-                  <span className="font-mono">$156</span> for <span className="font-mono">6</span> months (save <span className="font-mono">10%</span>)
+                  <span className="font-mono">3x</span> → <span className="font-mono font-semibold">$300</span> profit allowance
                 </div>
               </div>
 
               <ul className="space-y-3 mb-8">
                 <li className="flex items-start gap-3">
                   <CheckCircle2 className="size-5 text-accent flex-shrink-0 mt-0.5" />
-                  <span className="text-sm">Copy up to <span className="font-mono">2</span> traders</span>
+                  <span className="text-sm">Trade until you earn up to $300 profit</span>
                 </li>
                 <li className="flex items-start gap-3">
                   <CheckCircle2 className="size-5 text-accent flex-shrink-0 mt-0.5" />
-                  <span className="text-sm">Basic risk controls</span>
-                </li>
-                <li className="flex items-start gap-3">
-                  <CheckCircle2 className="size-5 text-accent flex-shrink-0 mt-0.5" />
-                  <span className="text-sm">Email support</span>
-                </li>
-                <li className="flex items-start gap-3">
-                  <CheckCircle2 className="size-5 text-accent flex-shrink-0 mt-0.5" />
-                  <span className="text-sm">Trade history (<span className="font-mono">30</span> days)</span>
-                </li>
-                <li className="flex items-start gap-3">
-                  <CheckCircle2 className="size-5 text-accent flex-shrink-0 mt-0.5" />
-                  <span className="text-sm">Standard execution speed</span>
-                </li>
-                <li className="flex items-start gap-3">
-                  <CheckCircle2 className="size-5 text-accent flex-shrink-0 mt-0.5" />
-                  <span className="text-sm"><span className="font-mono">20%</span> fee on profitable trades</span>
+                  <span className="text-sm">Then buy another package to continue</span>
                 </li>
               </ul>
 
@@ -232,56 +216,32 @@ export function PricingPage({ onNavigate }: PricingPageProps) {
               </Button>
             </Card>
 
-            {/* Pro Plan */}
+            {/* Level 2 $200 */}
             <Card className="p-8 border-accent/50 relative hover:border-accent transition">
               <Badge className="absolute -top-3 left-1/2 -translate-x-1/2 bg-accent text-background">
                 Most Popular
               </Badge>
 
               <div className="mb-6">
-                <h3 className="text-2xl font-bold mb-2">Pro</h3>
+                <h3 className="text-2xl font-bold mb-2">Level 2</h3>
                 <div className="flex items-baseline gap-2 mb-1">
-                  <div className="text-4xl font-mono font-bold">$79</div>
-                  <div className="text-muted-foreground">/month</div>
+                  <div className="text-4xl font-mono font-bold">$200</div>
                 </div>
+                <div className="text-sm text-muted-foreground">one-time package</div>
                 <div className="text-sm text-accent flex items-center gap-2 mt-2">
                   <Zap className="size-4" />
-                  <span className="font-mono">$426</span> for <span className="font-mono">6</span> months (save <span className="font-mono">10%</span>)
+                  <span className="font-mono">5x</span> → <span className="font-mono font-semibold">$1,000</span> profit allowance
                 </div>
               </div>
 
               <ul className="space-y-3 mb-8">
                 <li className="flex items-start gap-3">
                   <CheckCircle2 className="size-5 text-accent flex-shrink-0 mt-0.5" />
-                  <span className="text-sm font-semibold">Copy up to <span className="font-mono">5</span> traders</span>
+                  <span className="text-sm font-semibold">Trade until you earn up to $1,000 profit</span>
                 </li>
                 <li className="flex items-start gap-3">
                   <CheckCircle2 className="size-5 text-accent flex-shrink-0 mt-0.5" />
-                  <span className="text-sm font-semibold">Advanced risk controls</span>
-                </li>
-                <li className="flex items-start gap-3">
-                  <CheckCircle2 className="size-5 text-accent flex-shrink-0 mt-0.5" />
-                  <span className="text-sm font-semibold">Priority support</span>
-                </li>
-                <li className="flex items-start gap-3">
-                  <CheckCircle2 className="size-5 text-accent flex-shrink-0 mt-0.5" />
-                  <span className="text-sm font-semibold">Unlimited trade history</span>
-                </li>
-                <li className="flex items-start gap-3">
-                  <CheckCircle2 className="size-5 text-accent flex-shrink-0 mt-0.5" />
-                  <span className="text-sm font-semibold">Priority execution speed</span>
-                </li>
-                <li className="flex items-start gap-3">
-                  <CheckCircle2 className="size-5 text-accent flex-shrink-0 mt-0.5" />
-                  <span className="text-sm font-semibold">Referral program access</span>
-                </li>
-                <li className="flex items-start gap-3">
-                  <CheckCircle2 className="size-5 text-accent flex-shrink-0 mt-0.5" />
-                  <span className="text-sm font-semibold">API access</span>
-                </li>
-                <li className="flex items-start gap-3">
-                  <CheckCircle2 className="size-5 text-accent flex-shrink-0 mt-0.5" />
-                  <span className="text-sm font-semibold"><span className="font-mono">20%</span> fee on profitable trades</span>
+                  <span className="text-sm font-semibold">Then buy another package to continue</span>
                 </li>
               </ul>
 
@@ -289,58 +249,30 @@ export function PricingPage({ onNavigate }: PricingPageProps) {
                 className="w-full bg-accent text-background hover:bg-accent/90"
                 onClick={() => onNavigate("signup")}
               >
-                Start Pro Plan
+                Activate allowance
               </Button>
             </Card>
 
-            {/* Unlimited Plan */}
+            {/* Level 3 $500 */}
             <Card className="p-8 hover:border-accent/50 transition">
               <div className="mb-6">
-                <h3 className="text-2xl font-bold mb-2">Unlimited</h3>
-                <div className="text-4xl font-mono font-bold mb-1">$199</div>
-                <div className="text-sm text-muted-foreground">/month</div>
+                <h3 className="text-2xl font-bold mb-2">Level 3</h3>
+                <div className="text-4xl font-mono font-bold mb-1">$500</div>
+                <div className="text-sm text-muted-foreground">one-time package</div>
                 <div className="text-sm text-accent flex items-center gap-2 mt-2">
                   <Zap className="size-4" />
-                  <span className="font-mono">$1,074</span> for <span className="font-mono">6</span> months (save <span className="font-mono">10%</span>)
+                  <span className="font-mono">10x</span> → <span className="font-mono font-semibold">$5,000</span> profit allowance
                 </div>
               </div>
 
               <ul className="space-y-3 mb-8">
                 <li className="flex items-start gap-3">
                   <CheckCircle2 className="size-5 text-accent flex-shrink-0 mt-0.5" />
-                  <span className="text-sm font-semibold">Unlimited trader copies</span>
+                  <span className="text-sm font-semibold">Trade until you earn up to $5,000 profit</span>
                 </li>
                 <li className="flex items-start gap-3">
                   <CheckCircle2 className="size-5 text-accent flex-shrink-0 mt-0.5" />
-                  <span className="text-sm font-semibold">Advanced risk controls</span>
-                </li>
-                <li className="flex items-start gap-3">
-                  <CheckCircle2 className="size-5 text-accent flex-shrink-0 mt-0.5" />
-                  <span className="text-sm font-semibold">24/7 dedicated support</span>
-                </li>
-                <li className="flex items-start gap-3">
-                  <CheckCircle2 className="size-5 text-accent flex-shrink-0 mt-0.5" />
-                  <span className="text-sm font-semibold">Unlimited trade history</span>
-                </li>
-                <li className="flex items-start gap-3">
-                  <CheckCircle2 className="size-5 text-accent flex-shrink-0 mt-0.5" />
-                  <span className="text-sm font-semibold">Priority execution speed</span>
-                </li>
-                <li className="flex items-start gap-3">
-                  <CheckCircle2 className="size-5 text-accent flex-shrink-0 mt-0.5" />
-                  <span className="text-sm font-semibold">Referral program access</span>
-                </li>
-                <li className="flex items-start gap-3">
-                  <CheckCircle2 className="size-5 text-accent flex-shrink-0 mt-0.5" />
-                  <span className="text-sm font-semibold">Custom integrations</span>
-                </li>
-                <li className="flex items-start gap-3">
-                  <CheckCircle2 className="size-5 text-accent flex-shrink-0 mt-0.5" />
-                  <span className="text-sm font-semibold">API access</span>
-                </li>
-                <li className="flex items-start gap-3">
-                  <CheckCircle2 className="size-5 text-accent flex-shrink-0 mt-0.5" />
-                  <span className="text-sm font-semibold"><span className="font-mono">10%</span> fee on profitable trades</span>
+                  <span className="text-sm font-semibold">Then buy another package to continue</span>
                 </li>
               </ul>
 
@@ -349,7 +281,7 @@ export function PricingPage({ onNavigate }: PricingPageProps) {
                 className="w-full"
                 onClick={() => onNavigate("signup")}
               >
-                Get Unlimited
+                Buy package
               </Button>
             </Card>
           </div>
@@ -418,11 +350,9 @@ export function PricingPage({ onNavigate }: PricingPageProps) {
 
           <div className="space-y-6">
             <Card className="p-6">
-              <h3 className="font-semibold mb-2">When exactly do I pay the 20% fee?</h3>
+              <h3 className="font-semibold mb-2">How does the profit allowance work?</h3>
               <p className="text-sm text-muted-foreground leading-relaxed">
-                The 20% fee is charged only when a copied trade closes in profit. 
-                If you lose money on a trade, you pay nothing. The fee is automatically 
-                calculated and displayed in your Fees dashboard.
+                You pay upfront for a package (e.g. $100 Entry = $300 profit allowance). You can trade until you earn up to that amount in profit. When you hit the cap, buy another package to unlock more allowance. No per-trade fee.
               </p>
             </Card>
 
@@ -430,31 +360,28 @@ export function PricingPage({ onNavigate }: PricingPageProps) {
               <h3 className="font-semibold mb-2">What payment methods do you accept?</h3>
               <p className="text-sm text-muted-foreground leading-relaxed">
                 We accept cryptocurrency payments via CoinPayments (USDT, BTC, ETH, and 50+ other coins). 
-                All subscription fees are paid in crypto.
+                Joining fee and package purchases are paid in crypto.
               </p>
             </Card>
 
             <Card className="p-6">
-              <h3 className="font-semibold mb-2">Can I cancel my Pro subscription anytime?</h3>
+              <h3 className="font-semibold mb-2">Do I need to pay the joining fee first?</h3>
               <p className="text-sm text-muted-foreground leading-relaxed">
-                Yes, you can cancel anytime. If you cancel, you'll retain Pro features 
-                until the end of your billing period. No refunds for partial months.
+                Yes. The $100 joining fee is required before you can connect your CEX API and copy trade. It enables profile creation and API connection. After that, buy a trading package to unlock your profit allowance.
               </p>
             </Card>
 
             <Card className="p-6">
               <h3 className="font-semibold mb-2">Are there any hidden fees?</h3>
               <p className="text-sm text-muted-foreground leading-relaxed">
-                No. The only fees are: (1) 20% on profitable trades, and (2) optional Pro subscription. 
-                Your exchange may charge trading fees separately.
+                No. You pay: (1) a one-time $100 joining fee, and (2) package purchases for profit allowance. Your exchange may charge trading fees separately.
               </p>
             </Card>
 
             <Card className="p-6">
-              <h3 className="font-semibold mb-2">How does the 6-month discount work?</h3>
+              <h3 className="font-semibold mb-2">What is the revenue split?</h3>
               <p className="text-sm text-muted-foreground leading-relaxed">
-                Pay for 6 months upfront and get 10% off. For example, Pro plan is $426 for 6 months 
-                instead of $474. This is paid once every 6 months via crypto.
+                70% of joining fee and package revenue goes to the referral rewards pool, 20% to platform revenue, 10% to marketing. Rewards are based on purchases only, not on trading PnL.
               </p>
             </Card>
           </div>
@@ -468,7 +395,7 @@ export function PricingPage({ onNavigate }: PricingPageProps) {
             Ready to Start Copying?
           </h2>
           <p className="text-muted-foreground mb-8">
-            Join free and only pay when you profit
+            Pay joining fee and a package to unlock your trading allowance
           </p>
           <Button 
             size="lg"

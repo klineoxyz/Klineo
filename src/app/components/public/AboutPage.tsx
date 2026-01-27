@@ -130,11 +130,10 @@ export function AboutPage({ onNavigate }: AboutPageProps) {
               <span className="text-primary font-bold">1</span>
             </div>
             <div>
-              <h3 className="text-base font-semibold mb-2">Performance Fees Only on Profits</h3>
+              <h3 className="text-base font-semibold mb-2">Credit-based profit allowance</h3>
               <p className="text-sm text-muted-foreground leading-relaxed">
-                Unlike competitors who charge monthly platform fees regardless of results, KLINEO only takes a 
-                cut when you make money. If a trade loses, you pay zero performance fees. Our success is tied 
-                to yours.
+                Pay a joining fee and buy packages to unlock a profit allowance. Trade until you earn up to that cap, 
+                then buy again. No per-trade fee. Your package defines how much profit you can earn before topping up.
               </p>
             </div>
           </div>

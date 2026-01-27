@@ -60,7 +60,7 @@ export const navigationSections: NavSection[] = [
   {
     title: "Account",
     items: [
-      { id: "subscription", label: "Subscription", icon: CreditCard },
+      { id: "subscription", label: "Packages", icon: CreditCard },
       { id: "referrals", label: "Referrals", icon: Users },
       { id: "fees", label: "Fees", icon: Receipt },
     ],

@@ -234,8 +234,8 @@ export function CopySetup({ onNavigate, traderData }: CopySetupProps) {
 
           <Card className="p-4 bg-secondary/30">
             <div className="text-xs text-muted-foreground space-y-2">
-              <p>• Platform fee: 20% of profitable trades</p>
-              <p>• No fees on losing trades</p>
+              <p>• Your profit allowance is used as you earn from copied trades</p>
+              <p>• When you hit the cap, buy another package in Packages</p>
               <p>• You can manage multiple copy setups</p>
             </div>
           </Card>
