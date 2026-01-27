@@ -119,10 +119,10 @@ export default function App() {
   };
 
   const renderContent = () => {
-    if (activeView === "admin" && !isAdmin) return <Dashboard />;
+    if (activeView === "admin" && !isAdmin) return <Dashboard onNavigate={handleNavigate} />;
     switch (activeView) {
       case "dashboard":
-        return <Dashboard />;
+        return <Dashboard onNavigate={handleNavigate} />;
       case "trading-terminal":
         return <TradingTerminalNew onNavigate={handleNavigate} />;
       case "strategy-backtest":
@@ -171,7 +171,7 @@ export default function App() {
               description: "This page is only available in development or for admins."
             });
           }, 100);
-          return <Dashboard />;
+          return <Dashboard onNavigate={handleNavigate} />;
         }
         return <UIStatesDemo onNavigate={handleNavigate} />;
       case "smoke-test":
@@ -184,7 +184,7 @@ export default function App() {
               description: "This page is only available in development or for admins."
             });
           }, 100);
-          return <Dashboard />;
+          return <Dashboard onNavigate={handleNavigate} />;
         }
         return <SmokeTest />;
       case "onboarding-wizard":
@@ -195,7 +195,7 @@ export default function App() {
           />
         );
       default:
-        return <Dashboard />;
+        return <Dashboard onNavigate={handleNavigate} />;
     }
   };
 

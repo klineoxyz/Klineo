@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { verifySupabaseJWT, AuthenticatedRequest } from '../middleware/auth.js';
+import { requireJoiningFee } from '../middleware/requireEntitlement.js';
 import { validate, uuidParam } from '../middleware/validation.js';
 import { body } from 'express-validator';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
@@ -69,10 +70,11 @@ exchangeConnectionsRouter.get('/', async (req: AuthenticatedRequest, res) => {
 
 /**
  * POST /api/exchange-connections
- * Create or update exchange connection
+ * Create or update exchange connection (requires joining fee paid)
  */
 exchangeConnectionsRouter.post(
   '/',
+  requireJoiningFee,
   validate([
     body('exchange').isString().equals('binance').withMessage('Only binance is supported'),
     body('environment').optional().isIn(['production', 'testnet']).withMessage('Environment must be production or testnet'),

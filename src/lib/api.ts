@@ -90,6 +90,16 @@ export interface TestConnectionResponse {
   requestId: string;
 }
 
+// Entitlement (joining fee + package allowance)
+export interface EntitlementResponse {
+  joiningFeePaid: boolean;
+  status: 'inactive' | 'active' | 'exhausted';
+  activePackageId: string | null;
+  profitAllowanceUsd: number;
+  profitUsedUsd: number;
+  remainingUsd: number;
+}
+
 // Billing / Packages (credit-based model)
 export interface BillingPlansResponse {
   joiningFee: { priceUsd: number; currency: string };

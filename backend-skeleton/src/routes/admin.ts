@@ -70,6 +70,62 @@ adminRouter.get('/stats', async (req, res) => {
 });
 
 /**
+ * GET /api/admin/entitlements
+ * List entitlements for debugging (limit, page)
+ */
+adminRouter.get('/entitlements',
+  validate([pageQuery, limitQuery]),
+  async (req, res) => {
+    const client = getSupabase();
+    if (!client) {
+      return res.status(503).json({ error: 'Database unavailable' });
+    }
+    try {
+      const limit = Math.min(parseInt(req.query.limit as string) || 50, 100);
+      const page = parseInt(req.query.page as string) || 1;
+      const offset = (page - 1) * limit;
+
+      const { data: rows, error } = await client
+        .from('user_entitlements')
+        .select('user_id, joining_fee_paid, joining_fee_paid_at, active_package_id, profit_allowance_usd, profit_used_usd, status, activated_at, exhausted_at, updated_at')
+        .order('updated_at', { ascending: false })
+        .range(offset, offset + limit - 1);
+
+      if (error) {
+        console.error('Error fetching entitlements:', error);
+        return res.status(500).json({ error: 'Failed to fetch entitlements' });
+      }
+
+      const list = (rows || []).map((e: any) => ({
+        userId: e.user_id,
+        joiningFeePaid: !!e.joining_fee_paid,
+        joiningFeePaidAt: e.joining_fee_paid_at,
+        activePackageId: e.active_package_id,
+        profitAllowanceUsd: parseFloat(String(e.profit_allowance_usd ?? 0)),
+        profitUsedUsd: parseFloat(String(e.profit_used_usd ?? 0)),
+        remainingUsd: Math.max(0, parseFloat(String(e.profit_allowance_usd ?? 0)) - parseFloat(String(e.profit_used_usd ?? 0))),
+        status: e.status,
+        activatedAt: e.activated_at,
+        exhaustedAt: e.exhausted_at,
+        updatedAt: e.updated_at,
+      }));
+
+      const { count } = await client.from('user_entitlements').select('*', { count: 'exact', head: true });
+      res.json({
+        entitlements: list,
+        page,
+        limit,
+        total: count ?? 0,
+        totalPages: Math.ceil((count ?? 0) / limit),
+      });
+    } catch (err) {
+      console.error('Admin entitlements error:', err);
+      res.status(500).json({ error: 'Failed to fetch entitlements' });
+    }
+  }
+);
+
+/**
  * GET /api/admin/users
  * List all users with pagination
  */

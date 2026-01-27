@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { verifySupabaseJWT, AuthenticatedRequest } from '../middleware/auth.js';
+import { requireJoiningFee, requireActiveAllowance, fetchEntitlement } from '../middleware/requireEntitlement.js';
 import { validate, uuidParam, statusBody } from '../middleware/validation.js';
 import { body } from 'express-validator';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
@@ -91,9 +92,11 @@ copySetupsRouter.get('/', async (req: AuthenticatedRequest, res) => {
 
 /**
  * POST /api/copy-setups
- * Create a new copy setup
+ * Create a new copy setup (requires joining fee + active allowance)
  */
 copySetupsRouter.post('/',
+  requireJoiningFee,
+  requireActiveAllowance,
   validate([
     body('traderId').isUUID().withMessage('traderId must be a valid UUID'),
     body('allocationPct').optional().isFloat({ min: 0, max: 100 }).withMessage('allocationPct must be between 0 and 100'),
@@ -229,6 +232,22 @@ copySetupsRouter.put('/:id',
 
       if (existing.user_id !== req.user!.id) {
         return res.status(403).json({ error: 'Access denied' });
+      }
+
+      // Resuming/starting (status -> active) requires active allowance
+      if (status === 'active') {
+        const ent = await fetchEntitlement(client, req.user!.id);
+        const allowance = parseFloat(String(ent?.profit_allowance_usd ?? 0));
+        const used = parseFloat(String(ent?.profit_used_usd ?? 0));
+        const remaining = Math.max(0, allowance - used);
+        if (!ent || ent.status !== 'active' || remaining <= 0) {
+          const requestId = (req as any).requestId || 'unknown';
+          return res.status(402).json({
+            error: 'ALLOWANCE_EXHAUSTED',
+            message: 'Your package allowance is exhausted. Please purchase a new package.',
+            requestId,
+          });
+        }
       }
 
       // Build update object

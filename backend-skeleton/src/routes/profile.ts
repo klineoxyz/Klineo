@@ -24,6 +24,49 @@ export const profileRouter: Router = Router();
 profileRouter.use(verifySupabaseJWT);
 
 /**
+ * GET /api/me/entitlement
+ * Get current user's entitlement (joining fee + package allowance state)
+ */
+profileRouter.get('/entitlement', async (req: AuthenticatedRequest, res) => {
+  const client = getSupabase();
+  if (!client) {
+    return res.status(503).json({ error: 'Database unavailable' });
+  }
+
+  try {
+    const { data: ent, error } = await client
+      .from('user_entitlements')
+      .select('joining_fee_paid, status, active_package_id, profit_allowance_usd, profit_used_usd')
+      .eq('user_id', req.user!.id)
+      .maybeSingle();
+
+    if (error) {
+      console.error('Error fetching entitlement:', error);
+      return res.status(500).json({ error: 'Failed to fetch entitlement' });
+    }
+
+    const joiningFeePaid = !!ent?.joining_fee_paid;
+    const status = (ent?.status as 'inactive' | 'active' | 'exhausted') || 'inactive';
+    const activePackageId = ent?.active_package_id ?? null;
+    const profitAllowanceUsd = parseFloat(String(ent?.profit_allowance_usd ?? 0));
+    const profitUsedUsd = parseFloat(String(ent?.profit_used_usd ?? 0));
+    const remainingUsd = Math.max(0, profitAllowanceUsd - profitUsedUsd);
+
+    res.json({
+      joiningFeePaid,
+      status,
+      activePackageId,
+      profitAllowanceUsd,
+      profitUsedUsd,
+      remainingUsd,
+    });
+  } catch (err) {
+    console.error('Entitlement get error:', err);
+    res.status(500).json({ error: 'Failed to fetch entitlement' });
+  }
+});
+
+/**
  * GET /api/me/profile
  * Get current user's profile
  */

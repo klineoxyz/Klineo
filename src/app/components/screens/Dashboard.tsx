@@ -1,15 +1,28 @@
 import { Card } from "@/app/components/ui/card";
-import { AlertCircle, TrendingUp, TrendingDown, Activity, RefreshCw } from "lucide-react";
+import { AlertCircle, TrendingUp, TrendingDown, Activity, RefreshCw, Package } from "lucide-react";
 import { Alert, AlertDescription } from "@/app/components/ui/alert";
 import { Badge } from "@/app/components/ui/badge";
 import { Button } from "@/app/components/ui/button";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { DashboardLoading } from "./DashboardLoading";
 import { LoadingWrapper } from "@/app/components/ui/loading-wrapper";
 import { Sparkline, generateSparklineData } from "@/app/components/ui/sparkline";
+import { api } from "@/lib/api";
+import type { EntitlementResponse } from "@/lib/api";
 
-export function Dashboard() {
+interface DashboardProps {
+  onNavigate?: (view: string) => void;
+}
+
+export function Dashboard({ onNavigate }: DashboardProps) {
   const [isLoading, setIsLoading] = useState(false);
+  const [entitlement, setEntitlement] = useState<EntitlementResponse | null>(null);
+
+  useEffect(() => {
+    const base = import.meta.env.VITE_API_BASE_URL ?? "";
+    if (!base?.trim()) return;
+    api.get<EntitlementResponse>("/api/me/entitlement").then(setEntitlement).catch(() => setEntitlement(null));
+  }, []);
 
   // Generate sparkline data (in production, this would come from API)
   const portfolioData = useMemo(() => generateSparklineData(30, 24000, 0.02, 500), []);
@@ -44,6 +57,22 @@ export function Dashboard() {
             Refresh Data
           </Button>
         </div>
+
+        {/* Allowance exhausted banner */}
+        {entitlement?.status === "exhausted" && (
+          <Alert className="border-[#EF4444]/30 bg-[#EF4444]/5">
+            <Package className="size-4 text-[#EF4444]" />
+            <AlertDescription className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+              <span className="text-sm">Your package allowance is exhausted. Buy a new package to continue copy trading.</span>
+              {onNavigate && (
+                <Button variant="outline" size="sm" className="border-[#EF4444]/50 text-[#EF4444] hover:bg-[#EF4444]/10 shrink-0" onClick={() => onNavigate("subscription")}>
+                  <Package className="size-4 mr-1" />
+                  Buy package
+                </Button>
+              )}
+            </AlertDescription>
+          </Alert>
+        )}
 
         {/* System Alerts */}
         <Alert className="border-[#FFB000]/20 bg-[#FFB000]/5">

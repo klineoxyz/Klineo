@@ -69,8 +69,18 @@ export function CopySetup({ onNavigate, traderData }: CopySetupProps) {
       toast.success("Copy setup created", { description: `You're now copying ${trader.name}` });
       onNavigate("copy-trading");
     } catch (err: any) {
-      const message = err?.message || "Failed to create copy setup";
-      toast.error("Error", { description: message });
+      let description = err?.message || "Failed to create copy setup";
+      try {
+        const body = typeof err?.message === "string" && err.message.trim().startsWith("{") ? JSON.parse(err.message) : null;
+        if (body?.error === "ALLOWANCE_EXHAUSTED" || body?.error === "JOINING_FEE_REQUIRED") {
+          description = body.message || (body.error === "JOINING_FEE_REQUIRED" ? "Joining fee is required before you can start copying." : "Your package allowance is exhausted. Please purchase a new package.");
+          toast.error(body.error === "JOINING_FEE_REQUIRED" ? "Joining fee required" : "Allowance exhausted", { description });
+          return;
+        }
+      } catch {
+        // ignore parse
+      }
+      toast.error("Error", { description });
     } finally {
       setIsSubmitting(false);
     }
