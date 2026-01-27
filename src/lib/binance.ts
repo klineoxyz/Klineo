@@ -112,3 +112,56 @@ export async function fetchOrderBook(
 
   return { bids, asks };
 }
+
+/** 24h ticker item from Binance */
+interface BinanceTicker24h {
+  symbol: string;
+  lastPrice: string;
+  priceChangePercent: string;
+  volume: string;
+  quoteVolume: string;
+}
+
+/** Formatted pair for UI: symbol (BTC/USDT), price, change, volume */
+export interface UsdtPairInfo {
+  symbol: string;
+  price: string;
+  change: string;
+  volume: string;
+}
+
+function formatVolume(value: number): string {
+  if (value >= 1e9) return `${(value / 1e9).toFixed(1)}B`;
+  if (value >= 1e6) return `${(value / 1e6).toFixed(0)}M`;
+  if (value >= 1e3) return `${(value / 1e3).toFixed(1)}K`;
+  return value.toFixed(0);
+}
+
+/**
+ * Fetch USDT pairs from Binance 24h ticker, sorted by quote volume (desc).
+ * Returns top `limit` pairs. No API key required.
+ */
+export async function fetchUsdtPairs(limit = 100): Promise<UsdtPairInfo[]> {
+  const url = `${BINANCE_API}/ticker/24hr`;
+  const res = await fetch(url);
+  if (!res.ok) {
+    const t = await res.text();
+    throw new Error(`Binance ticker error ${res.status}: ${t || res.statusText}`);
+  }
+  const raw = (await res.json()) as BinanceTicker24h[];
+  const usdt = raw.filter((t) => t.symbol.endsWith("USDT"));
+  usdt.sort((a, b) => parseFloat(b.quoteVolume) - parseFloat(a.quoteVolume));
+  const top = usdt.slice(0, limit);
+  return top.map((t) => {
+    const base = t.symbol.slice(0, -4);
+    const symbol = `${base}/USDT`;
+    const last = parseFloat(t.lastPrice);
+    const pct = parseFloat(t.priceChangePercent);
+    const price = last >= 1000
+      ? last.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+      : last.toLocaleString("en-US", { minimumFractionDigits: 4, maximumFractionDigits: 4 });
+    const change = (pct >= 0 ? "+" : "") + pct.toFixed(2);
+    const vol = formatVolume(parseFloat(t.quoteVolume));
+    return { symbol, price, change, volume: vol };
+  });
+}
