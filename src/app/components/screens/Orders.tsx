@@ -73,10 +73,10 @@ export function Orders() {
 
   if (isLoading) {
     return (
-      <div className="p-6">
+      <div className="p-4 sm:p-6">
         <div className="animate-pulse space-y-6">
           <div className="h-8 bg-muted rounded w-1/3" />
-          <div className="grid grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
             {[...Array(4)].map((_, i) => (
               <div key={i} className="h-24 bg-muted rounded" />
             ))}
@@ -89,7 +89,7 @@ export function Orders() {
 
   if (error && orders.length === 0) {
     return (
-      <div className="p-6">
+      <div className="p-4 sm:p-6">
         <ErrorState
           title="Failed to load orders"
           message={error.includes("VITE_API_BASE_URL not set") 
@@ -106,38 +106,38 @@ export function Orders() {
   }
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold mb-1">Orders</h1>
+        <h1 className="text-xl sm:text-2xl font-semibold mb-1">Orders</h1>
         <p className="text-sm text-muted-foreground">View and manage your trading orders</p>
       </div>
 
       {/* Summary */}
-      <div className="grid grid-cols-4 gap-4">
-        <Card className="p-4 space-y-2">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <Card className="p-3 sm:p-4 space-y-2">
           <div className="text-xs text-muted-foreground uppercase tracking-wide">Open Orders</div>
-          <div className="text-2xl font-semibold">{openOrders.length}</div>
+          <div className="text-xl sm:text-2xl font-semibold">{openOrders.length}</div>
         </Card>
 
-        <Card className="p-4 space-y-2">
+        <Card className="p-3 sm:p-4 space-y-2">
           <div className="text-xs text-muted-foreground uppercase tracking-wide">Filled</div>
-          <div className="text-2xl font-semibold">{filledOrders.length}</div>
+          <div className="text-xl sm:text-2xl font-semibold">{filledOrders.length}</div>
         </Card>
 
-        <Card className="p-4 space-y-2">
+        <Card className="p-3 sm:p-4 space-y-2">
           <div className="text-xs text-muted-foreground uppercase tracking-wide">Cancelled</div>
-          <div className="text-2xl font-semibold">{cancelledOrders.length}</div>
+          <div className="text-xl sm:text-2xl font-semibold">{cancelledOrders.length}</div>
         </Card>
 
-        <Card className="p-4 space-y-2">
+        <Card className="p-3 sm:p-4 space-y-2">
           <div className="text-xs text-muted-foreground uppercase tracking-wide">Total Orders</div>
-          <div className="text-2xl font-semibold">{total}</div>
+          <div className="text-xl sm:text-2xl font-semibold">{total}</div>
         </Card>
       </div>
 
       {/* Orders Tabs */}
       {orders.length === 0 ? (
-        <Card className="p-12">
+        <Card className="p-6 sm:p-12">
           <EmptyState
             icon={X}
             title="No orders yet"
@@ -147,8 +147,8 @@ export function Orders() {
       ) : (
         <Card>
           <Tabs defaultValue="open" className="w-full">
-            <div className="px-6 pt-6 border-b border-border">
-              <TabsList>
+            <div className="px-4 sm:px-6 pt-4 sm:pt-6 border-b border-border">
+              <TabsList className="flex-wrap h-auto gap-1 p-1 w-full sm:w-fit">
                 <TabsTrigger value="open">Open ({openOrders.length})</TabsTrigger>
                 <TabsTrigger value="filled">Filled ({filledOrders.length})</TabsTrigger>
                 <TabsTrigger value="cancelled">Cancelled ({cancelledOrders.length})</TabsTrigger>
@@ -157,9 +157,9 @@ export function Orders() {
 
             <TabsContent value="open" className="m-0">
               {openOrders.length === 0 ? (
-                <div className="p-12 text-center text-muted-foreground">No open orders</div>
+                <div className="p-6 sm:p-12 text-center text-muted-foreground">No open orders</div>
               ) : (
-                <Table>
+                <Table className="min-w-[640px]">
                   <TableHeader>
                     <TableRow>
                       <TableHead>Order ID</TableHead>
@@ -205,9 +205,9 @@ export function Orders() {
 
             <TabsContent value="filled" className="m-0">
               {filledOrders.length === 0 ? (
-                <div className="p-12 text-center text-muted-foreground">No filled orders</div>
+                <div className="p-6 sm:p-12 text-center text-muted-foreground">No filled orders</div>
               ) : (
-                <Table>
+                <Table className="min-w-[640px]">
                   <TableHeader>
                     <TableRow>
                       <TableHead>Order ID</TableHead>
@@ -249,9 +249,9 @@ export function Orders() {
 
             <TabsContent value="cancelled" className="m-0">
               {cancelledOrders.length === 0 ? (
-                <div className="p-12 text-center text-muted-foreground">No cancelled orders</div>
+                <div className="p-6 sm:p-12 text-center text-muted-foreground">No cancelled orders</div>
               ) : (
-                <Table>
+                <Table className="min-w-[640px]">
                   <TableHeader>
                     <TableRow>
                       <TableHead>Order ID</TableHead>
@@ -292,11 +292,11 @@ export function Orders() {
             </TabsContent>
           </Tabs>
           {totalPages > 1 && (
-            <div className="flex items-center justify-between p-4 border-t">
-              <div className="text-sm text-muted-foreground">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 border-t">
+              <div className="text-sm text-muted-foreground order-2 sm:order-1">
                 Page {page} of {totalPages} ({total} total)
               </div>
-              <div className="flex gap-2">
+              <div className="flex gap-2 order-1 sm:order-2">
                 <Button
                   variant="outline"
                   size="sm"

@@ -89,10 +89,10 @@ export function TradeHistory() {
 
   if (isLoading) {
     return (
-      <div className="p-6">
+      <div className="p-4 sm:p-6">
         <div className="animate-pulse space-y-6">
           <div className="h-8 bg-muted rounded w-1/3" />
-          <div className="grid grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
             {[...Array(4)].map((_, i) => (
               <div key={i} className="h-24 bg-muted rounded" />
             ))}
@@ -105,7 +105,7 @@ export function TradeHistory() {
 
   if (error && trades.length === 0) {
     return (
-      <div className="p-6">
+      <div className="p-4 sm:p-6">
         <ErrorState
           title="Failed to load trades"
           message={error.includes("VITE_API_BASE_URL not set") 
@@ -122,52 +122,52 @@ export function TradeHistory() {
   }
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold mb-1">Trade History</h1>
+        <h1 className="text-xl sm:text-2xl font-semibold mb-1">Trade History</h1>
         <p className="text-sm text-muted-foreground">Complete history of executed trades</p>
       </div>
 
       {/* Summary */}
-      <div className="grid grid-cols-4 gap-4">
-        <Card className="p-4 space-y-2">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <Card className="p-3 sm:p-4 space-y-2">
           <div className="text-xs text-muted-foreground uppercase tracking-wide">Today's Trades</div>
-          <div className="text-2xl font-semibold">{todayTrades.length}</div>
+          <div className="text-xl sm:text-2xl font-semibold">{todayTrades.length}</div>
         </Card>
 
-        <Card className="p-4 space-y-2">
+        <Card className="p-3 sm:p-4 space-y-2">
           <div className="text-xs text-muted-foreground uppercase tracking-wide">Total Volume</div>
-          <div className="text-2xl font-semibold">${(totalVolume / 1000).toFixed(1)}k</div>
+          <div className="text-xl sm:text-2xl font-semibold">${(totalVolume / 1000).toFixed(1)}k</div>
           <div className="text-xs text-muted-foreground">USDT</div>
         </Card>
 
-        <Card className="p-4 space-y-2">
+        <Card className="p-3 sm:p-4 space-y-2">
           <div className="text-xs text-muted-foreground uppercase tracking-wide">Total Trades</div>
-          <div className="text-2xl font-semibold">{total}</div>
+          <div className="text-xl sm:text-2xl font-semibold">{total}</div>
         </Card>
 
-        <Card className="p-4 space-y-2">
+        <Card className="p-3 sm:p-4 space-y-2">
           <div className="text-xs text-muted-foreground uppercase tracking-wide">Total Fees Paid</div>
-          <div className="text-2xl font-semibold">${totalFees.toFixed(2)}</div>
+          <div className="text-xl sm:text-2xl font-semibold">${totalFees.toFixed(2)}</div>
           <div className="text-xs text-muted-foreground">Exchange + Platform</div>
         </Card>
       </div>
 
       {/* Filters & Export */}
       <Card className="p-4">
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex items-center gap-4 flex-1">
-            <div className="relative flex-1 max-w-sm">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div className="w-full sm:max-w-sm">
+            <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
               <Input 
                 placeholder="Search by symbol, trade ID..." 
-                className="pl-9"
+                className="pl-9 w-full"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
             </div>
           </div>
-          <Button variant="outline" className="gap-2" disabled>
+          <Button variant="outline" className="gap-2 w-full sm:w-auto shrink-0" disabled>
             <Download className="size-4" />
             Export CSV
           </Button>
@@ -176,7 +176,7 @@ export function TradeHistory() {
 
       {/* Trade History Table */}
       {filteredTrades.length === 0 ? (
-        <Card className="p-12">
+        <Card className="p-6 sm:p-12">
           <EmptyState
             icon={Search}
             title={searchTerm ? "No trades found" : "No trades yet"}
@@ -187,10 +187,10 @@ export function TradeHistory() {
         </Card>
       ) : (
         <Card>
-          <div className="p-6 border-b border-border">
-            <h3 className="text-lg font-semibold">Executed Trades</h3>
+          <div className="p-4 sm:p-6 border-b border-border">
+            <h3 className="text-base sm:text-lg font-semibold">Executed Trades</h3>
           </div>
-          <Table>
+          <Table className="min-w-[640px]">
             <TableHeader>
               <TableRow>
                 <TableHead>Trade ID</TableHead>
@@ -231,11 +231,11 @@ export function TradeHistory() {
             </TableBody>
           </Table>
           {totalPages > 1 && (
-            <div className="flex items-center justify-between p-4 border-t">
-              <div className="text-sm text-muted-foreground">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 border-t">
+              <div className="text-sm text-muted-foreground order-2 sm:order-1">
                 Page {page} of {totalPages} ({total} total)
               </div>
-              <div className="flex gap-2">
+              <div className="flex gap-2 order-1 sm:order-2">
                 <Button
                   variant="outline"
                   size="sm"

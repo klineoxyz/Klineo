@@ -122,10 +122,10 @@ export function NotificationsCenter({ onNavigate }: NotificationsCenterProps) {
 
   if (isLoading) {
     return (
-      <div className="p-6">
+      <div className="p-4 sm:p-6">
         <div className="animate-pulse space-y-6">
           <div className="h-8 bg-muted rounded w-1/3" />
-          <div className="grid grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
             {[...Array(4)].map((_, i) => (
               <div key={i} className="h-24 bg-muted rounded" />
             ))}
@@ -138,7 +138,7 @@ export function NotificationsCenter({ onNavigate }: NotificationsCenterProps) {
 
   if (error && notifications.length === 0) {
     return (
-      <div className="p-6">
+      <div className="p-4 sm:p-6">
         <ErrorState
           title="Failed to load notifications"
           message={error.includes("VITE_API_BASE_URL not set") 
@@ -176,25 +176,26 @@ export function NotificationsCenter({ onNavigate }: NotificationsCenterProps) {
   };
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold mb-1">Notifications</h1>
+          <h1 className="text-xl sm:text-2xl font-semibold mb-1">Notifications</h1>
           <p className="text-sm text-muted-foreground">
             {unreadCount} unread notification{unreadCount !== 1 ? 's' : ''}
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap gap-2 sm:gap-3">
           <Button 
             variant="outline" 
             size="sm" 
             onClick={markAllAsRead} 
             disabled={unreadCount === 0}
+            className="flex-1 sm:flex-initial"
           >
             Mark All Read
           </Button>
-          <Button variant="outline" size="sm" onClick={() => onNavigate("settings")}>
+          <Button variant="outline" size="sm" onClick={() => onNavigate("settings")} className="flex-1 sm:flex-initial">
             <Settings className="size-4 mr-2" />
             Settings
           </Button>
@@ -202,45 +203,45 @@ export function NotificationsCenter({ onNavigate }: NotificationsCenterProps) {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-4 gap-4">
-        <Card className="p-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <Card className="p-3 sm:p-4">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm text-muted-foreground">Total</span>
             <Bell className="size-4 text-muted-foreground" />
           </div>
-          <div className="text-2xl font-semibold">{notifications.length}</div>
+          <div className="text-xl sm:text-2xl font-semibold">{notifications.length}</div>
         </Card>
-        <Card className="p-4">
+        <Card className="p-3 sm:p-4">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm text-muted-foreground">Unread</span>
             <div className="size-2 rounded-full bg-[#EF4444] animate-pulse"></div>
           </div>
-          <div className="text-2xl font-semibold">{unreadCount}</div>
+          <div className="text-xl sm:text-2xl font-semibold">{unreadCount}</div>
         </Card>
-        <Card className="p-4">
+        <Card className="p-3 sm:p-4">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm text-muted-foreground">Trade Alerts</span>
             <TrendingUp className="size-4 text-[#10B981]" />
           </div>
-          <div className="text-2xl font-semibold">{tradeAlerts}</div>
+          <div className="text-xl sm:text-2xl font-semibold">{tradeAlerts}</div>
         </Card>
-        <Card className="p-4">
+        <Card className="p-3 sm:p-4">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm text-muted-foreground">Risk Alerts</span>
             <AlertTriangle className="size-4 text-[#EF4444]" />
           </div>
-          <div className="text-2xl font-semibold">{riskAlerts}</div>
+          <div className="text-xl sm:text-2xl font-semibold">{riskAlerts}</div>
         </Card>
       </div>
 
       {/* Filters */}
       <Card className="p-4">
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
+          <div className="flex items-center gap-2 shrink-0">
             <Filter className="size-4 text-muted-foreground" />
             <span className="text-sm font-medium">Filter:</span>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button
               variant={filter === "all" ? "default" : "outline"}
               size="sm"

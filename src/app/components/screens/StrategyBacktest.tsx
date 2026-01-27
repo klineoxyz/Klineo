@@ -346,11 +346,11 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
             </Button>
           </div>
         ) : (
-          <div className="p-4 space-y-4">
+          <div className="p-3 sm:p-4 space-y-3 sm:space-y-4">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Settings className="h-4 w-4 text-primary" />
-                <h2 className="font-semibold">Strategy Config</h2>
+              <div className="flex items-center gap-2 min-w-0">
+                <Settings className="h-4 w-4 text-primary shrink-0" />
+                <h2 className="font-semibold truncate">Strategy Config</h2>
               </div>
               <Button
                 variant="ghost"
@@ -622,29 +622,29 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
 
               {/* KPI Cards - Matching Screenshot Layout */}
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
-                <div>
+                <div className="min-w-0">
                   <div className="text-xs text-muted-foreground mb-1">Total trades</div>
-                  <div className="text-2xl font-bold">{kpis.totalTrades}</div>
+                  <div className="text-xl sm:text-2xl font-bold truncate">{kpis.totalTrades}</div>
                 </div>
-                <div>
+                <div className="min-w-0">
                   <div className="text-xs text-muted-foreground mb-1">Win rate</div>
-                  <div className="text-2xl font-bold text-green-500">{kpis.winRate.toFixed(1)}%</div>
+                  <div className="text-xl sm:text-2xl font-bold text-green-500 truncate">{kpis.winRate.toFixed(1)}%</div>
                 </div>
-                <div>
+                <div className="min-w-0">
                   <div className="text-xs text-muted-foreground mb-1">PnL (USDT)</div>
-                  <div className={`text-2xl font-bold ${kpis.netPnl >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                  <div className={`text-xl sm:text-2xl font-bold truncate ${kpis.netPnl >= 0 ? 'text-green-500' : 'text-red-500'}`}>
                     {kpis.netPnl >= 0 ? '+' : ''}${kpis.netPnl.toFixed(2)}
                   </div>
                 </div>
-                <div>
+                <div className="min-w-0">
                   <div className="text-xs text-muted-foreground mb-1">PnL (%)</div>
-                  <div className={`text-2xl font-bold ${kpis.roi >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                  <div className={`text-xl sm:text-2xl font-bold truncate ${kpis.roi >= 0 ? 'text-green-500' : 'text-red-500'}`}>
                     {kpis.roi >= 0 ? '+' : ''}{kpis.roi.toFixed(2)}%
                   </div>
                 </div>
-                <div>
+                <div className="min-w-0">
                   <div className="text-xs text-muted-foreground mb-1">Avg Profit/Trade</div>
-                  <div className={`text-2xl font-bold ${kpis.avgPnl >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                  <div className={`text-xl sm:text-2xl font-bold truncate ${kpis.avgPnl >= 0 ? 'text-green-500' : 'text-red-500'}`}>
                     {kpis.avgPnl >= 0 ? '+' : ''}${kpis.avgPnl.toFixed(2)}
                   </div>
                 </div>
@@ -652,13 +652,13 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
 
               {/* Optimize Button */}
               <div className="flex justify-end">
-                <Button className="bg-[#FFB000] hover:bg-[#FFB000]/90 text-black font-semibold">
+                <Button className="bg-[#FFB000] hover:bg-[#FFB000]/90 text-black font-semibold w-full sm:w-auto min-h-[44px] sm:min-h-0">
                   Optimize
                 </Button>
               </div>
 
               {/* Price Chart with Buy/Sell Labels and Shaded Regions */}
-              <Card className="p-6 bg-card/50">
+              <Card className="p-4 sm:p-6 bg-card/50 overflow-hidden">
                 <div className="flex flex-col lg:flex-row gap-4">
                   {/* Chart Toolbar - horizontal on mobile, vertical on lg+ */}
                   <div className="flex flex-row lg:flex-col gap-2 lg:border-r border-border lg:pr-4 overflow-x-auto pb-2 lg:pb-0">
@@ -931,14 +931,14 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
 
           {/* Empty State */}
           {!hasResults && !isBacktesting && (
-            <Card className="p-12 bg-card/50 flex flex-col items-center justify-center text-center">
-              <Activity className="h-12 w-12 text-muted-foreground mb-4" />
-              <h3 className="text-lg font-semibold mb-2">No Backtest Results</h3>
-              <p className="text-sm text-muted-foreground mb-6 max-w-md">
+            <Card className="p-6 sm:p-12 bg-card/50 flex flex-col items-center justify-center text-center">
+              <Activity className="h-10 w-10 sm:h-12 sm:w-12 text-muted-foreground mb-3 sm:mb-4" />
+              <h3 className="text-base sm:text-lg font-semibold mb-2">No Backtest Results</h3>
+              <p className="text-sm text-muted-foreground mb-4 sm:mb-6 max-w-md px-2">
                 Configure your strategy parameters in the left panel and click "Run Backtest" to
                 see performance results
               </p>
-              <Button onClick={handleRunBacktest}>
+              <Button onClick={handleRunBacktest} className="w-full sm:w-auto min-h-[44px]">
                 <Play className="h-4 w-4 mr-2" />
                 Run Your First Backtest
               </Button>
@@ -947,31 +947,31 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
 
           {/* Loading State */}
           {isBacktesting && (
-            <Card className="p-12 bg-card/50 flex flex-col items-center justify-center text-center">
-              <Loader2 className="h-12 w-12 text-primary mb-4 animate-spin" />
-              <h3 className="text-lg font-semibold mb-2">Running Backtest...</h3>
-              <p className="text-sm text-muted-foreground mb-6">
+            <Card className="p-6 sm:p-12 bg-card/50 flex flex-col items-center justify-center text-center">
+              <Loader2 className="h-10 w-10 sm:h-12 sm:w-12 text-primary mb-3 sm:mb-4 animate-spin" />
+              <h3 className="text-base sm:text-lg font-semibold mb-2">Running Backtest...</h3>
+              <p className="text-sm text-muted-foreground mb-4 sm:mb-6">
                 Analyzing {symbol} on {timeframe} timeframe
               </p>
-              <Progress value={65} className="w-64" />
+              <Progress value={65} className="w-full max-w-64" />
             </Card>
           )}
         </div>
 
         {/* BOTTOM PANEL - Trade Breakdown */}
         {hasResults && !isBacktesting && (
-          <div className={`border-t border-border transition-all duration-300 ${tradeBreakdownExpanded ? 'h-96' : 'h-auto'}`}>
+          <div className={`border-t border-border transition-all duration-300 shrink-0 ${tradeBreakdownExpanded ? 'h-64 sm:h-80 lg:h-96' : 'h-auto'}`}>
             {/* Collapsible Header */}
             <div 
-              className="flex items-center justify-between px-6 py-3 bg-card/30 border-b border-border cursor-pointer hover:bg-card/50 transition-colors"
+              className="flex items-center justify-between px-4 sm:px-6 py-3 bg-card/30 border-b border-border cursor-pointer hover:bg-card/50 transition-colors min-h-[52px]"
               onClick={() => setTradeBreakdownExpanded(!tradeBreakdownExpanded)}
             >
-              <div className="flex items-center gap-2">
-                <ListOrdered className="h-4 w-4 text-primary" />
-                <h3 className="font-semibold">Trade Breakdown</h3>
-                <Badge variant="outline">{backtestTrades.length} trades</Badge>
+              <div className="flex items-center gap-2 min-w-0">
+                <ListOrdered className="h-4 w-4 text-primary shrink-0" />
+                <h3 className="font-semibold truncate">Trade Breakdown</h3>
+                <Badge variant="outline" className="shrink-0">{backtestTrades.length} trades</Badge>
               </div>
-              <Button variant="ghost" size="icon" className="h-7 w-7">
+              <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0" aria-label={tradeBreakdownExpanded ? "Collapse" : "Expand"}>
                 {tradeBreakdownExpanded ? (
                   <ChevronDown className="h-4 w-4" />
                 ) : (
@@ -982,9 +982,9 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
 
             {/* Collapsible Content */}
             {tradeBreakdownExpanded && (
-              <div className="overflow-y-auto h-[calc(100%-52px)]">
-                <div className="p-6">
-                  <Table>
+              <div className="overflow-x-auto overflow-y-auto h-[calc(100%-52px)]">
+                <div className="p-4 sm:p-6 min-w-0">
+                  <Table className="min-w-[640px]">
                     <TableHeader>
                       <TableRow>
                         <TableHead className="w-12">#</TableHead>
@@ -1062,7 +1062,7 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
                             <TableRow key={`trade-detail-${trade.id}`}>
                               <TableCell colSpan={9} className="bg-secondary/30">
                                 <div className="p-4 space-y-3">
-                                  <div className="grid grid-cols-4 gap-4 text-sm">
+                                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 text-sm">
                                     <div>
                                       <div className="text-muted-foreground mb-1">Leverage</div>
                                       <div className="font-mono font-medium">{trade.leverage}</div>
@@ -1099,7 +1099,7 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
 
       {/* RIGHT PANEL - Launch Strategy */}
       <div className="w-full lg:w-80 border-t lg:border-t-0 lg:border-l border-border bg-card overflow-y-auto shrink-0">
-        <div className="p-4 space-y-4">
+        <div className="p-3 sm:p-4 space-y-3 sm:space-y-4">
           <div className="flex items-center gap-2">
             <Zap className="h-4 w-4 text-primary" />
             <h2 className="font-semibold">Launch Strategy</h2>

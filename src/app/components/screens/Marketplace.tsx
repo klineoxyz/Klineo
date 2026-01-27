@@ -84,15 +84,15 @@ export function Marketplace({ onNavigate }: MarketplaceProps) {
       isLoading={isLoading}
       loadingComponent={<MarketplaceLoading />}
     >
-      <div className="p-6 space-y-6">
-        <div className="flex items-center justify-between">
+      <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-semibold mb-1">Marketplace</h1>
+            <h1 className="text-xl sm:text-2xl font-semibold mb-1">Marketplace</h1>
             <p className="text-sm text-muted-foreground">Browse and copy professional traders</p>
           </div>
           <Button 
             onClick={() => onNavigate("master-trader-application")}
-            className="bg-primary text-primary-foreground"
+            className="bg-primary text-primary-foreground w-full sm:w-auto"
           >
             Become a Master Trader
           </Button>
@@ -100,8 +100,8 @@ export function Marketplace({ onNavigate }: MarketplaceProps) {
 
         {/* Filters */}
         <Card className="p-4">
-          <div className="grid grid-cols-5 gap-4">
-            <div className="relative col-span-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
+            <div className="relative sm:col-span-2">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
               <Input placeholder="Search traders..." className="pl-9" />
             </div>

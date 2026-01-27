@@ -42,10 +42,10 @@ export function Portfolio() {
 
   if (isLoading) {
     return (
-      <div className="p-6">
+      <div className="p-4 sm:p-6">
         <div className="animate-pulse space-y-6">
           <div className="h-8 bg-muted rounded w-1/3" />
-          <div className="grid grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
             {[...Array(4)].map((_, i) => (
               <div key={i} className="h-24 bg-muted rounded" />
             ))}
@@ -58,7 +58,7 @@ export function Portfolio() {
 
   if (error && !summary) {
     return (
-      <div className="p-6">
+      <div className="p-4 sm:p-6">
         <ErrorState
           title="Failed to load portfolio"
           message={error}
@@ -89,61 +89,62 @@ export function Portfolio() {
   ];
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold mb-1">Portfolio</h1>
+        <h1 className="text-xl sm:text-2xl font-semibold mb-1">Portfolio</h1>
         <p className="text-sm text-muted-foreground">Overview of your asset balances and equity</p>
       </div>
 
       {/* Summary Metrics */}
-      <div className="grid grid-cols-4 gap-4">
-        <Card className="p-4 space-y-2">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <Card className="p-3 sm:p-4 space-y-2">
           <div className="text-xs text-muted-foreground uppercase tracking-wide">Total PnL</div>
-          <div className={`text-2xl font-semibold ${(summary?.totalPnl || 0) >= 0 ? "text-[#10B981]" : "text-[#EF4444]"}`}>
+          <div className={`text-xl sm:text-2xl font-semibold truncate ${(summary?.totalPnl || 0) >= 0 ? "text-[#10B981]" : "text-[#EF4444]"}`}>
             ${(summary?.totalPnl || 0).toFixed(2)}
           </div>
           <div className="text-xs text-muted-foreground">All time</div>
         </Card>
 
-        <Card className="p-4 space-y-2">
+        <Card className="p-3 sm:p-4 space-y-2">
           <div className="text-xs text-muted-foreground uppercase tracking-wide">Unrealized PnL</div>
-          <div className={`text-2xl font-semibold ${(summary?.unrealizedPnl || 0) >= 0 ? "text-[#10B981]" : "text-[#EF4444]"}`}>
+          <div className={`text-xl sm:text-2xl font-semibold truncate ${(summary?.unrealizedPnl || 0) >= 0 ? "text-[#10B981]" : "text-[#EF4444]"}`}>
             ${(summary?.unrealizedPnl || 0).toFixed(2)}
           </div>
           <div className="text-xs text-muted-foreground">Open positions</div>
         </Card>
 
-        <Card className="p-4 space-y-2">
+        <Card className="p-3 sm:p-4 space-y-2">
           <div className="text-xs text-muted-foreground uppercase tracking-wide">Realized PnL</div>
-          <div className={`text-2xl font-semibold ${(summary?.realizedPnl || 0) >= 0 ? "text-[#10B981]" : "text-[#EF4444]"}`}>
+          <div className={`text-xl sm:text-2xl font-semibold truncate ${(summary?.realizedPnl || 0) >= 0 ? "text-[#10B981]" : "text-[#EF4444]"}`}>
             ${(summary?.realizedPnl || 0).toFixed(2)}
           </div>
           <div className="text-xs text-muted-foreground">Closed positions</div>
         </Card>
 
-        <Card className="p-4 space-y-2">
+        <Card className="p-3 sm:p-4 space-y-2">
           <div className="text-xs text-muted-foreground uppercase tracking-wide">Total Volume</div>
-          <div className="text-2xl font-semibold">${((summary?.totalVolume || 0) / 1000).toFixed(1)}k</div>
+          <div className="text-xl sm:text-2xl font-semibold truncate">${((summary?.totalVolume || 0) / 1000).toFixed(1)}k</div>
           <div className="text-xs text-muted-foreground">USDT</div>
         </Card>
       </div>
 
       {/* Additional Stats */}
-      <div className="grid grid-cols-2 gap-4">
-        <Card className="p-4 space-y-2">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4">
+        <Card className="p-3 sm:p-4 space-y-2">
           <div className="text-xs text-muted-foreground uppercase tracking-wide">Open Positions</div>
-          <div className="text-2xl font-semibold">{summary?.openPositions || 0}</div>
+          <div className="text-xl sm:text-2xl font-semibold">{summary?.openPositions || 0}</div>
         </Card>
-        <Card className="p-4 space-y-2">
+        <Card className="p-3 sm:p-4 space-y-2">
           <div className="text-xs text-muted-foreground uppercase tracking-wide">Active Copy Setups</div>
-          <div className="text-2xl font-semibold">{summary?.activeCopySetups || 0}</div>
+          <div className="text-xl sm:text-2xl font-semibold">{summary?.activeCopySetups || 0}</div>
         </Card>
       </div>
 
       {/* Equity Chart */}
-      <Card className="p-6">
-        <h3 className="text-lg font-semibold mb-4">Equity Chart</h3>
-        <ResponsiveContainer width="100%" height={300}>
+      <Card className="p-4 sm:p-6 overflow-hidden">
+        <h3 className="text-base sm:text-lg font-semibold mb-4">Equity Chart</h3>
+        <div className="h-48 sm:h-64 md:h-[300px] min-h-[180px] w-full">
+        <ResponsiveContainer width="100%" height="100%">
           <LineChart data={equityData}>
             <CartesianGrid strokeDasharray="3 3" stroke="#2A2D35" />
             <XAxis dataKey="date" stroke="#8B8B8B" />
@@ -161,6 +162,7 @@ export function Portfolio() {
             <Line type="monotone" dataKey="value" stroke="#10B981" strokeWidth={2} dot={false} activeDot={{ r: 4, fill: "#10B981", stroke: "#12151A", strokeWidth: 2 }} />
           </LineChart>
         </ResponsiveContainer>
+        </div>
       </Card>
     </div>
   );

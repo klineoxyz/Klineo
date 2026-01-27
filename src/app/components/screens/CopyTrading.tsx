@@ -75,10 +75,10 @@ export function CopyTrading({ onNavigate }: CopyTradingProps) {
 
   if (isLoading) {
     return (
-      <div className="p-6">
+      <div className="p-4 sm:p-6">
         <div className="animate-pulse space-y-6">
           <div className="h-8 bg-muted rounded w-1/3" />
-          <div className="grid grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
             {[...Array(4)].map((_, i) => (
               <div key={i} className="h-24 bg-muted rounded" />
             ))}
@@ -91,7 +91,7 @@ export function CopyTrading({ onNavigate }: CopyTradingProps) {
 
   if (error && copySetups.length === 0) {
     return (
-      <div className="p-6">
+      <div className="p-4 sm:p-6">
         <ErrorState
           title="Failed to load copy setups"
           message={error}
@@ -106,40 +106,40 @@ export function CopyTrading({ onNavigate }: CopyTradingProps) {
   }
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold mb-1">Copy Trading</h1>
+          <h1 className="text-xl sm:text-2xl font-semibold mb-1">Copy Trading</h1>
           <p className="text-sm text-muted-foreground">Monitor and manage your active copy positions</p>
         </div>
-        <Button onClick={() => onNavigate("marketplace")} className="bg-primary text-primary-foreground">
+        <Button onClick={() => onNavigate("marketplace")} className="bg-primary text-primary-foreground w-full sm:w-auto">
           Browse Traders
         </Button>
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-4 gap-4">
-        <Card className="p-4 space-y-2">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <Card className="p-3 sm:p-4 space-y-2">
           <div className="text-xs text-muted-foreground uppercase tracking-wide">Active Copies</div>
-          <div className="text-2xl font-semibold">{activeSetups.length}</div>
+          <div className="text-xl sm:text-2xl font-semibold">{activeSetups.length}</div>
           <div className="text-xs text-muted-foreground">of {copySetups.length} total</div>
         </Card>
 
-        <Card className="p-4 space-y-2">
+        <Card className="p-3 sm:p-4 space-y-2">
           <div className="text-xs text-muted-foreground uppercase tracking-wide">Total Allocated</div>
-          <div className="text-2xl font-semibold">{totalAllocated.toFixed(1)}%</div>
+          <div className="text-xl sm:text-2xl font-semibold">{totalAllocated.toFixed(1)}%</div>
           <div className="text-xs text-muted-foreground">of portfolio</div>
         </Card>
 
-        <Card className="p-4 space-y-2">
+        <Card className="p-3 sm:p-4 space-y-2">
           <div className="text-xs text-muted-foreground uppercase tracking-wide">Paused</div>
-          <div className="text-2xl font-semibold">
+          <div className="text-xl sm:text-2xl font-semibold">
             {copySetups.filter((s) => s.status === "paused").length}
           </div>
           <div className="text-xs text-muted-foreground">copy setups</div>
         </Card>
 
-        <Card className="p-4 space-y-2">
+        <Card className="p-3 sm:p-4 space-y-2">
           <div className="text-xs text-muted-foreground uppercase tracking-wide">Copy Engine</div>
           <div className="flex items-center gap-2">
             <div className={`size-2 rounded-full ${activeSetups.length > 0 ? "bg-[#10B981]" : "bg-muted"}`} />
@@ -153,20 +153,20 @@ export function CopyTrading({ onNavigate }: CopyTradingProps) {
 
       {/* Active Copy Traders */}
       {copySetups.length === 0 ? (
-        <Card className="p-12">
+        <Card className="p-6 sm:p-12">
           <div className="text-center space-y-4">
             <p className="text-muted-foreground">No copy setups yet</p>
-            <Button onClick={() => onNavigate("marketplace")} className="bg-primary text-primary-foreground">
+            <Button onClick={() => onNavigate("marketplace")} className="bg-primary text-primary-foreground w-full sm:w-auto">
               Browse Traders
             </Button>
           </div>
         </Card>
       ) : (
         <Card>
-          <div className="p-6 border-b border-border">
-            <h3 className="text-lg font-semibold">Active Copy Positions</h3>
+          <div className="p-4 sm:p-6 border-b border-border">
+            <h3 className="text-base sm:text-lg font-semibold">Active Copy Positions</h3>
           </div>
-          <Table>
+          <Table className="min-w-[640px]">
             <TableHeader>
               <TableRow>
                 <TableHead>Trader</TableHead>

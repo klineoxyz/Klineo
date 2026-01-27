@@ -25,17 +25,17 @@ const tickets = [
 
 export function Support() {
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold mb-1">Support</h1>
+        <h1 className="text-xl sm:text-2xl font-semibold mb-1">Support</h1>
         <p className="text-sm text-muted-foreground">Get help and submit support tickets</p>
       </div>
 
-      <div className="grid grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
         {/* New Ticket Form */}
-        <div className="col-span-2 space-y-6">
-          <Card className="p-6 space-y-6">
-            <h3 className="text-lg font-semibold">Submit a Support Ticket</h3>
+        <div className="lg:col-span-2 space-y-4 sm:space-y-6">
+          <Card className="p-4 sm:p-6 space-y-4 sm:space-y-6">
+            <h3 className="text-base sm:text-lg font-semibold">Submit a Support Ticket</h3>
             <div className="space-y-4">
               <div className="space-y-2">
                 <Label>Subject</Label>
@@ -66,11 +66,11 @@ export function Support() {
           </Card>
 
           {/* Previous Tickets */}
-          <Card className="p-6">
-            <h3 className="text-lg font-semibold mb-4">Your Tickets</h3>
+          <Card className="p-4 sm:p-6">
+            <h3 className="text-base sm:text-lg font-semibold mb-4">Your Tickets</h3>
             <div className="space-y-3">
               {tickets.map((ticket, i) => (
-                <div key={i} className="p-4 bg-secondary/30 rounded border border-border flex items-start justify-between">
+                <div key={i} className="p-4 bg-secondary/30 rounded border border-border flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
                   <div>
                     <div className="flex items-center gap-2 mb-2">
                       <span className="font-mono text-sm font-semibold">{ticket.id}</span>
@@ -103,7 +103,7 @@ export function Support() {
 
         {/* Resources Sidebar */}
         <div className="space-y-4">
-          <Card className="p-6 space-y-4">
+          <Card className="p-4 sm:p-6 space-y-4">
             <h3 className="text-lg font-semibold">Quick Links</h3>
             <div className="space-y-2">
               <Button variant="outline" className="w-full justify-start" size="sm">

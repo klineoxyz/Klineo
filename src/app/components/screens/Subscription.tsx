@@ -53,15 +53,15 @@ interface SubscriptionProps {
 
 export function Subscription({ onNavigate }: SubscriptionProps) {
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold mb-1">Subscription</h1>
+        <h1 className="text-xl sm:text-2xl font-semibold mb-1">Subscription</h1>
         <p className="text-sm text-muted-foreground">Manage your subscription and billing</p>
       </div>
 
       {/* Current Plan */}
-      <Card className="p-6 bg-secondary/30 border-primary/20">
-        <div className="flex items-start justify-between">
+      <Card className="p-4 sm:p-6 bg-secondary/30 border-primary/20">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
           <div>
             <div className="flex items-center gap-3 mb-2">
               <h3 className="text-xl font-semibold">Pro Plan</h3>
@@ -72,14 +72,14 @@ export function Subscription({ onNavigate }: SubscriptionProps) {
             </p>
             <div className="text-2xl font-semibold mb-1">$79<span className="text-base text-muted-foreground">/month</span></div>
           </div>
-          <Button variant="outline">Manage Plan</Button>
+          <Button variant="outline" className="w-full sm:w-auto">Manage Plan</Button>
         </div>
       </Card>
 
       {/* Duration Toggle */}
       <div className="flex justify-center">
-        <Tabs defaultValue="monthly" className="w-auto">
-          <TabsList className="grid w-[400px] grid-cols-2">
+        <Tabs defaultValue="monthly" className="w-full max-w-[400px]">
+          <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="monthly">Monthly</TabsTrigger>
             <TabsTrigger value="6months">
               6 Months
@@ -92,7 +92,7 @@ export function Subscription({ onNavigate }: SubscriptionProps) {
       </div>
 
       {/* Pricing Cards */}
-      <div className="grid grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6">
         {plans.map((plan, i) => (
           <Card 
             key={i} 
