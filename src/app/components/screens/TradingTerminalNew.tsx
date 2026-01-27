@@ -27,7 +27,6 @@ import {
 import { toast } from "sonner";
 import { TradingViewChart } from "@/app/components/TradingViewChart";
 import { 
-  TradingViewTicker,
   TradingViewMarketOverview,
   TradingViewAdvancedChart 
 } from "@/app/components/TradingViewWidgets";
@@ -326,9 +325,18 @@ export function TradingTerminalNew({ onNavigate }: TradingTerminalProps) {
 
   return (
     <div className="h-screen flex flex-col bg-background overflow-hidden min-h-0">
-      {/* TradingView Ticker Tape */}
-      <div className="h-10 sm:h-12 border-b border-border shrink-0">
-        <TradingViewTicker />
+      {/* CSP-safe ticker: Binance data only, no external script — avoids Content-Security-Policy eval violations */}
+      <div className="h-10 sm:h-12 border-b border-border shrink-0 overflow-hidden">
+        <div className="h-full flex items-center gap-4 overflow-x-auto px-2 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+          {pairs.slice(0, 12).map((p, i) => (
+            <span key={p.symbol} className="shrink-0 flex items-center gap-1.5 text-[11px] sm:text-xs font-mono">
+              <span className="text-muted-foreground">{p.symbol}</span>
+              <span className="text-foreground font-medium">{p.price}</span>
+              <span className={p.change.startsWith("+") ? "text-green-500" : "text-red-500"}>{p.change}%</span>
+              {i < 11 && <span className="text-muted-foreground/60">|</span>}
+            </span>
+          ))}
+        </div>
       </div>
 
       {/* Top Bar */}
@@ -661,7 +669,7 @@ export function TradingTerminalNew({ onNavigate }: TradingTerminalProps) {
                 )
               ) : (
                 <div className="h-full">
-                  <TradingViewAdvancedChart symbol="BINANCE:BTCUSDT" />
+                  <TradingViewAdvancedChart symbol={`BINANCE:${selectedPair.replace("/", "")}`} />
                 </div>
               )}
             </div>

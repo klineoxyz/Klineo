@@ -188,59 +188,28 @@ export function TradingViewMarketOverview() {
   );
 }
 
-// Advanced Chart Widget (Full TradingView Chart)
-export function TradingViewAdvancedChart({ symbol = 'BINANCE:BTCUSDT' }: { symbol?: string }) {
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!containerRef.current) return;
-
-    const script = document.createElement('script');
-    script.src = 'https://s3.tradingview.com/tv.js';
-    script.async = true;
-    script.onload = () => {
-      if (containerRef.current && (window as any).TradingView) {
-        new (window as any).TradingView.widget({
-          autosize: true,
-          symbol,
-          interval: '5',
-          timezone: 'Etc/UTC',
-          theme: 'dark',
-          style: '1',
-          locale: 'en',
-          toolbar_bg: '#0B0D10',
-          enable_publishing: false,
-          allow_symbol_change: true,
-          container_id: containerRef.current.id,
-          backgroundColor: '#0B0D10',
-          gridColor: '#1f2937',
-          hide_side_toolbar: false,
-          studies: [
-            'STD;SMA',
-            'STD;EMA',
-            'STD;Volume',
-            'STD;MACD',
-            'STD;RSI',
-            'STD;Bollinger_Bands',
-          ],
-        });
-      }
-    };
-
-    document.head.appendChild(script);
-
-    return () => {
-      if (document.head.contains(script)) {
-        document.head.removeChild(script);
-      }
-    };
-  }, [symbol]);
-
+/**
+ * CSP-safe TradingView chart: iframe only, no eval/script in our origin.
+ * Use this when strict Content-Security-Policy blocks script-src (e.g. no unsafe-eval).
+ * TradingView's tv.js uses eval internally; this iframe keeps their code in their origin.
+ */
+export function TradingViewChartIframe({ symbol = 'BINANCE:BTCUSDT' }: { symbol?: string }) {
+  const src = `https://www.tradingview.com/chart/?symbol=${encodeURIComponent(symbol)}`;
   return (
-    <div
-      id="tradingview_advanced_chart"
-      ref={containerRef}
-      className="tradingview-widget-container h-full"
+    <iframe
+      src={src}
+      title="TradingView Chart"
+      className="w-full h-full min-h-[300px] border-0"
+      sandbox="allow-scripts allow-same-origin allow-popups allow-forms"
     />
   );
+}
+
+/**
+ * Advanced Chart Widget (Full TradingView Chart) — loads tv.js in-page.
+ * Can trigger CSP "script-src blocked" / eval in strict environments.
+ * Prefer TradingViewChartIframe when CSP or copy-trading flows are used.
+ */
+export function TradingViewAdvancedChart({ symbol = 'BINANCE:BTCUSDT' }: { symbol?: string }) {
+  return <TradingViewChartIframe symbol={symbol} />;
 }
