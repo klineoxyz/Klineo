@@ -243,9 +243,9 @@ copySetupsRouter.put('/:id',
         if (!ent || ent.status !== 'active' || remaining <= 0) {
           const requestId = (req as any).requestId || 'unknown';
           return res.status(402).json({
-            error: 'ALLOWANCE_EXHAUSTED',
-            message: 'Your package allowance is exhausted. Please purchase a new package.',
-            requestId,
+            error: 'ALLOWANCE_EXCEEDED',
+            message: 'Profit allowance exhausted. Please buy a new package.',
+            request_id: requestId,
           });
         }
       }

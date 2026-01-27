@@ -571,6 +571,149 @@ export const smokeTests: SmokeTestDefinition[] = [
         fetch(`${baseURL}/api/self-test/rls`, { headers })
       );
     }
+  },
+
+  // Entitlement / allowance smoke tests
+  {
+    name: 'GET /api/entitlements/me',
+    category: 'authenticated',
+    run: async () => {
+      const user = await getCurrentUser();
+      if (!user) {
+        return { name: 'GET /api/entitlements/me', status: 'SKIP', message: 'Login required' };
+      }
+      const baseURL = getBaseURL();
+      const headers = await getAuthHeaders();
+      return runTest('GET /api/entitlements/me', () =>
+        fetch(`${baseURL}/api/entitlements/me`, { headers })
+      );
+    }
+  },
+  {
+    name: 'POST /api/self-test/simulate-profit',
+    category: 'admin',
+    run: async () => {
+      const user = await getCurrentUser();
+      if (!user) {
+        return { name: 'POST /api/self-test/simulate-profit', status: 'SKIP', message: 'Login required' };
+      }
+      if (user.role !== 'admin') {
+        return { name: 'POST /api/self-test/simulate-profit', status: 'SKIP', message: 'Admin role required' };
+      }
+      const baseURL = getBaseURL();
+      const headers = await getAuthHeaders();
+      const result = await runTest('POST /api/self-test/simulate-profit', () =>
+        fetch(`${baseURL}/api/self-test/simulate-profit`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ amount: 10 })
+        })
+      );
+      if (result.httpCode === 404) {
+        return { ...result, status: 'SKIP', message: 'Self-test disabled in production' };
+      }
+      return result;
+    }
+  },
+  {
+    name: 'Allowance gating (402 ALLOWANCE_EXCEEDED)',
+    category: 'admin',
+    run: async () => {
+      const user = await getCurrentUser();
+      if (!user) {
+        return { name: 'Allowance gating (402 ALLOWANCE_EXCEEDED)', status: 'SKIP', message: 'Login required' };
+      }
+      if (user.role !== 'admin') {
+        return { name: 'Allowance gating (402 ALLOWANCE_EXCEEDED)', status: 'SKIP', message: 'Admin role required' };
+      }
+      const baseURL = getBaseURL();
+      const headers = await getAuthHeaders();
+      const testName = 'Allowance gating (402 ALLOWANCE_EXCEEDED)';
+
+      const entRes = await fetch(`${baseURL}/api/entitlements/me`, { headers });
+      if (!entRes.ok) {
+        return { name: testName, status: 'FAIL', httpCode: entRes.status, message: 'Failed to load entitlement', details: { error: 'entitlements/me not ok' } };
+      }
+      const entData = await entRes.json();
+      const status = (entData?.entitlement?.status as string) || 'none';
+      if (status === 'none') {
+        return { name: testName, status: 'SKIP', message: 'No active package to test allowance gating' };
+      }
+
+      const remaining = Number(entData?.entitlement?.remaining ?? 0);
+      const simulateAmount = Math.max(10, remaining + 1);
+      const simRes = await fetch(`${baseURL}/api/self-test/simulate-profit`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ amount: simulateAmount })
+      });
+      if (simRes.status === 404) {
+        return { name: testName, status: 'SKIP', message: 'Self-test disabled in production' };
+      }
+
+      let traderId: string | null = null;
+      const tradersRes = await fetch(`${baseURL}/api/traders?limit=1`, { headers });
+      if (tradersRes.ok) {
+        const tradersData = await tradersRes.json();
+        const list = Array.isArray(tradersData?.traders) ? tradersData.traders : tradersData?.data || [];
+        if (list.length > 0 && list[0]?.id) traderId = list[0].id;
+      }
+      if (!traderId) {
+        return { name: testName, status: 'SKIP', message: 'No trader available to call gated copy-setups' };
+      }
+
+      const gatedRes = await fetch(`${baseURL}/api/copy-setups`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ traderId })
+      });
+      const code = gatedRes.status;
+      let gatedBody: Record<string, unknown> = {};
+      try {
+        gatedBody = (await gatedRes.json()) as Record<string, unknown>;
+      } catch {
+        gatedBody = {};
+      }
+      const errCode = gatedBody?.error as string;
+      if (code === 402 && errCode === 'ALLOWANCE_EXCEEDED') {
+        return {
+          name: testName,
+          status: 'PASS',
+          httpCode: 402,
+          message: 'Gating OK: 402 ALLOWANCE_EXCEEDED',
+          details: { requestPath: '/api/copy-setups', response: sanitizeResponse(gatedBody) }
+        };
+      }
+      return {
+        name: testName,
+        status: 'FAIL',
+        httpCode: code,
+        message: `Expected 402 ALLOWANCE_EXCEEDED, got ${code}${errCode ? ` (${errCode})` : ''}`,
+        details: { requestPath: '/api/copy-setups', response: sanitizeResponse(gatedBody) }
+      };
+    }
+  },
+  {
+    name: 'GET /api/self-test/mlm-summary',
+    category: 'admin',
+    run: async () => {
+      const user = await getCurrentUser();
+      if (!user) {
+        return { name: 'GET /api/self-test/mlm-summary', status: 'SKIP', message: 'Login required' };
+      }
+      if (user.role !== 'admin') {
+        return { name: 'GET /api/self-test/mlm-summary', status: 'SKIP', message: 'Admin role required' };
+      }
+      const baseURL = getBaseURL();
+      const headers = await getAuthHeaders();
+      const result = await runTest('GET /api/self-test/mlm-summary', () =>
+        fetch(`${baseURL}/api/self-test/mlm-summary?limit=5`, { headers })
+      );
+      if (result.httpCode === 404) {
+        return { ...result, status: 'SKIP', message: 'Self-test disabled in production' };
+      }
+      return result;
+    }
   }
 ];
 

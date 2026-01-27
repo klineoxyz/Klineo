@@ -284,3 +284,193 @@ selfTestRouter.get('/rls', async (req: AuthenticatedRequest, res) => {
     });
   }
 });
+
+/**
+ * POST /api/self-test/simulate-profit
+ * Admin-only. Increments profit_used for the calling admin. DEV/staging enabled; prod requires ENABLE_SELF_TEST_ENDPOINT=true.
+ */
+selfTestRouter.post('/simulate-profit', async (req: AuthenticatedRequest, res) => {
+  const requestId = (req as any).requestId || 'unknown';
+  const service = getSupabaseService();
+  if (!service) {
+    return res.status(503).json({
+      status: 'error',
+      error: 'Database unavailable',
+      request_id: requestId
+    });
+  }
+
+  try {
+    const body = req.body && typeof req.body === 'object' ? req.body : {};
+    const raw = typeof body.amount === 'number' ? body.amount : Number(body.amount);
+    const amount = Number.isNaN(raw) ? 0 : Math.max(0, Math.min(100000, raw));
+    if (amount <= 0) {
+      return res.status(400).json({
+        status: 'error',
+        error: 'amount must be between 0 and 100000 (exclusive)',
+        request_id: requestId
+      });
+    }
+    const applied = amount;
+    const reason = typeof body.reason === 'string' ? body.reason : 'smoke_test';
+    const userId = req.user!.id;
+
+    const { data: ent, error: entError } = await service
+      .from('user_entitlements')
+      .select('id, profit_allowance_usd, profit_used_usd, status')
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (entError || !ent) {
+      return res.status(400).json({
+        status: 'error',
+        error: 'No entitlement record to update',
+        request_id: requestId
+      });
+    }
+
+    const allowance = parseFloat(String(ent.profit_allowance_usd ?? 0));
+    const usedBefore = parseFloat(String(ent.profit_used_usd ?? 0));
+    const newUsed = usedBefore + applied;
+    const exhausted = newUsed >= allowance;
+    const newStatus = exhausted ? 'exhausted' : (ent.status as string);
+
+    await service.from('profit_events').insert({
+      user_id: userId,
+      source: 'admin_adjustment',
+      amount_usd: applied,
+      ref_type: 'smoke_test',
+      metadata: { reason }
+    });
+
+    const updatePayload: Record<string, unknown> = {
+      profit_used_usd: newUsed,
+      status: newStatus,
+      updated_at: new Date().toISOString()
+    };
+    if (exhausted) {
+      updatePayload.exhausted_at = new Date().toISOString();
+    }
+    const { error: updateErr } = await service
+      .from('user_entitlements')
+      .update(updatePayload)
+      .eq('user_id', userId);
+
+    if (updateErr) {
+      console.error('Simulate-profit update error:', updateErr);
+      return res.status(500).json({
+        status: 'error',
+        error: 'Failed to update entitlement',
+        request_id: requestId
+      });
+    }
+
+    const remaining = Math.max(0, allowance - newUsed);
+    res.json({
+      status: 'ok',
+      applied,
+      profit_used: newUsed,
+      profit_allowance: allowance,
+      remaining,
+      is_exhausted: exhausted,
+      request_id: requestId
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Unknown error';
+    console.error('Simulate-profit error:', msg);
+    res.status(500).json({
+      status: 'error',
+      error: process.env.NODE_ENV === 'production' ? 'Internal error' : msg,
+      request_id: requestId
+    });
+  }
+});
+
+/**
+ * GET /api/self-test/mlm-summary?limit=5
+ * Admin-only. Returns last distribution events (eligible_purchases + aggregates). Prod requires ENABLE_SELF_TEST_ENDPOINT=true.
+ */
+selfTestRouter.get('/mlm-summary', async (req: AuthenticatedRequest, res) => {
+  const requestId = (req as any).requestId || 'unknown';
+  const limit = Math.min(20, Math.max(1, parseInt(String(req.query.limit), 10) || 5));
+  const service = getSupabaseService();
+  if (!service) {
+    return res.status(503).json({
+      events: [],
+      error: 'Database unavailable',
+      request_id: requestId
+    });
+  }
+
+  try {
+    const { data: purchases, error: pErr } = await service
+      .from('eligible_purchases')
+      .select('id, purchase_type, amount, currency, status, created_at')
+      .eq('status', 'completed')
+      .order('created_at', { ascending: false })
+      .limit(limit);
+
+    if (pErr || !purchases?.length) {
+      return res.json({
+        events: [],
+        request_id: requestId
+      });
+    }
+
+    const events: Array<{
+      type: 'onboarding_fee' | 'package';
+      gross: number;
+      distributed_total: number;
+      platform_total: number;
+      marketing_total: number;
+      created_at: string;
+    }> = [];
+
+    for (const p of purchases) {
+      const type = (p.purchase_type === 'onboarding_fee' || p.purchase_type === 'package')
+        ? p.purchase_type
+        : 'onboarding_fee';
+      const gross = parseFloat(String(p.amount ?? 0));
+
+      const { data: refRows } = await service
+        .from('purchase_referral_earnings')
+        .select('amount')
+        .eq('purchase_id', p.id);
+      const distributed_total = (refRows || []).reduce((s, r) => s + parseFloat(String(r.amount ?? 0)), 0);
+
+      const { data: splitRows } = await service
+        .from('purchase_revenue_splits')
+        .select('split_type, amount')
+        .eq('purchase_id', p.id);
+      let platform_total = 0;
+      let marketing_total = 0;
+      for (const s of splitRows || []) {
+        const a = parseFloat(String(s.amount ?? 0));
+        if (s.split_type === 'platform') platform_total += a;
+        else if (s.split_type === 'marketing') marketing_total += a;
+      }
+
+      events.push({
+        type,
+        gross,
+        distributed_total,
+        platform_total,
+        marketing_total,
+        created_at: (p as any).created_at || new Date().toISOString()
+      });
+    }
+
+    res.json({
+      events,
+      request_id: requestId
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Unknown error';
+    console.error('MLM summary error:', msg);
+    res.status(500).json({
+      events: [],
+      error: process.env.NODE_ENV === 'production' ? 'Internal error' : msg,
+      request_id: requestId
+    });
+  }
+});

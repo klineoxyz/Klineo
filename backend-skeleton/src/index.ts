@@ -18,6 +18,7 @@ import { exchangeConnectionsRouter } from './routes/exchange-connections.js';
 import { purchasesRouter } from './routes/purchases.js';
 import { billingRouter } from './routes/billing.js';
 import { entitlementsRouter } from './routes/entitlements.js';
+import { entitlementsMeRouter } from './routes/entitlements-me.js';
 import { apiLimiter, authLimiter, adminLimiter } from './middleware/rateLimit.js';
 
 dotenv.config();
@@ -115,6 +116,7 @@ app.use('/api/exchange-connections', exchangeConnectionsRouter);
 app.use('/api/purchases', purchasesRouter);
 app.use('/api/billing', billingRouter);
 app.use('/api/entitlement', entitlementsRouter);
+app.use('/api/entitlements', entitlementsMeRouter);
 
 // 404 handler
 app.use((req, res) => {

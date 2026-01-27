@@ -138,6 +138,42 @@ VITE_SUPABASE_ANON_KEY=<anon_key>
 
 ---
 
+## 🧪 How to Use Smoke Test (Entitlement / Gating)
+
+The Smoke Test page lets admins validate entitlement, profit allowance, and gating end-to-end without real trading.
+
+### Enable Smoke Test page in production
+
+- **Frontend (Vercel)**: Set `VITE_ENABLE_SMOKE_TEST_PAGE=true` in the project env vars and redeploy.
+- **Who can see it**: In production, the Smoke Test link appears only when **both** `VITE_ENABLE_SMOKE_TEST_PAGE=true` **and** the user has admin role. Non-admins who hit the route are redirected to the dashboard with an “Admin only” toast.
+- **Development**: The Smoke Test route is always available in dev (no env flag required).
+
+### Enable self-test endpoints in production
+
+- **Backend (Railway)**: Set `ENABLE_SELF_TEST_ENDPOINT=true` in the backend env and redeploy.
+- **Effect**: With this set, admin-only endpoints are enabled in prod:
+  - `POST /api/self-test/simulate-profit` (increment `profit_used` for smoke tests)
+  - `GET /api/self-test/mlm-summary?limit=5` (sanitized MLM distribution events)
+- **Default**: In production, if `ENABLE_SELF_TEST_ENDPOINT` is not `true`, these endpoints respond with **404** (and the RLS self-test does too when the kill-switch runs).
+
+### Run entitlement and gating tests safely
+
+1. **As admin**, open the Smoke Test page (dev, or prod with `VITE_ENABLE_SMOKE_TEST_PAGE=true`).
+2. **Entitlement**
+   - The “Entitlement” section calls `GET /api/entitlements/me` and shows allowance / used / remaining / status.
+   - Use “Refresh” to reload after changes.
+3. **Simulate profit** (admin only, requires self-test enabled in prod)
+   - Enter an amount (0 &lt; value ≤ 100000) and click “Simulate Profit”. This calls `POST /api/self-test/simulate-profit` and increases `profit_used` for your user.
+   - Use sparingly; it persists to the DB. If self-test is disabled in prod, the UI shows “Self-test disabled in production”.
+4. **Run Gating Test**
+   - Click “Run Gating Test”. The suite will (if you have an active package) simulate enough profit to exceed the allowance, then call a gated endpoint (e.g. `POST /api/copy-setups`). It **expects 402** and `error: "ALLOWANCE_EXCEEDED"`. If you have no active package, the test is **SKIPPED** with “No active package to test allowance gating”.
+5. **MLM Events**
+   - The “MLM Events” panel calls `GET /api/self-test/mlm-summary?limit=5` and shows type, gross, distributed/platform/marketing totals, and created_at. No PII. If the endpoint is off in prod, the panel shows “No distribution events, or self-test disabled.”
+
+**Security**: The Smoke Test UI and self-test endpoints never expose secrets, tokens, or emails. Responses use `request_id`, numeric totals, and status only.
+
+---
+
 ## 🧪 Manual Test Plan (Before Launch)
 
 ### Pre-Launch Checklist

@@ -94,7 +94,7 @@ export async function requireActiveAllowance(
     return res.status(503).json({
       error: 'Service unavailable',
       message: 'Database unavailable',
-      requestId,
+      request_id: requestId,
     });
   }
 
@@ -105,9 +105,9 @@ export async function requireActiveAllowance(
 
   if (!ent || ent.status !== 'active' || remaining <= 0) {
     return res.status(402).json({
-      error: 'ALLOWANCE_EXHAUSTED',
-      message: 'Your package allowance is exhausted. Please purchase a new package.',
-      requestId,
+      error: 'ALLOWANCE_EXCEEDED',
+      message: 'Profit allowance exhausted. Please buy a new package.',
+      request_id: requestId,
     });
   }
 

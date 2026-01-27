@@ -4,62 +4,44 @@ import { Button } from "@/app/components/ui/button";
 import { Badge } from "@/app/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/app/components/ui/table";
 import { Alert, AlertDescription } from "@/app/components/ui/alert";
-import { Loader2, Copy, Trash2, CheckCircle2, XCircle, MinusCircle, ChevronDown, ChevronUp } from "lucide-react";
+import { Input } from "@/app/components/ui/input";
+import { Loader2, Copy, Trash2, CheckCircle2, XCircle, MinusCircle, ChevronDown, ChevronUp, Shield, Coins } from "lucide-react";
 import { useAuth } from "@/app/contexts/AuthContext";
 import { api } from "@/lib/api";
 import { runAllTests, runTestByName, smokeTests, type SmokeTestResult, sanitizeResponse } from "@/lib/smokeTests";
 import { toast } from "sonner";
 
+type EntitlementState = {
+  entitlement: { profit_allowance: number; profit_used: number; remaining: number; status: string; package_name?: string | null };
+} | null;
+
+type MlmEvent = { type: string; gross: number; distributed_total: number; platform_total: number; marketing_total: number; created_at: string };
+
 export function SmokeTest() {
-  const { user, isAdmin } = useAuth();
-  
-  // Access control: dev OR (prod + admin)
-  const isDev = import.meta.env.DEV;
+  const { isAdmin } = useAuth();
   const isProduction = import.meta.env.PROD;
-  
-  useEffect(() => {
-    if (isProduction && !isAdmin) {
-      // Redirect to dashboard and show toast
-      setTimeout(() => {
-        toast.error("Smoke test disabled in production", {
-          description: "This page is only available in development or for admins."
-        });
-      }, 100);
-      // App.tsx will handle redirect
-    }
-  }, [isProduction, isAdmin]);
-  
-  // If production and not allowed, don't render
-  if (isProduction && !isAdmin) {
-    return null; // App.tsx will handle redirect
-  }
+
   const [results, setResults] = useState<SmokeTestResult[]>([]);
   const [isRunning, setIsRunning] = useState(false);
   const [expandedTest, setExpandedTest] = useState<string | null>(null);
   const [userInfo, setUserInfo] = useState<{ email: string; role: string } | null>(null);
+  const [entitlement, setEntitlement] = useState<EntitlementState>(null);
+  const [entitlementLoading, setEntitlementLoading] = useState(false);
+  const [simulateAmount, setSimulateAmount] = useState("10");
+  const [simulateLoading, setSimulateLoading] = useState(false);
+  const [mlmEvents, setMlmEvents] = useState<MlmEvent[]>([]);
+  const [mlmLoading, setMlmLoading] = useState(false);
 
-  // Get environment info (never display raw values)
   const apiBaseURL = import.meta.env.VITE_API_BASE_URL || '';
   const supabaseURL = import.meta.env.VITE_SUPABASE_URL || '';
-
-  // Mask URLs for display (only show hostname, never full URL)
   const maskedApiDomain = apiBaseURL ? (() => {
-    try {
-      return new URL(apiBaseURL).hostname;
-    } catch {
-      return '[masked]';
-    }
+    try { return new URL(apiBaseURL).hostname; } catch { return '[masked]'; }
   })() : 'Not configured';
   const maskedSupabaseDomain = supabaseURL ? (() => {
-    try {
-      return new URL(supabaseURL).hostname;
-    } catch {
-      return '[masked]';
-    }
+    try { return new URL(supabaseURL).hostname; } catch { return '[masked]'; }
   })() : 'Not configured';
 
   useEffect(() => {
-    // Load current user info
     const loadUserInfo = async () => {
       try {
         const data = await api.get<{ id: string; email: string; role: string }>('/api/auth/me');
@@ -70,6 +52,39 @@ export function SmokeTest() {
     };
     loadUserInfo();
   }, []);
+
+  const loadEntitlement = async () => {
+    setEntitlementLoading(true);
+    try {
+      const data = await api.get<{ entitlement: { profit_allowance: number; profit_used: number; remaining: number; status: string; package_name?: string | null } }>('/api/entitlements/me');
+      setEntitlement({ entitlement: data.entitlement });
+    } catch {
+      setEntitlement(null);
+    } finally {
+      setEntitlementLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (userInfo) loadEntitlement();
+  }, [userInfo?.role]);
+
+  const loadMlm = async () => {
+    if (!isAdmin) return;
+    setMlmLoading(true);
+    try {
+      const data = await api.get<{ events: MlmEvent[] }>('/api/self-test/mlm-summary?limit=5');
+      setMlmEvents(Array.isArray(data?.events) ? data.events : []);
+    } catch {
+      setMlmEvents([]);
+    } finally {
+      setMlmLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isAdmin) loadMlm();
+  }, [isAdmin]);
 
   const handleRunAll = async () => {
     setIsRunning(true);
@@ -149,6 +164,49 @@ export function SmokeTest() {
     setExpandedTest(null);
   };
 
+  const handleSimulateProfit = async () => {
+    if (!isAdmin) return;
+    const n = Math.min(100000, Math.max(0.01, Number(simulateAmount)));
+    if (Number.isNaN(n) || n <= 0) {
+      toast.error("Invalid amount", { description: "Use a number between 0 and 100000." });
+      return;
+    }
+    setSimulateLoading(true);
+    try {
+      await api.post('/api/self-test/simulate-profit', { amount: n });
+      toast.success("Profit simulated");
+      loadEntitlement();
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Request failed";
+      if (String(msg).includes("404") || String(msg).includes("Not found")) {
+        toast.info("Self-test disabled", { description: "Self-test endpoints are off in production." });
+      } else {
+        toast.error("Simulate failed", { description: String(msg) });
+      }
+    } finally {
+      setSimulateLoading(false);
+    }
+  };
+
+  const handleRunGatingTest = async () => {
+    const name = 'Allowance gating (402 ALLOWANCE_EXCEEDED)';
+    setIsRunning(true);
+    try {
+      const result = await runTestByName(name);
+      if (result) {
+        setResults(prev => {
+          const i = prev.findIndex(r => r.name === name);
+          if (i >= 0) return prev.map((r, j) => (j === i ? result : r));
+          return [...prev, result];
+        });
+      }
+    } catch (err: unknown) {
+      toast.error("Gating test failed", { description: err instanceof Error ? err.message : String(err) });
+    } finally {
+      setIsRunning(false);
+    }
+  };
+
   const getStatusBadge = (status: SmokeTestResult['status']) => {
     switch (status) {
       case 'PASS':
@@ -197,6 +255,8 @@ export function SmokeTest() {
 
   const overallStatus = getOverallStatus();
 
+  if (isProduction && !isAdmin) return null;
+
   return (
     <div className="p-6 space-y-6">
       <div>
@@ -226,6 +286,109 @@ export function SmokeTest() {
           </div>
         </div>
       </Card>
+
+      {/* Entitlement */}
+      <Card className="p-4">
+        <h3 className="font-semibold mb-3 flex items-center gap-2">
+          <Shield className="size-4" /> Entitlement
+        </h3>
+        {entitlementLoading ? (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Loader2 className="size-4 animate-spin" /> Loading…
+          </div>
+        ) : entitlement?.entitlement ? (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+            <div>
+              <span className="text-muted-foreground">Allowance</span>
+              <div className="font-mono">{Number(entitlement.entitlement.profit_allowance).toFixed(2)}</div>
+            </div>
+            <div>
+              <span className="text-muted-foreground">Used</span>
+              <div className="font-mono">{Number(entitlement.entitlement.profit_used).toFixed(2)}</div>
+            </div>
+            <div>
+              <span className="text-muted-foreground">Remaining</span>
+              <div className="font-mono">{Number(entitlement.entitlement.remaining).toFixed(2)}</div>
+            </div>
+            <div>
+              <span className="text-muted-foreground">Status</span>
+              <div><Badge variant={entitlement.entitlement.status === 'active' ? 'default' : 'secondary'}>{entitlement.entitlement.status}</Badge></div>
+            </div>
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">No entitlement data. Log in and fetch to see allowance/used/remaining.</p>
+        )}
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <Button variant="outline" size="sm" onClick={loadEntitlement} disabled={entitlementLoading}>
+            Refresh
+          </Button>
+          {isAdmin && (
+            <>
+              <Input
+                type="number"
+                min={0.01}
+                max={100000}
+                step={1}
+                value={simulateAmount}
+                onChange={(e) => setSimulateAmount(e.target.value)}
+                className="w-24 h-8 text-sm"
+                placeholder="Amount"
+              />
+              <Button size="sm" onClick={handleSimulateProfit} disabled={simulateLoading}>
+                {simulateLoading ? <Loader2 className="size-4 animate-spin" /> : <Coins className="size-4" />}
+                Simulate Profit
+              </Button>
+              <Button variant="secondary" size="sm" onClick={handleRunGatingTest} disabled={isRunning}>
+                Run Gating Test
+              </Button>
+            </>
+          )}
+        </div>
+      </Card>
+
+      {/* MLM Events (admin only, sanitized) */}
+      {isAdmin && (
+        <Card className="p-4">
+          <h3 className="font-semibold mb-3">MLM Events</h3>
+          {mlmLoading ? (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="size-4 animate-spin" /> Loading…
+            </div>
+          ) : mlmEvents.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No distribution events, or self-test disabled.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Type</TableHead>
+                    <TableHead>Gross</TableHead>
+                    <TableHead>Distributed</TableHead>
+                    <TableHead>Platform</TableHead>
+                    <TableHead>Marketing</TableHead>
+                    <TableHead>Created</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {mlmEvents.map((ev, i) => (
+                    <TableRow key={i}>
+                      <TableCell className="font-mono text-xs">{ev.type}</TableCell>
+                      <TableCell className="font-mono text-xs">{Number(ev.gross).toFixed(2)}</TableCell>
+                      <TableCell className="font-mono text-xs">{Number(ev.distributed_total).toFixed(2)}</TableCell>
+                      <TableCell className="font-mono text-xs">{Number(ev.platform_total).toFixed(2)}</TableCell>
+                      <TableCell className="font-mono text-xs">{Number(ev.marketing_total).toFixed(2)}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">{ev.created_at ? new Date(ev.created_at).toISOString().slice(0, 19) : '-'}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+          <Button variant="ghost" size="sm" className="mt-2" onClick={loadMlm} disabled={mlmLoading}>
+            Refresh MLM
+          </Button>
+        </Card>
+      )}
 
       {/* Overall Status Banner */}
       <Card className={`p-4 ${
