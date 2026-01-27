@@ -204,7 +204,7 @@ export function Admin() {
   const handleSaveFeeSettings = () => {
     setShowFeeConfirm(false);
     toast.success("Platform fees updated", {
-      description: `Starter/Pro: ${starterFee}%, Unlimited: ${unlimitedFee}%`,
+      description: `Entry/Pro: ${starterFee}%, Elite: ${unlimitedFee}%`,
     });
   };
 
@@ -816,27 +816,27 @@ export function Admin() {
               <Settings2 className="size-6 text-primary" />
               <div>
                 <h3 className="text-lg font-semibold">Platform Fee Configuration</h3>
-                <p className="text-sm text-muted-foreground">Adjust performance-based fee percentages for each subscription tier</p>
+                <p className="text-sm text-muted-foreground">Adjust performance-based fee percentages for each package (credit-based profit allowance)</p>
               </div>
             </div>
 
             <div className="grid gap-6">
-              {/* Current Fee Structure */}
+              {/* Current Fee Structure — aligned with packages: Entry $100, Pro $200, Elite $500 */}
               <div className="p-4 bg-secondary/30 rounded-lg border border-border">
                 <h4 className="text-sm font-semibold mb-4 text-primary uppercase tracking-wide">Current Fee Structure</h4>
                 <div className="grid grid-cols-3 gap-4">
                   <div className="text-center">
-                    <div className="text-xs text-muted-foreground mb-1">Starter Plan</div>
+                    <div className="text-xs text-muted-foreground mb-1">Entry $100</div>
                     <div className="text-3xl font-bold text-foreground">{starterFee}%</div>
                     <div className="text-xs text-muted-foreground mt-1">On profitable trades</div>
                   </div>
                   <div className="text-center">
-                    <div className="text-xs text-muted-foreground mb-1">Pro Plan</div>
+                    <div className="text-xs text-muted-foreground mb-1">Pro $200</div>
                     <div className="text-3xl font-bold text-foreground">{proFee}%</div>
                     <div className="text-xs text-muted-foreground mt-1">On profitable trades</div>
                   </div>
                   <div className="text-center">
-                    <div className="text-xs text-muted-foreground mb-1">Unlimited Plan</div>
+                    <div className="text-xs text-muted-foreground mb-1">Elite $500</div>
                     <div className="text-3xl font-bold text-primary">{unlimitedFee}%</div>
                     <div className="text-xs text-muted-foreground mt-1">On profitable trades</div>
                   </div>
@@ -849,7 +849,7 @@ export function Admin() {
                 
                 <div className="grid grid-cols-3 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="starter-fee">Starter Plan Fee (%)</Label>
+                    <Label htmlFor="starter-fee">Entry $100 Fee (%)</Label>
                     <Input
                       id="starter-fee"
                       type="number"
@@ -864,7 +864,7 @@ export function Admin() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="pro-fee">Pro Plan Fee (%)</Label>
+                    <Label htmlFor="pro-fee">Pro $200 Fee (%)</Label>
                     <Input
                       id="pro-fee"
                       type="number"
@@ -879,7 +879,7 @@ export function Admin() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="unlimited-fee">Unlimited Plan Fee (%)</Label>
+                    <Label htmlFor="unlimited-fee">Elite $500 Fee (%)</Label>
                     <Input
                       id="unlimited-fee"
                       type="number"
@@ -1269,7 +1269,7 @@ export function Admin() {
         open={showFeeConfirm}
         onOpenChange={setShowFeeConfirm}
         title="Update Platform Fee Settings"
-        description={`You are about to change platform fees to: Starter ${starterFee}%, Pro ${proFee}%, Unlimited ${unlimitedFee}%. This will affect all new trades going forward and will be logged in the audit trail.`}
+        description={`You are about to change platform fees to: Entry $100 ${starterFee}%, Pro $200 ${proFee}%, Elite $500 ${unlimitedFee}%. This will affect all new trades going forward and will be logged in the audit trail.`}
         confirmLabel="Update Fee Settings"
         dangerLevel="warning"
         onConfirm={handleSaveFeeSettings}
