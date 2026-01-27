@@ -50,6 +50,19 @@ export interface DemoPosition {
   updatedAt: string;
 }
 
+/** Copy-setup shape for Copy Trading "Active Copy Positions" — same as API copySetups */
+export interface DemoCopySetup {
+  id: string;
+  traderId: string;
+  trader: { id: string; name: string; slug: string; avatarUrl?: string; status: string } | null;
+  allocationPct: number;
+  maxPositionPct: number | null;
+  status: "active" | "paused" | "stopped";
+  createdAt: string;
+  updatedAt: string;
+  _isDemo?: boolean;
+}
+
 /** Shape from Strategy Backtest "backtestTrades" (or equivalent) */
 export interface BacktestTradeRow {
   id: number;
@@ -68,7 +81,13 @@ export interface BacktestTradeRow {
 const DEMO_STORAGE_KEY = "klineo_demo_mode";
 const DEMO_DATA_KEY = "klineo_demo_data";
 
-function loadPersistedDemo(): { isDemo: boolean; trades: DemoTrade[]; orders: DemoOrder[]; positions: DemoPosition[] } {
+function loadPersistedDemo(): {
+  isDemo: boolean;
+  trades: DemoTrade[];
+  orders: DemoOrder[];
+  positions: DemoPosition[];
+  copySetups: DemoCopySetup[];
+} {
   try {
     const raw = localStorage.getItem(DEMO_STORAGE_KEY);
     const dataRaw = localStorage.getItem(DEMO_DATA_KEY);
@@ -76,22 +95,30 @@ function loadPersistedDemo(): { isDemo: boolean; trades: DemoTrade[]; orders: De
     let trades: DemoTrade[] = [];
     let orders: DemoOrder[] = [];
     let positions: DemoPosition[] = [];
+    let copySetups: DemoCopySetup[] = [];
     if (dataRaw) {
       const parsed = JSON.parse(dataRaw);
       trades = parsed.trades || [];
       orders = parsed.orders || [];
       positions = parsed.positions || [];
+      copySetups = parsed.copySetups || [];
     }
-    return { isDemo, trades, orders, positions };
+    return { isDemo, trades, orders, positions, copySetups };
   } catch {
-    return { isDemo: false, trades: [], orders: [], positions: [] };
+    return { isDemo: false, trades: [], orders: [], positions: [], copySetups: [] };
   }
 }
 
-function savePersistedDemo(isDemo: boolean, trades: DemoTrade[], orders: DemoOrder[], positions: DemoPosition[]) {
+function savePersistedDemo(
+  isDemo: boolean,
+  trades: DemoTrade[],
+  orders: DemoOrder[],
+  positions: DemoPosition[],
+  copySetups: DemoCopySetup[]
+) {
   try {
     localStorage.setItem(DEMO_STORAGE_KEY, String(isDemo));
-    localStorage.setItem(DEMO_DATA_KEY, JSON.stringify({ trades, orders, positions }));
+    localStorage.setItem(DEMO_DATA_KEY, JSON.stringify({ trades, orders, positions, copySetups }));
   } catch (_) {}
 }
 
@@ -101,6 +128,7 @@ interface DemoContextValue {
   demoTrades: DemoTrade[];
   demoOrders: DemoOrder[];
   demoPositions: DemoPosition[];
+  demoCopySetups: DemoCopySetup[];
   addDemoFromBacktest: (rows: BacktestTradeRow[], symbol?: string) => void;
   clearDemo: () => void;
 }
@@ -123,13 +151,15 @@ export function DemoProvider({ children }: { children: ReactNode }) {
   const [demoTrades, setDemoTrades] = useState<DemoTrade[]>([]);
   const [demoOrders, setDemoOrders] = useState<DemoOrder[]>([]);
   const [demoPositions, setDemoPositions] = useState<DemoPosition[]>([]);
+  const [demoCopySetups, setDemoCopySetups] = useState<DemoCopySetup[]>([]);
 
   useEffect(() => {
-    const { isDemo, trades, orders, positions } = loadPersistedDemo();
+    const { isDemo, trades, orders, positions, copySetups } = loadPersistedDemo();
     setDemoModeState(isDemo);
     setDemoTrades(trades);
     setDemoOrders(orders);
     setDemoPositions(positions);
+    setDemoCopySetups(copySetups);
   }, []);
 
   const setDemoMode = useCallback((on: boolean) => {
@@ -138,11 +168,12 @@ export function DemoProvider({ children }: { children: ReactNode }) {
       setDemoTrades([]);
       setDemoOrders([]);
       setDemoPositions([]);
-      savePersistedDemo(false, [], [], []);
+      setDemoCopySetups([]);
+      savePersistedDemo(false, [], [], [], []);
     } else {
-      savePersistedDemo(true, demoTrades, demoOrders, demoPositions);
+      savePersistedDemo(true, demoTrades, demoOrders, demoPositions, demoCopySetups);
     }
-  }, [demoTrades, demoOrders, demoPositions]);
+  }, [demoTrades, demoOrders, demoPositions, demoCopySetups]);
 
   const addDemoFromBacktest = useCallback((rows: BacktestTradeRow[], symbol = "BTC/USDT") => {
     const base = `demo-${Date.now()}-`;
@@ -202,9 +233,23 @@ export function DemoProvider({ children }: { children: ReactNode }) {
       });
     });
 
+    const now = new Date().toISOString();
+    const demoSetup: DemoCopySetup = {
+      id: "demo-strategy",
+      traderId: "demo",
+      trader: { id: "demo", name: "Demo Strategy", slug: "demo-strategy", status: "approved" },
+      allocationPct: 100,
+      maxPositionPct: 25,
+      status: "active",
+      createdAt: now,
+      updatedAt: now,
+      _isDemo: true,
+    };
+
     setDemoTrades((prev) => [...prev, ...trades]);
     setDemoOrders((prev) => [...prev, ...orders]);
     setDemoPositions((prev) => [...prev, ...positions]);
+    setDemoCopySetups([demoSetup]);
     setDemoModeState(true);
   }, []);
 
@@ -213,16 +258,17 @@ export function DemoProvider({ children }: { children: ReactNode }) {
     setDemoTrades([]);
     setDemoOrders([]);
     setDemoPositions([]);
-    savePersistedDemo(false, [], [], []);
+    setDemoCopySetups([]);
+    savePersistedDemo(false, [], [], [], []);
   }, []);
 
   const persist = useCallback(() => {
-    savePersistedDemo(isDemoMode, demoTrades, demoOrders, demoPositions);
-  }, [isDemoMode, demoTrades, demoOrders, demoPositions]);
+    savePersistedDemo(isDemoMode, demoTrades, demoOrders, demoPositions, demoCopySetups);
+  }, [isDemoMode, demoTrades, demoOrders, demoPositions, demoCopySetups]);
 
   useEffect(() => {
     persist();
-  }, [isDemoMode, demoTrades, demoOrders, demoPositions, persist]);
+  }, [isDemoMode, demoTrades, demoOrders, demoPositions, demoCopySetups, persist]);
 
   const value: DemoContextValue = {
     isDemoMode,
@@ -230,6 +276,7 @@ export function DemoProvider({ children }: { children: ReactNode }) {
     demoTrades,
     demoOrders,
     demoPositions,
+    demoCopySetups,
     addDemoFromBacktest,
     clearDemo,
   };

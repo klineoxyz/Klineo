@@ -1004,7 +1004,7 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {backtestTrades.flatMap((trade) => {
+                      {[...backtestTrades].reverse().flatMap((trade) => {
                         const rows = [
                           <TableRow
                             key={`trade-${trade.id}`}

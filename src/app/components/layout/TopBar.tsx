@@ -40,7 +40,9 @@ export function TopBar({
   activeCopies = 3,
   exchangeLatency = 45
 }: TopBarProps) {
-  const { isDemoMode, clearDemo } = useDemo();
+  const { isDemoMode, clearDemo, demoCopySetups } = useDemo();
+  const demoActiveCount = demoCopySetups.filter((s) => s.status === "active").length;
+  const displayedActiveCopies = isDemoMode ? demoActiveCount : activeCopies;
   const [currentTime, setCurrentTime] = useState(new Date());
   const [showPauseModal, setShowPauseModal] = useState(false);
 
@@ -96,12 +98,17 @@ export function TopBar({
                 Expires: Mar 15, 2026
               </span>
             </div>
-            <div className="flex items-center gap-2 px-2 py-1 bg-accent/10 rounded border border-accent/20">
+            <button
+              type="button"
+              onClick={() => onNavigate("copy-trading")}
+              className="flex items-center gap-2 px-2 py-1 bg-accent/10 rounded border border-accent/20 hover:bg-accent/20 transition-colors text-left"
+              title="View in Copy Trading"
+            >
               <div className="size-1.5 rounded-full bg-accent animate-pulse" />
               <span className="text-xs font-medium text-accent">
-                {activeCopies} Active Copies
+                {displayedActiveCopies} Active Copies{isDemoMode ? " (Demo)" : ""}
               </span>
-            </div>
+            </button>
           </div>
         </div>
 

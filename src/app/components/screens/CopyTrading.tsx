@@ -6,6 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Activity, Pause, StopCircle, AlertTriangle, Loader2 } from "lucide-react";
 import { api } from "@/lib/api";
 import { toast } from "@/app/lib/toast";
+import { useDemo } from "@/app/contexts/DemoContext";
 import { LoadingWrapper } from "@/app/components/ui/loading-wrapper";
 import { EmptyState } from "@/app/components/ui/empty-state";
 import { ErrorState } from "@/app/components/ui/error-state";
@@ -33,10 +34,13 @@ interface CopySetup {
 }
 
 export function CopyTrading({ onNavigate }: CopyTradingProps) {
+  const { isDemoMode, demoCopySetups, clearDemo } = useDemo();
   const [copySetups, setCopySetups] = useState<CopySetup[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+
+  const displaySetups = isDemoMode ? [...(demoCopySetups as CopySetup[]), ...copySetups] : copySetups;
 
   const loadCopySetups = async () => {
     setIsLoading(true);
@@ -54,8 +58,9 @@ export function CopyTrading({ onNavigate }: CopyTradingProps) {
   };
 
   useEffect(() => {
-    loadCopySetups();
-  }, []);
+    if (!isDemoMode) loadCopySetups();
+    else setIsLoading(false);
+  }, [isDemoMode]);
 
   const handleStatusChange = async (id: string, newStatus: "active" | "paused" | "stopped") => {
     setUpdatingId(id);
@@ -70,10 +75,10 @@ export function CopyTrading({ onNavigate }: CopyTradingProps) {
     }
   };
 
-  const activeSetups = copySetups.filter((s) => s.status === "active");
-  const totalAllocated = copySetups.reduce((sum, s) => sum + s.allocationPct, 0);
+  const activeSetups = displaySetups.filter((s) => s.status === "active");
+  const totalAllocated = displaySetups.reduce((sum, s) => sum + s.allocationPct, 0);
 
-  if (isLoading) {
+  if (!isDemoMode && isLoading) {
     return (
       <div className="p-4 sm:p-6">
         <div className="animate-pulse space-y-6">
@@ -112,9 +117,17 @@ export function CopyTrading({ onNavigate }: CopyTradingProps) {
           <h1 className="text-xl sm:text-2xl font-semibold mb-1">Copy Trading</h1>
           <p className="text-sm text-muted-foreground">Monitor and manage your active copy positions</p>
         </div>
-        <Button onClick={() => onNavigate("marketplace")} className="bg-primary text-primary-foreground w-full sm:w-auto">
-          Browse Traders
-        </Button>
+        <div className="flex items-center gap-2 flex-wrap">
+          {isDemoMode && (
+            <>
+              <Badge variant="secondary" className="bg-primary/15 text-primary border-primary/30">Demo</Badge>
+              <Button variant="ghost" size="sm" onClick={clearDemo}>Exit demo</Button>
+            </>
+          )}
+          <Button onClick={() => onNavigate("marketplace")} className="bg-primary text-primary-foreground w-full sm:w-auto">
+            Browse Traders
+          </Button>
+        </div>
       </div>
 
       {/* Summary Cards */}
@@ -122,7 +135,7 @@ export function CopyTrading({ onNavigate }: CopyTradingProps) {
         <Card className="p-3 sm:p-4 space-y-2">
           <div className="text-xs text-muted-foreground uppercase tracking-wide">Active Copies</div>
           <div className="text-xl sm:text-2xl font-semibold">{activeSetups.length}</div>
-          <div className="text-xs text-muted-foreground">of {copySetups.length} total</div>
+          <div className="text-xs text-muted-foreground">of {displaySetups.length} total</div>
         </Card>
 
         <Card className="p-3 sm:p-4 space-y-2">
@@ -134,7 +147,7 @@ export function CopyTrading({ onNavigate }: CopyTradingProps) {
         <Card className="p-3 sm:p-4 space-y-2">
           <div className="text-xs text-muted-foreground uppercase tracking-wide">Paused</div>
           <div className="text-xl sm:text-2xl font-semibold">
-            {copySetups.filter((s) => s.status === "paused").length}
+            {displaySetups.filter((s) => s.status === "paused").length}
           </div>
           <div className="text-xs text-muted-foreground">copy setups</div>
         </Card>
@@ -152,7 +165,7 @@ export function CopyTrading({ onNavigate }: CopyTradingProps) {
       </div>
 
       {/* Active Copy Traders */}
-      {copySetups.length === 0 ? (
+      {displaySetups.length === 0 ? (
         <Card className="p-6 sm:p-12">
           <div className="text-center space-y-4">
             <p className="text-muted-foreground">No copy setups yet</p>
@@ -178,7 +191,9 @@ export function CopyTrading({ onNavigate }: CopyTradingProps) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {copySetups.map((setup) => (
+              {displaySetups.map((setup) => {
+                const isDemo = (setup as CopySetup & { _isDemo?: boolean })._isDemo ?? setup.id.startsWith("demo-");
+                return (
                 <TableRow key={setup.id}>
                   <TableCell>
                     <div className="flex items-center gap-3">
@@ -186,8 +201,13 @@ export function CopyTrading({ onNavigate }: CopyTradingProps) {
                         {setup.trader?.name?.charAt(0) || "?"}
                       </div>
                       <div>
-                        <div className="font-medium">{setup.trader?.name || "Unknown Trader"}</div>
-                        {setup.trader?.status !== "approved" && (
+                        <div className="font-medium flex items-center gap-2">
+                          {setup.trader?.name || "Unknown Trader"}
+                          {isDemo && (
+                            <Badge variant="outline" className="text-[10px] bg-primary/10 text-primary border-primary/30">Demo</Badge>
+                          )}
+                        </div>
+                        {!isDemo && setup.trader?.status !== "approved" && (
                           <div className="text-xs text-muted-foreground">Trader not approved</div>
                         )}
                       </div>
@@ -216,53 +236,59 @@ export function CopyTrading({ onNavigate }: CopyTradingProps) {
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-2">
-                      {setup.status === "active" ? (
-                        <Button 
-                          variant="outline" 
-                          size="sm"
-                          onClick={() => handleStatusChange(setup.id, "paused")}
-                          disabled={updatingId === setup.id}
-                        >
-                          {updatingId === setup.id ? (
-                            <Loader2 className="size-3 mr-1 animate-spin" />
-                          ) : (
-                            <Pause className="size-3 mr-1" />
-                          )}
-                          Pause
-                        </Button>
-                      ) : setup.status === "paused" ? (
-                        <Button 
-                          variant="outline" 
-                          size="sm"
-                          onClick={() => handleStatusChange(setup.id, "active")}
-                          disabled={updatingId === setup.id}
-                        >
-                          {updatingId === setup.id ? (
-                            <Loader2 className="size-3 mr-1 animate-spin" />
-                          ) : (
-                            <Activity className="size-3 mr-1" />
-                          )}
-                          Resume
-                        </Button>
-                      ) : null}
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
-                        className="text-[#EF4444] border-[#EF4444]/50 hover:bg-[#EF4444]/10"
-                        onClick={() => handleStatusChange(setup.id, "stopped")}
-                        disabled={updatingId === setup.id}
-                      >
-                        {updatingId === setup.id ? (
-                          <Loader2 className="size-3 mr-1 animate-spin" />
-                        ) : (
-                          <StopCircle className="size-3 mr-1" />
-                        )}
-                        Stop
-                      </Button>
+                      {isDemo ? (
+                        <span className="text-xs text-muted-foreground">Use Exit demo to clear</span>
+                      ) : (
+                        <>
+                          {setup.status === "active" ? (
+                            <Button 
+                              variant="outline" 
+                              size="sm"
+                              onClick={() => handleStatusChange(setup.id, "paused")}
+                              disabled={updatingId === setup.id}
+                            >
+                              {updatingId === setup.id ? (
+                                <Loader2 className="size-3 mr-1 animate-spin" />
+                              ) : (
+                                <Pause className="size-3 mr-1" />
+                              )}
+                              Pause
+                            </Button>
+                          ) : setup.status === "paused" ? (
+                            <Button 
+                              variant="outline" 
+                              size="sm"
+                              onClick={() => handleStatusChange(setup.id, "active")}
+                              disabled={updatingId === setup.id}
+                            >
+                              {updatingId === setup.id ? (
+                                <Loader2 className="size-3 mr-1 animate-spin" />
+                              ) : (
+                                <Activity className="size-3 mr-1" />
+                              )}
+                              Resume
+                            </Button>
+                          ) : null}
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="text-[#EF4444] border-[#EF4444]/50 hover:bg-[#EF4444]/10"
+                            onClick={() => handleStatusChange(setup.id, "stopped")}
+                            disabled={updatingId === setup.id}
+                          >
+                            {updatingId === setup.id ? (
+                              <Loader2 className="size-3 mr-1 animate-spin" />
+                            ) : (
+                              <StopCircle className="size-3 mr-1" />
+                            )}
+                            Stop
+                          </Button>
+                        </>
+                      )}
                     </div>
                   </TableCell>
                 </TableRow>
-              ))}
+              ); })}
             </TableBody>
           </Table>
         </Card>
