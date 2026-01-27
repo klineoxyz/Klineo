@@ -212,6 +212,7 @@ export default function App() {
       {isAuthenticated ? (
         <>
           <TopBar
+            activeView={activeView}
             onNavigate={handleNavigate}
             onLogout={handleLogout}
             sidebarCollapsed={sidebarCollapsed}

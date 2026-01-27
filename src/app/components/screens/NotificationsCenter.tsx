@@ -175,6 +175,23 @@ export function NotificationsCenter({ onNavigate }: NotificationsCenterProps) {
     return "bg-secondary border-border text-muted-foreground";
   };
 
+  const getDisplayTitle = (n: Notification): string => {
+    const t = (n.title || "").trim();
+    if (t) return t;
+    switch (n.type) {
+      case "trade": return "Trade update";
+      case "risk": return "Risk alert";
+      case "system": return "System message";
+      case "account": return "Account update";
+      default: return "Notification";
+    }
+  };
+
+  const getDisplayBody = (n: Notification): string | null => {
+    const b = (n.body || "").trim();
+    return b || null;
+  };
+
   return (
     <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
       {/* Header */}
@@ -306,7 +323,9 @@ export function NotificationsCenter({ onNavigate }: NotificationsCenterProps) {
         </Card>
       ) : (
         <div className="space-y-3">
-          {filteredNotifications.map((notification) => (
+          {filteredNotifications.map((notification) => {
+            const displayBody = getDisplayBody(notification);
+            return (
             <Card 
               key={notification.id} 
               className={`p-4 transition-colors ${!notification.read ? "border-accent/50 bg-accent/5" : ""}`}
@@ -318,10 +337,10 @@ export function NotificationsCenter({ onNavigate }: NotificationsCenterProps) {
                 <div className="flex-1 space-y-1">
                   <div className="flex items-start justify-between">
                     <div>
-                      <h4 className="font-semibold">{notification.title}</h4>
-                      {notification.body && (
-                        <p className="text-sm text-muted-foreground mt-1">{notification.body}</p>
-                      )}
+                      <h4 className="font-semibold">{getDisplayTitle(notification)}</h4>
+                      {displayBody ? (
+                        <p className="text-sm text-muted-foreground mt-1">{displayBody}</p>
+                      ) : null}
                     </div>
                     {!notification.read && (
                       <div className="size-2 rounded-full bg-accent ml-2" />
@@ -349,7 +368,7 @@ export function NotificationsCenter({ onNavigate }: NotificationsCenterProps) {
                 </div>
               </div>
             </Card>
-          ))}
+          ); })}
         </div>
       )}
     </div>

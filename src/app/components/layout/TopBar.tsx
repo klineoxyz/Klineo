@@ -11,6 +11,7 @@ import {
 } from "@/app/components/ui/dropdown-menu";
 import { ConnectionStatus } from "@/app/components/ui/error-state";
 import { useDemo } from "@/app/contexts/DemoContext";
+import { useUnreadNotificationsCount } from "@/app/hooks/useUnreadNotificationsCount";
 import { useState, useEffect } from "react";
 import {
   Dialog,
@@ -22,6 +23,7 @@ import {
 } from "@/app/components/ui/dialog";
 
 interface TopBarProps {
+  activeView?: string;
   onNavigate: (view: string) => void;
   onLogout?: () => void;
   sidebarCollapsed?: boolean;
@@ -32,6 +34,7 @@ interface TopBarProps {
 }
 
 export function TopBar({ 
+  activeView,
   onNavigate, 
   onLogout,
   sidebarCollapsed = false,
@@ -43,6 +46,7 @@ export function TopBar({
   const { isDemoMode, clearDemo, demoCopySetups } = useDemo();
   const demoActiveCount = demoCopySetups.filter((s) => s.status === "active").length;
   const displayedActiveCopies = isDemoMode ? demoActiveCount : activeCopies;
+  const unreadNotifications = useUnreadNotificationsCount(activeView);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [showPauseModal, setShowPauseModal] = useState(false);
 
@@ -148,9 +152,11 @@ export function TopBar({
 
           <ConnectionStatus status={connectionStatus} />
 
-          <Button variant="ghost" size="icon" className="size-9 relative" onClick={() => onNavigate("notifications-center")}>
+          <Button variant="ghost" size="icon" className="size-9 relative" onClick={() => onNavigate("notifications-center")} aria-label={unreadNotifications > 0 ? `${unreadNotifications} unread notifications` : "Notifications"}>
             <Bell className="size-4" />
-            <div className="absolute top-1 right-1 size-2 rounded-full bg-[#EF4444] animate-pulse" />
+            {unreadNotifications > 0 && (
+              <span className="absolute top-1 right-1 size-2 rounded-full bg-[#EF4444] animate-pulse" aria-hidden />
+            )}
           </Button>
 
           <DropdownMenu>
