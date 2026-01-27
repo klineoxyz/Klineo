@@ -767,7 +767,8 @@ export function TradingTerminalNew({ onNavigate }: TradingTerminalProps) {
                 </div>
 
                 <div className="text-[11px] sm:text-xs text-muted-foreground mb-1">
-                  Available: <span className="text-foreground truncate">12,345.67 USDT</span>
+                  Available: <span className="text-foreground truncate" title="Demo balance — connect Binance Testnet in Settings to use real balance when supported">12,345.67 USDT</span>
+                  <span className="ml-1 text-[10px] text-muted-foreground/80">(demo)</span>
                 </div>
 
                 {orderType === "limit" && (
@@ -851,7 +852,8 @@ export function TradingTerminalNew({ onNavigate }: TradingTerminalProps) {
                 </div>
 
                 <div className="text-[11px] sm:text-xs text-muted-foreground mb-1">
-                  Available: <span className="text-foreground">0.5234 {selectedPair.split("/")[0]}</span>
+                  Available: <span className="text-foreground" title="Demo balance — connect Binance Testnet in Settings to use real balance when supported">0.5234 {selectedPair.split("/")[0]}</span>
+                  <span className="ml-1 text-[10px] text-muted-foreground/80">(demo)</span>
                 </div>
 
                 {orderType === "limit" && (

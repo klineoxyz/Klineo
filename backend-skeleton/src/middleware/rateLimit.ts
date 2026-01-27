@@ -14,14 +14,16 @@ export const apiLimiter = rateLimit({
 
 /**
  * Stricter rate limiter for authentication endpoints
- * 20 requests per 15 minutes per IP
+ * 20 requests per 15 minutes per IP for login/signup-style requests.
+ * GET /api/auth/me (session check, "Test Connection") is skipped so it doesn't burn this limit.
  */
 export const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 20, // 20 requests per 15 minutes
+  max: 20, // 20 requests per 15 minutes for POST/PUT/DELETE
   message: 'Too many authentication attempts, please try again later.',
   standardHeaders: true,
   legacyHeaders: false,
+  skip: (req) => req.method === 'GET', // GET /me and other read-only auth checks don't count
 });
 
 /**
