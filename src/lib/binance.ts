@@ -137,6 +137,42 @@ function formatVolume(value: number): string {
   return value.toFixed(0);
 }
 
+/** 24h ticker for a single symbol (for Market Stats). Binance Spot uses highPrice/lowPrice. */
+export interface Ticker24h {
+  symbol: string;
+  lastPrice: string;
+  priceChangePercent: string;
+  high24h: string;
+  low24h: string;
+  volume: string;
+  quoteVolume: string;
+}
+
+/**
+ * Fetch 24h ticker for one pair from Binance Spot (for Market Stats).
+ * Uses GET /api/v3/ticker/24hr?symbol= — Spot returns highPrice, lowPrice.
+ * No API key required.
+ */
+export async function fetchTicker24h(pair: string): Promise<Ticker24h> {
+  const symbol = pairToSymbol(pair);
+  const url = `${BINANCE_API}/ticker/24hr?symbol=${encodeURIComponent(symbol)}`;
+  const res = await fetch(url);
+  if (!res.ok) {
+    const t = await res.text();
+    throw new Error(`Binance ticker 24h error ${res.status}: ${t || res.statusText}`);
+  }
+  const raw = (await res.json()) as Record<string, string>;
+  return {
+    symbol: raw.symbol ?? symbol,
+    lastPrice: raw.lastPrice ?? "0",
+    priceChangePercent: raw.priceChangePercent ?? "0",
+    high24h: raw.highPrice ?? raw.lastPrice ?? "0",
+    low24h: raw.lowPrice ?? raw.lastPrice ?? "0",
+    volume: raw.volume ?? "0",
+    quoteVolume: raw.quoteVolume ?? "0",
+  };
+}
+
 /**
  * Fetch USDT pairs from Binance 24h ticker, sorted by quote volume (desc).
  * Returns top `limit` pairs. No API key required.

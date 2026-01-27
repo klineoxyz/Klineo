@@ -31,8 +31,8 @@ import {
   TradingViewMarketOverview,
   TradingViewAdvancedChart 
 } from "@/app/components/TradingViewWidgets";
-import { fetchKlines, fetchOrderBook, fetchUsdtPairs } from "@/lib/binance";
-import type { OrderBookLevel, UsdtPairInfo } from "@/lib/binance";
+import { fetchKlines, fetchOrderBook, fetchUsdtPairs, fetchTicker24h } from "@/lib/binance";
+import type { OrderBookLevel, UsdtPairInfo, Ticker24h } from "@/lib/binance";
 import type { OhlcvItem } from "@/app/components/charts/LightweightChartsWidget";
 
 type Timeframe = '1m' | '5m' | '15m' | '30m' | '1h' | '2h' | '4h' | '12h' | '1D' | '5D' | '1W' | '1M';
@@ -179,7 +179,6 @@ export function TradingTerminalNew({ onNavigate }: TradingTerminalProps) {
   const currentPairData = pairs.find((p) => p.symbol === selectedPair) || pairs[0];
   const basePrice = parseFloat(currentPairData.price.replace(/,/g, ""));
   const priceChange = parseFloat(currentPairData.change);
-  const isPositiveChange = priceChange >= 0;
 
   // Chart: real Binance klines (fallback to mock on error)
   const [chartData, setChartData] = useState<OhlcvItem[]>([]);
@@ -249,17 +248,57 @@ export function TradingTerminalNew({ onNavigate }: TradingTerminalProps) {
       });
   }, []);
 
+  // Market Stats from Binance 24h ticker for selected pair (exchange-specific; Binance for now)
+  const [marketStats, setMarketStats] = useState<Ticker24h | null>(null);
+  const [marketStatsLoading, setMarketStatsLoading] = useState(false);
+
+  const loadMarketStats = useCallback(async () => {
+    setMarketStatsLoading(true);
+    try {
+      const t = await fetchTicker24h(selectedPair);
+      setMarketStats(t);
+    } catch {
+      setMarketStats(null);
+    } finally {
+      setMarketStatsLoading(false);
+    }
+  }, [selectedPair]);
+
+  useEffect(() => {
+    loadMarketStats();
+  }, [loadMarketStats]);
+
+  useEffect(() => {
+    const interval = setInterval(loadMarketStats, 30000);
+    return () => clearInterval(interval);
+  }, [loadMarketStats]);
+
   const orderBookData = orderBook ?? generateOrderBook(basePrice);
   const recentTrades = generateRecentTrades(basePrice);
   const currentPrice = chartData.length ? chartData[chartData.length - 1].close : basePrice;
-  const priceChange24h = priceChange;
-  const volume24h = currentPairData.volume;
-  const high24h = chartData.length
-    ? Math.max(...chartData.map((d) => d.high)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-    : (basePrice * 1.035).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const low24h = chartData.length
-    ? Math.min(...chartData.map((d) => d.low)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-    : (basePrice * 0.975).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  // Prefer Binance 24h ticker for Market Stats; fallback to pair list / chart
+  const priceChange24h = marketStats ? parseFloat(marketStats.priceChangePercent) : priceChange;
+  const volume24h = marketStats
+    ? (() => {
+        const v = parseFloat(marketStats.quoteVolume);
+        if (v >= 1e9) return `${(v / 1e9).toFixed(1)}B`;
+        if (v >= 1e6) return `${(v / 1e6).toFixed(0)}M`;
+        if (v >= 1e3) return `${(v / 1e3).toFixed(1)}K`;
+        return v.toFixed(0);
+      })()
+    : currentPairData.volume;
+  const high24h = marketStats
+    ? parseFloat(marketStats.high24h).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    : chartData.length
+      ? Math.max(...chartData.map((d) => d.high)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+      : (basePrice * 1.035).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const low24h = marketStats
+    ? parseFloat(marketStats.low24h).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    : chartData.length
+      ? Math.min(...chartData.map((d) => d.low)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+      : (basePrice * 0.975).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const isPositiveChange = priceChange24h >= 0;
 
   const handleTimeframeChange = useCallback((timeframe: Timeframe) => {
     setSelectedTimeframe(timeframe);
@@ -347,6 +386,11 @@ export function TradingTerminalNew({ onNavigate }: TradingTerminalProps) {
             <div className="flex items-center gap-1.5 shrink-0">
               {orderBookLoading && (
                 <Loader2 className="size-3.5 text-muted-foreground animate-spin" aria-hidden />
+              )}
+              {orderBookLive && (
+                <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30" title="Data source">
+                  Binance
+                </span>
               )}
               <span
                 className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${
@@ -664,9 +708,14 @@ export function TradingTerminalNew({ onNavigate }: TradingTerminalProps) {
 
         {/* Right - Order Entry + Market Overview */}
         <div className="w-full lg:w-[300px] xl:w-[340px] border-t lg:border-t-0 lg:border-l border-border overflow-hidden flex flex-col shrink-0">
-          {/* Market Stats */}
+          {/* Market Stats (from Binance when connected; exchange-specific) */}
           <div className="p-3 sm:p-4 border-b border-border bg-card/30 shrink-0">
-            <div className="text-xs sm:text-sm font-semibold mb-2 sm:mb-3">Market Stats</div>
+            <div className="flex items-center justify-between gap-2 mb-2 sm:mb-3">
+              <span className="text-xs sm:text-sm font-semibold">Market Stats</span>
+              <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30" title="Data source">
+                Binance
+              </span>
+            </div>
             <div className="grid grid-cols-2 sm:grid-cols-1 gap-x-4 gap-y-2 sm:gap-y-2.5 text-[11px] sm:text-xs">
               <div className="flex justify-between">
                 <span className="text-muted-foreground">24h Volume</span>

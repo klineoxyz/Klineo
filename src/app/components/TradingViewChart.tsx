@@ -125,13 +125,44 @@ export function TradingViewChart({
         </div>
       </div>
 
-      <div className="flex-1 min-h-[300px] w-full relative overflow-hidden">
+      <div className="flex-1 min-h-[300px] w-full relative flex flex-col overflow-hidden">
         <LightweightChartsWidget
           data={data}
           showVolume={showVolume}
           autoSize
-          className="w-full h-full"
+          className="w-full flex-1 min-h-0"
         />
+        {/* Visible time axis from candle data (so users always see date/time per candle) */}
+        {data.length > 0 && (
+          <div
+            className="flex items-center justify-between gap-2 px-2 py-1.5 bg-[#0a0e13] border-t border-[#374151] text-[10px] sm:text-xs font-mono text-[#9ca3af] shrink-0"
+            aria-label="Chart time range"
+          >
+            {(() => {
+              const times = data.map((d) => new Date(d.time));
+              const pad = (n: number) => String(n).padStart(2, "0");
+              const fmt = (d: Date) =>
+                `${pad(d.getUTCDate())} ${d.toLocaleString("en-US", { month: "short", timeZone: "UTC" })} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`;
+              if (times.length === 0) return null;
+              if (times.length === 1) return <span>{fmt(times[0])}</span>;
+              const n = Math.min(5, times.length);
+              const indices = n <= 2 ? [0, times.length - 1] : Array.from({ length: n }, (_, i) => Math.floor((i / (n - 1)) * (times.length - 1)));
+              const seen = new Set<number>();
+              const unique = indices.filter((i) => {
+                if (seen.has(i)) return false;
+                seen.add(i);
+                return true;
+              });
+              return (
+                <>
+                  {unique.map((i) => (
+                    <span key={i}>{fmt(times[i])}</span>
+                  ))}
+                </>
+              );
+            })()}
+          </div>
+        )}
       </div>
 
       {/* RSI Panel */}

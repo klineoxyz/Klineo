@@ -168,6 +168,16 @@ export function LightweightChartsWidget({
     }
 
     chart.timeScale().fitContent();
+    chart.timeScale().applyOptions({
+      visible: true,
+      timeVisible: true,
+      secondsVisible: true,
+      borderVisible: true,
+      ticksVisible: true,
+      minimumHeight: 48,
+      tickMarkFormatter: THEME.timeScale.tickMarkFormatter,
+      tickMarkMaxCharacterLength: THEME.timeScale.tickMarkMaxCharacterLength,
+    });
     chartRef.current = chart;
 
     if (!autoSize) {
