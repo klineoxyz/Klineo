@@ -290,26 +290,19 @@ function SubscriptionContent({
                         <Bot className="size-4 shrink-0 text-accent" />
                         <span><strong className="text-foreground">{features.bots}</strong> auto-trade bot{features.bots === 1 ? "" : "s"}</span>
                       </li>
-                      {features.canCreateStrategy ? (
-                        <li className="flex items-center gap-2">
-                          <Sparkles className="size-4 shrink-0 text-accent" />
-                          <span className="text-foreground">Create your own strategy</span>
-                        </li>
-                      ) : (
-                        <li className="flex items-center gap-2 opacity-75">
-                          <Sparkles className="size-4 shrink-0" />
-                          <span>Create strategy — upgrade to Most Popular</span>
-                        </li>
-                      )}
+                      <li className="flex items-center gap-2">
+                        <Sparkles className="size-4 shrink-0 text-accent" />
+                        <span className="text-foreground">Create your own strategy</span>
+                      </li>
                       {features.listStrategyInMarket ? (
                         <li className="flex items-center gap-2">
                           <Store className="size-4 shrink-0 text-accent" />
-                          <span className="text-foreground">List Strategy bot in the Market so your community can follow your strategy</span>
+                          <span className="text-foreground">Share your strategy as a bot — list in Market so your community can follow</span>
                         </li>
                       ) : (
                         <li className="flex items-center gap-2 opacity-75">
                           <Store className="size-4 shrink-0" />
-                          <span>List strategy in Market — upgrade to Boost or higher</span>
+                          <span>Share strategy as bot (list in Market) — upgrade to Boost or higher</span>
                         </li>
                       )}
                     </ul>
