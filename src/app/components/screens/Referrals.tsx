@@ -158,25 +158,33 @@ export function Referrals({ onNavigate }: ReferralsProps) {
           {/* Reward split diagram: each segment (bar) with label directly underneath */}
           <div className="space-y-2">
             <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Pool split (of 70%)</div>
-            <div className="flex min-w-0 rounded-md border border-border/50 bg-muted/30 overflow-hidden" role="img" aria-label="Community rewards pool: Level 1 30%, Level 2 20%, Level 3 10%, Level 4 8%, Level 5 6%, Level 6 4%, Level 7 2%">
-              {[
-                { flex: 30, label: "L1 30%", barClass: "bg-primary/90 hover:bg-primary" },
-                { flex: 20, label: "L2 20%", barClass: "bg-primary/80 hover:bg-primary/90" },
-                { flex: 10, label: "L3 10%", barClass: "bg-primary/70 hover:bg-primary/80" },
-                { flex: 8, label: "L4 8%", barClass: "bg-primary/60 hover:bg-primary/70" },
-                { flex: 6, label: "L5 6%", barClass: "bg-primary/50 hover:bg-primary/60" },
-                { flex: 4, label: "L6 4%", barClass: "bg-primary/40 hover:bg-primary/50" },
-                { flex: 2, label: "L7 2%", barClass: "bg-primary/30 hover:bg-primary/40 rounded-r-md" },
-              ].map((item, i) => (
-                <div key={i} className="flex flex-col min-w-0 flex-1" style={{ flex: item.flex }}>
-                  <div className={`h-10 flex items-center justify-center text-[10px] font-medium text-primary-foreground ${item.barClass}`} title={item.label}>
-                    {item.flex}%
+            <div className="space-y-1" role="img" aria-label="Community rewards pool: Level 1 30%, Level 2 20%, Level 3 10%, Level 4 8%, Level 5 6%, Level 6 4%, Level 7 2%">
+              {/* Proportional bar: segments only, no per-segment labels */}
+              <div className="flex min-w-0 rounded-md border border-border/50 overflow-hidden">
+                {[
+                  { flex: 30, barClass: "bg-primary/90 hover:bg-primary" },
+                  { flex: 20, barClass: "bg-primary/80 hover:bg-primary/90" },
+                  { flex: 10, barClass: "bg-primary/70 hover:bg-primary/80" },
+                  { flex: 8, barClass: "bg-primary/60 hover:bg-primary/70" },
+                  { flex: 6, barClass: "bg-primary/50 hover:bg-primary/60" },
+                  { flex: 4, barClass: "bg-primary/40 hover:bg-primary/50" },
+                  { flex: 2, barClass: "bg-primary/30 hover:bg-primary/40 rounded-r-md" },
+                ].map((item, i) => (
+                  <div key={i} className="flex-1 min-w-0 h-10 flex items-center justify-center" style={{ flex: item.flex }} title={`L${i + 1} ${item.flex}%`}>
+                    <div className={`w-full h-full flex items-center justify-center text-[10px] font-medium text-primary-foreground ${item.barClass}`}>
+                      {item.flex}%
+                    </div>
                   </div>
-                  <div className="py-1.5 text-center text-[10px] sm:text-xs text-muted-foreground font-medium border-t border-border/50 bg-muted/20">
-                    {item.label}
+                ))}
+              </div>
+              {/* Labels in one row with equal space so L7 2% is never squished */}
+              <div className="grid grid-cols-7 gap-0.5 text-center">
+                {["L1 30%", "L2 20%", "L3 10%", "L4 8%", "L5 6%", "L6 4%", "L7 2%"].map((label, i) => (
+                  <div key={i} className="py-1 text-[10px] sm:text-xs text-muted-foreground font-medium truncate px-0.5" title={label}>
+                    {label}
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           </div>
         </section>
