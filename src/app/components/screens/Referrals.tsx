@@ -90,29 +90,61 @@ export function Referrals({ onNavigate }: ReferralsProps) {
             <li>• Rewards are from purchases only—not from trading PnL or balances</li>
             <li>• Minimum payout: $50.00 USDT</li>
           </ul>
-          {/* Hierarchical network diagram: simple icons like reference image (1 → 2 → 4 → 8, up to 7 levels) */}
+          {/* Hierarchical network diagram with connecting lines (1 → 2 → 4 → 8, up to 7 levels) */}
           <div className="space-y-2">
             <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Network structure (up to 7 levels)</div>
-            <div className="flex flex-col items-center py-3 gap-3">
-              <div className="flex justify-center">
-                <div className="rounded-full bg-primary p-2 text-primary-foreground" title="L1"><User className="size-5" /></div>
-              </div>
-              <div className="flex justify-center gap-6">
-                <div className="rounded-full bg-primary/80 p-2 text-primary-foreground" title="L2"><User className="size-5" /></div>
-                <div className="rounded-full bg-primary/80 p-2 text-primary-foreground" title="L2"><User className="size-5" /></div>
-              </div>
-              <div className="flex justify-center gap-3">
-                {[1, 2, 3, 4].map((i) => (
-                  <div key={i} className="rounded-full bg-primary/60 p-2 text-primary-foreground" title="L3"><User className="size-4" /></div>
-                ))}
-              </div>
-              <div className="flex justify-center gap-2 flex-wrap max-w-[200px]">
-                {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
-                  <div key={i} className="rounded-full bg-primary/40 p-1.5 text-primary-foreground" title="L4"><User className="size-3" /></div>
-                ))}
-              </div>
-              <p className="text-[10px] text-muted-foreground mt-1">L1 → L2 → … → L7 · Rewards flow down your network</p>
+            <div className="relative w-full aspect-[2/1.6] max-h-[220px] min-h-[160px]">
+              <svg className="absolute inset-0 w-full h-full text-primary" viewBox="0 0 100 80" preserveAspectRatio="xMidYMid meet" aria-hidden>
+                <defs>
+                  <linearGradient id="ref-line" x1="0%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%" stopColor="currentColor" stopOpacity="0.85" />
+                    <stop offset="100%" stopColor="currentColor" stopOpacity="0.35" />
+                  </linearGradient>
+                </defs>
+                {/* L1 → L2 */}
+                <line x1="50" y1="10" x2="28" y2="28" stroke="url(#ref-line)" strokeWidth="1.2" fill="none" />
+                <line x1="50" y1="10" x2="72" y2="28" stroke="url(#ref-line)" strokeWidth="1.2" fill="none" />
+                {/* L2 → L3 */}
+                <line x1="28" y1="28" x2="14" y2="46" stroke="url(#ref-line)" strokeWidth="1.1" fill="none" />
+                <line x1="28" y1="28" x2="42" y2="46" stroke="url(#ref-line)" strokeWidth="1.1" fill="none" />
+                <line x1="72" y1="28" x2="58" y2="46" stroke="url(#ref-line)" strokeWidth="1.1" fill="none" />
+                <line x1="72" y1="28" x2="86" y2="46" stroke="url(#ref-line)" strokeWidth="1.1" fill="none" />
+                {/* L3 → L4 */}
+                <line x1="14" y1="46" x2="7" y2="64" stroke="url(#ref-line)" strokeWidth="1" fill="none" />
+                <line x1="14" y1="46" x2="21" y2="64" stroke="url(#ref-line)" strokeWidth="1" fill="none" />
+                <line x1="42" y1="46" x2="35" y2="64" stroke="url(#ref-line)" strokeWidth="1" fill="none" />
+                <line x1="42" y1="46" x2="49" y2="64" stroke="url(#ref-line)" strokeWidth="1" fill="none" />
+                <line x1="58" y1="46" x2="51" y2="64" stroke="url(#ref-line)" strokeWidth="1" fill="none" />
+                <line x1="58" y1="46" x2="65" y2="64" stroke="url(#ref-line)" strokeWidth="1" fill="none" />
+                <line x1="86" y1="46" x2="79" y2="64" stroke="url(#ref-line)" strokeWidth="1" fill="none" />
+                <line x1="86" y1="46" x2="93" y2="64" stroke="url(#ref-line)" strokeWidth="1" fill="none" />
+              </svg>
+              {/* Nodes (positions match SVG coordinates: x,y in viewBox 0 0 100 80 → left %, top %) */}
+              <div className="absolute rounded-full bg-primary p-1.5 text-primary-foreground shadow-sm -translate-x-1/2 -translate-y-1/2" style={{ left: "50%", top: "12.5%" }} title="L1"><User className="size-4 sm:size-5" /></div>
+              <div className="absolute rounded-full bg-primary/85 p-1.5 text-primary-foreground shadow-sm -translate-x-1/2 -translate-y-1/2" style={{ left: "28%", top: "35%" }} title="L2"><User className="size-3 sm:size-4" /></div>
+              <div className="absolute rounded-full bg-primary/85 p-1.5 text-primary-foreground shadow-sm -translate-x-1/2 -translate-y-1/2" style={{ left: "72%", top: "35%" }} title="L2"><User className="size-3 sm:size-4" /></div>
+              {[
+                { left: 14, top: 57.5 },
+                { left: 42, top: 57.5 },
+                { left: 58, top: 57.5 },
+                { left: 86, top: 57.5 },
+              ].map((pos, i) => (
+                <div key={i} className="absolute rounded-full bg-primary/65 p-1.5 text-primary-foreground shadow-sm -translate-x-1/2 -translate-y-1/2" style={{ left: `${pos.left}%`, top: `${pos.top}%` }} title="L3"><User className="size-3" /></div>
+              ))}
+              {[
+                { left: 7, top: 80 },
+                { left: 21, top: 80 },
+                { left: 35, top: 80 },
+                { left: 49, top: 80 },
+                { left: 51, top: 80 },
+                { left: 65, top: 80 },
+                { left: 79, top: 80 },
+                { left: 93, top: 80 },
+              ].map((pos, i) => (
+                <div key={i} className="absolute rounded-full bg-primary/45 p-1 text-primary-foreground shadow-sm -translate-x-1/2 -translate-y-1/2" style={{ left: `${pos.left}%`, top: `${pos.top}%` }} title="L4"><User className="size-2.5 sm:size-3" /></div>
+              ))}
             </div>
+            <p className="text-[10px] text-muted-foreground text-center">L1 → L2 → … → L7 · Rewards flow down your network</p>
           </div>
           {/* Reward split diagram: 70% pool split across 7 levels */}
           <div className="space-y-2">
