@@ -9,6 +9,36 @@ import { testConnection, getAccountInfo, type BinanceCredentials } from '../lib/
 
 let supabase: SupabaseClient | null = null;
 
+/**
+ * Normalize encrypted_config from DB to base64 string for decrypt().
+ * Postgres bytea can be returned as Buffer, hex string (\x... or 0x...), base64 string, or JSON Buffer object.
+ */
+function encryptedConfigToBase64(raw: unknown): string {
+  if (Buffer.isBuffer(raw)) {
+    return raw.toString('base64');
+  }
+  if (typeof raw === 'string') {
+    if (raw.startsWith('\\x') || raw.startsWith('0x')) {
+      const hex = raw.replace(/^\\x|^0x/i, '');
+      return Buffer.from(hex, 'hex').toString('base64');
+    }
+    return raw;
+  }
+  if (
+    raw &&
+    typeof raw === 'object' &&
+    'type' in (raw as object) &&
+    (raw as { type: string }).type === 'Buffer' &&
+    Array.isArray((raw as { data: number[] }).data)
+  ) {
+    return Buffer.from((raw as { data: number[] }).data).toString('base64');
+  }
+  if (raw && typeof raw === 'object' && ArrayBuffer.isView(raw) && !Buffer.isBuffer(raw)) {
+    return Buffer.from(raw as Uint8Array).toString('base64');
+  }
+  throw new Error('Invalid encrypted_config format');
+}
+
 function getSupabase(): SupabaseClient | null {
   if (supabase) return supabase;
   const url = process.env.SUPABASE_URL;
@@ -190,7 +220,7 @@ exchangeConnectionsRouter.post(
       // Decrypt credentials
       let credentials: BinanceCredentials;
       try {
-        const encryptedBase64 = Buffer.from(connection.encrypted_config).toString('base64');
+        const encryptedBase64 = encryptedConfigToBase64(connection.encrypted_config);
         const decryptedJson = await decrypt(encryptedBase64);
         const parsed = JSON.parse(decryptedJson);
         credentials = {
@@ -280,7 +310,7 @@ exchangeConnectionsRouter.get('/balance', async (req: AuthenticatedRequest, res)
 
     let credentials: BinanceCredentials;
     try {
-      const encryptedBase64 = Buffer.from(connection.encrypted_config).toString('base64');
+      const encryptedBase64 = encryptedConfigToBase64(connection.encrypted_config);
       const decryptedJson = await decrypt(encryptedBase64);
       const parsed = JSON.parse(decryptedJson);
       credentials = {
