@@ -47,13 +47,13 @@ export function Referrals({ onNavigate }: ReferralsProps) {
         <p className="text-sm text-muted-foreground">Earn from the 70% community rewards pool when people in your network pay onboarding fees or buy packages</p>
       </div>
 
-      {/* Referral Info */}
-      <Card className="p-4 sm:p-6 space-y-4 sm:space-y-6">
-        <div>
-          <h3 className="text-base sm:text-lg font-semibold mb-4">Your Referral Details</h3>
+      {/* Referral Info — Your Referral Details + Community Rewards visible on UI */}
+      <Card className="p-4 sm:p-6 flex flex-col gap-6 overflow-visible">
+        <section className="space-y-4">
+          <h3 className="text-base sm:text-lg font-semibold">Your Referral Details</h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
             <div className="space-y-2 min-w-0">
-              <label className="text-xs text-muted-foreground uppercase tracking-wide">Referral Link</label>
+              <Label className="text-xs text-muted-foreground uppercase tracking-wide">Referral Link</Label>
               <div className="flex gap-2 flex-col sm:flex-row">
                 <Input value={referralData.link} readOnly className="font-mono text-sm min-w-0" />
                 <Button
@@ -66,7 +66,7 @@ export function Referrals({ onNavigate }: ReferralsProps) {
               </div>
             </div>
             <div className="space-y-2 min-w-0">
-              <label className="text-xs text-muted-foreground uppercase tracking-wide">Referral Code</label>
+              <Label className="text-xs text-muted-foreground uppercase tracking-wide">Referral Code</Label>
               <div className="flex gap-2 flex-col sm:flex-row">
                 <Input value={referralData.code} readOnly className="font-mono text-sm min-w-0" />
                 <Button
@@ -79,9 +79,11 @@ export function Referrals({ onNavigate }: ReferralsProps) {
               </div>
             </div>
           </div>
-        </div>
+        </section>
 
-        <div className="p-4 bg-secondary/30 rounded space-y-4">
+        <Separator />
+
+        <section className="p-4 bg-secondary/30 rounded-lg space-y-4">
           <h4 className="font-semibold text-sm">Community Rewards (70% pool)</h4>
           <ul className="space-y-1 text-sm text-muted-foreground">
             <li>• <span className="text-primary font-medium">70%</span> of every onboarding fee and package purchase goes to the community rewards pool</li>
@@ -134,7 +136,7 @@ export function Referrals({ onNavigate }: ReferralsProps) {
               <span>L7 2%</span>
             </div>
           </div>
-        </div>
+        </section>
       </Card>
 
       {/* Earnings Summary */}
