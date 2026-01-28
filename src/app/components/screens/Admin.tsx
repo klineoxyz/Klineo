@@ -10,9 +10,10 @@ import { Label } from "@/app/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/app/components/ui/select";
 import { Textarea } from "@/app/components/ui/textarea";
 import { ConfirmationDialog } from "@/app/components/ui/confirmation-dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/app/components/ui/dialog";
 import { toast } from "@/app/lib/toast";
 import { copyToClipboard } from "@/app/lib/clipboard";
-import { Search, Shield, ChevronLeft, ChevronRight, Download, Filter, Settings2, Percent, Calendar, Save, Copy, Link2, Trash2, RefreshCw, Ticket } from "lucide-react";
+import { Search, Shield, ChevronLeft, ChevronRight, Download, Filter, Settings2, Percent, Calendar, Save, Copy, Link2, Trash2, RefreshCw, Ticket, Banknote, CheckCircle } from "lucide-react";
 
 // Mock data removed - now loaded from API
 
@@ -58,6 +59,11 @@ export function Admin() {
   const [durationMonths, setDurationMonths] = useState("");
   const [couponExpiry, setCouponExpiry] = useState("");
   const [couponDescription, setCouponDescription] = useState("");
+
+  // Mark referral payout as paid
+  const [markPaidPayout, setMarkPaidPayout] = useState<{ id: string; referrer: string; amount: number } | null>(null);
+  const [markPaidTransactionId, setMarkPaidTransactionId] = useState("");
+  const [markPaidLoading, setMarkPaidLoading] = useState(false);
 
   // Load stats on mount
   useEffect(() => {

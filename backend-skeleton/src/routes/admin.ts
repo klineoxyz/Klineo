@@ -528,7 +528,7 @@ adminRouter.get('/referrals', async (req, res) => {
   try {
     const { data: earnings, error: earningsErr } = await client
       .from('purchase_referral_earnings')
-      .select('id, purchase_id, level, user_id, amount, currency, rate_pct, created_at')
+      .select('id, purchase_id, level, user_id, amount, currency, rate_pct, created_at, payout_status, paid_at, transaction_id')
       .order('created_at', { ascending: false })
       .limit(500);
 
@@ -563,6 +563,7 @@ adminRouter.get('/referrals', async (req, res) => {
       const purchaseType = purchase?.purchase_type === 'onboarding_fee' ? 'Onboarding fee' : purchase?.purchase_type === 'package' ? 'Package' : purchase?.purchase_type || '—';
 
       return {
+        id: e.id,
         referrer: referrerEmail,
         referrerId: e.user_id,
         level: e.level,
@@ -575,6 +576,9 @@ adminRouter.get('/referrals', async (req, res) => {
           day: 'numeric',
           year: 'numeric',
         }),
+        payoutStatus: e.payout_status ?? 'pending',
+        paidAt: e.paid_at ? new Date(e.paid_at).toISOString() : null,
+        transactionId: e.transaction_id ?? null,
       };
     });
 
@@ -588,6 +592,50 @@ adminRouter.get('/referrals', async (req, res) => {
   } catch (err) {
     console.error('Admin referrals error:', err);
     res.status(500).json({ error: 'Failed to fetch referrals' });
+  }
+});
+
+/**
+ * PATCH /api/admin/referrals/:id/mark-paid
+ * Admin marks a referral payout as paid and records transaction (e.g. tx hash).
+ */
+adminRouter.patch('/referrals/:id/mark-paid', async (req, res) => {
+  const client = getSupabase();
+  if (!client) {
+    return res.status(503).json({ error: 'Database unavailable' });
+  }
+
+  const { id } = req.params;
+  const { transactionId } = req.body as { transactionId?: string };
+
+  if (!id) {
+    return res.status(400).json({ error: 'Missing payout id' });
+  }
+
+  try {
+    const { data, error } = await client
+      .from('purchase_referral_earnings')
+      .update({
+        payout_status: 'paid',
+        paid_at: new Date().toISOString(),
+        transaction_id: typeof transactionId === 'string' && transactionId.trim() ? transactionId.trim() : null,
+      })
+      .eq('id', id)
+      .select('id')
+      .single();
+
+    if (error) {
+      console.error('Admin mark-paid error:', error);
+      return res.status(500).json({ error: 'Failed to update payout' });
+    }
+    if (!data) {
+      return res.status(404).json({ error: 'Payout not found' });
+    }
+
+    res.json({ ok: true, id: data.id });
+  } catch (err) {
+    console.error('Admin mark-paid error:', err);
+    res.status(500).json({ error: 'Failed to update payout' });
   }
 });
 
