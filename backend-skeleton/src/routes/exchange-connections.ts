@@ -122,10 +122,9 @@ exchangeConnectionsRouter.post(
     const { exchange, environment = 'production', label, apiKey, apiSecret } = req.body;
 
     try {
-      // Encrypt credentials
+      // Encrypt credentials (store as base64 TEXT to avoid bytea serialization issues)
       const credentialsJson = JSON.stringify({ apiKey, apiSecret });
       const encryptedConfig = await encrypt(credentialsJson);
-      const encryptedBuffer = Buffer.from(encryptedConfig, 'base64');
 
       // Check if connection already exists (upsert)
       const { data: existing } = await client
@@ -140,7 +139,7 @@ exchangeConnectionsRouter.post(
         exchange,
         environment,
         label: label || null,
-        encrypted_config: encryptedBuffer,
+        encrypted_config_b64: encryptedConfig,
         updated_at: new Date().toISOString(),
       };
 
@@ -201,10 +200,10 @@ exchangeConnectionsRouter.post(
     const connectionId = req.params.id;
 
     try {
-      // Fetch connection
+      // Fetch connection (prefer encrypted_config_b64 TEXT over bytea for reliable read)
       const { data: connection, error: fetchError } = await client
         .from('user_exchange_connections')
-        .select('id, exchange, environment, encrypted_config')
+        .select('id, exchange, environment, encrypted_config_b64, encrypted_config')
         .eq('id', connectionId)
         .eq('user_id', req.user!.id)
         .single();
@@ -213,14 +212,18 @@ exchangeConnectionsRouter.post(
         return res.status(404).json({ error: 'Connection not found', requestId });
       }
 
-      if (!connection.encrypted_config) {
+      const hasB64 = typeof connection.encrypted_config_b64 === 'string' && connection.encrypted_config_b64.length > 0;
+      const hasBytea = connection.encrypted_config != null;
+      if (!hasB64 && !hasBytea) {
         return res.status(400).json({ error: 'Connection has no credentials', requestId });
       }
 
-      // Decrypt credentials
+      // Decrypt credentials (prefer base64 TEXT; fallback to bytea)
       let credentials: BinanceCredentials;
       try {
-        const encryptedBase64 = encryptedConfigToBase64(connection.encrypted_config);
+        const encryptedBase64 = hasB64
+          ? connection.encrypted_config_b64
+          : encryptedConfigToBase64(connection.encrypted_config);
         const decryptedJson = await decrypt(encryptedBase64);
         const parsed = JSON.parse(decryptedJson);
         credentials = {
@@ -229,8 +232,13 @@ exchangeConnectionsRouter.post(
           environment: (connection.environment || 'production') as 'production' | 'testnet',
         };
       } catch (decryptError) {
-        console.error(`[${requestId}] Decryption failed:`, decryptError instanceof Error ? decryptError.message : 'Unknown');
-        return res.status(500).json({ error: 'Failed to decrypt credentials', requestId });
+        const msg = decryptError instanceof Error ? decryptError.message : 'Unknown';
+        console.error(`[${requestId}] Decryption failed:`, msg);
+        return res.status(500).json({
+          error: 'Failed to decrypt credentials',
+          message: 'Credentials could not be decrypted. Ensure ENCRYPTION_KEY is set on the server and unchanged since the connection was saved. Try removing and re-adding the exchange in Settings.',
+          requestId,
+        });
       }
 
       // Test connection
@@ -281,7 +289,7 @@ exchangeConnectionsRouter.get('/balance', async (req: AuthenticatedRequest, res)
   try {
     const { data: connections, error: listError } = await client
       .from('user_exchange_connections')
-      .select('id, exchange, environment, encrypted_config')
+      .select('id, exchange, environment, encrypted_config_b64, encrypted_config')
       .eq('user_id', req.user!.id)
       .eq('exchange', 'binance')
       .order('created_at', { ascending: false })
@@ -298,7 +306,9 @@ exchangeConnectionsRouter.get('/balance', async (req: AuthenticatedRequest, res)
     }
 
     const connection = connections[0];
-    if (!connection.encrypted_config) {
+    const hasB64 = typeof connection.encrypted_config_b64 === 'string' && connection.encrypted_config_b64.length > 0;
+    const hasBytea = connection.encrypted_config != null;
+    if (!hasB64 && !hasBytea) {
       return res.status(200).json({
         connected: false,
         exchange: 'binance',
@@ -310,7 +320,9 @@ exchangeConnectionsRouter.get('/balance', async (req: AuthenticatedRequest, res)
 
     let credentials: BinanceCredentials;
     try {
-      const encryptedBase64 = encryptedConfigToBase64(connection.encrypted_config);
+      const encryptedBase64 = hasB64
+        ? connection.encrypted_config_b64
+        : encryptedConfigToBase64(connection.encrypted_config);
       const decryptedJson = await decrypt(encryptedBase64);
       const parsed = JSON.parse(decryptedJson);
       credentials = {
@@ -320,7 +332,11 @@ exchangeConnectionsRouter.get('/balance', async (req: AuthenticatedRequest, res)
       };
     } catch (decryptError) {
       console.error(`[${requestId}] Balance: decryption failed`);
-      return res.status(500).json({ error: 'Failed to decrypt credentials', requestId });
+      return res.status(500).json({
+        error: 'Failed to decrypt credentials',
+        message: 'Credentials could not be decrypted. Ensure ENCRYPTION_KEY is set on the server and unchanged since the connection was saved. Try removing and re-adding the exchange in Settings.',
+        requestId,
+      });
     }
 
     const account = await getAccountInfo(credentials);

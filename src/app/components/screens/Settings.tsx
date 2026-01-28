@@ -215,7 +215,15 @@ export function Settings() {
       const data = await exchangeConnections.list();
       setExchangeConnectionsList(data.connections);
     } catch (err: any) {
-      toast.error('Test failed', { description: err?.message });
+      let description = err?.message;
+      try {
+        const body = typeof err?.message === 'string' ? JSON.parse(err.message) : null;
+        if (body?.message) description = body.message;
+        else if (body?.error && !description?.includes(body.error)) description = [body.error, body.message].filter(Boolean).join(' — ');
+      } catch {
+        /* use raw message */
+      }
+      toast.error('Test failed', { description });
     } finally {
       setTestingId(null);
     }
