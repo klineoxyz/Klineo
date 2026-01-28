@@ -78,9 +78,17 @@ export interface ExchangeConnection {
 }
 
 export interface CreateConnectionRequest {
-  exchange: 'binance';
+  exchange: 'binance' | 'bybit';
   environment?: 'production' | 'testnet';
   label?: string;
+  apiKey: string;
+  apiSecret: string;
+}
+
+/** Body for POST /api/exchange-connections/test (test credentials without saving) */
+export interface TestConnectionRequest {
+  exchange: 'binance' | 'bybit';
+  environment?: 'production' | 'testnet';
   apiKey: string;
   apiSecret: string;
 }
@@ -166,7 +174,14 @@ export const exchangeConnections = {
   },
 
   /**
-   * Test exchange connection
+   * Test credentials before saving (no persistence). Call before "Save Connection".
+   */
+  testBeforeSave: async (data: TestConnectionRequest): Promise<{ success: boolean; ok?: boolean; latencyMs?: number; message?: string; error?: string; requestId?: string }> => {
+    return api.post('/api/exchange-connections/test', data);
+  },
+
+  /**
+   * Test existing exchange connection (by id)
    */
   test: async (id: string): Promise<TestConnectionResponse> => {
     return api.post(`/api/exchange-connections/${id}/test`);

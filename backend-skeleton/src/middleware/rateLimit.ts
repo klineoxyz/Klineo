@@ -37,3 +37,15 @@ export const adminLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
 });
+
+/**
+ * Rate limiter for exchange connection attempts (test + save)
+ * 10 attempts per 15 minutes per IP to prevent credential stuffing
+ */
+export const exchangeConnectionLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: 'Too many connection attempts, please try again later.',
+  standardHeaders: true,
+  legacyHeaders: false,
+});

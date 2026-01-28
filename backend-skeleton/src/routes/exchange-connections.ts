@@ -2,10 +2,12 @@ import { Router } from 'express';
 import { verifySupabaseJWT, AuthenticatedRequest } from '../middleware/auth.js';
 import { requireJoiningFee } from '../middleware/requireEntitlement.js';
 import { validate, uuidParam } from '../middleware/validation.js';
+import { exchangeConnectionLimiter } from '../middleware/rateLimit.js';
 import { body } from 'express-validator';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { encrypt, decrypt, maskApiKey } from '../lib/crypto.js';
-import { testConnection, getAccountInfo, type BinanceCredentials } from '../lib/binance.js';
+import { testConnection as binanceTestConnection, getAccountInfo as binanceGetAccountInfo, type BinanceCredentials } from '../lib/binance.js';
+import { testConnection as bybitTestConnection, getWalletBalance as bybitGetWalletBalance, type BybitCredentials } from '../lib/bybit.js';
 
 let supabase: SupabaseClient | null = null;
 
@@ -57,6 +59,61 @@ export const exchangeConnectionsRouter: Router = Router();
 exchangeConnectionsRouter.use(verifySupabaseJWT);
 
 /**
+ * POST /api/exchange-connections/test
+ * Test credentials WITHOUT saving. Use before "Save Connection".
+ * Body: { exchange, environment, apiKey, apiSecret }
+ */
+exchangeConnectionsRouter.post(
+  '/test',
+  exchangeConnectionLimiter,
+  validate([
+    body('exchange').isIn(['binance', 'bybit']).withMessage('Exchange must be binance or bybit'),
+    body('environment').optional().isIn(['production', 'testnet']).withMessage('Environment must be production or testnet'),
+    body('apiKey').isString().isLength({ min: 10, max: 200 }).withMessage('API key must be 10-200 characters'),
+    body('apiSecret').isString().isLength({ min: 10, max: 200 }).withMessage('API secret must be 10-200 characters'),
+  ]),
+  async (req: AuthenticatedRequest, res) => {
+    const requestId = (req as any).requestId || 'unknown';
+    const { exchange, environment = 'production', apiKey, apiSecret } = req.body;
+
+    try {
+      let result: { ok: boolean; latencyMs: number; message: string; error?: string };
+      if (exchange === 'binance') {
+        result = await binanceTestConnection({
+          apiKey,
+          apiSecret,
+          environment: environment as 'production' | 'testnet',
+        });
+      } else if (exchange === 'bybit') {
+        result = await bybitTestConnection({
+          apiKey,
+          apiSecret,
+          environment: environment as 'production' | 'testnet',
+        });
+      } else {
+        return res.status(400).json({ error: 'Unsupported exchange', requestId });
+      }
+
+      if (result.ok) {
+        return res.json({ success: true, ok: true, latencyMs: result.latencyMs, message: result.message, requestId });
+      }
+      return res.status(400).json({
+        success: false,
+        ok: false,
+        message: result.message,
+        error: result.error,
+        requestId,
+      });
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+      const sanitized = errorMessage.replace(/api[_-]?key/gi, '[REDACTED]').replace(/secret/gi, '[REDACTED]');
+      console.error(`[${requestId}] Test connection error:`, sanitized);
+      return res.status(500).json({ error: 'Connection test failed', message: sanitized, requestId });
+    }
+  }
+);
+
+/**
  * GET /api/exchange-connections
  * List current user's exchange connections (masked, no secrets)
  */
@@ -105,8 +162,9 @@ exchangeConnectionsRouter.get('/', async (req: AuthenticatedRequest, res) => {
 exchangeConnectionsRouter.post(
   '/',
   requireJoiningFee,
+  exchangeConnectionLimiter,
   validate([
-    body('exchange').isString().equals('binance').withMessage('Only binance is supported'),
+    body('exchange').isIn(['binance', 'bybit']).withMessage('Exchange must be binance or bybit'),
     body('environment').optional().isIn(['production', 'testnet']).withMessage('Environment must be production or testnet'),
     body('label').optional().isString().isLength({ max: 40 }).withMessage('Label must be <= 40 characters'),
     body('apiKey').isString().isLength({ min: 10, max: 200 }).withMessage('API key must be 10-200 characters'),
@@ -223,15 +281,18 @@ exchangeConnectionsRouter.post(
       }
 
       // Decrypt credentials (only from encrypted_config_b64; old bytea is not used)
-      let credentials: BinanceCredentials;
+      const env = (connection.environment || 'production') as 'production' | 'testnet';
+      let testResult: { ok: boolean; latencyMs: number; message: string; error?: string };
       try {
         const decryptedJson = await decrypt(connection.encrypted_config_b64);
         const parsed = JSON.parse(decryptedJson);
-        credentials = {
-          apiKey: parsed.apiKey,
-          apiSecret: parsed.apiSecret,
-          environment: (connection.environment || 'production') as 'production' | 'testnet',
-        };
+        if (connection.exchange === 'bybit') {
+          const creds: BybitCredentials = { apiKey: parsed.apiKey, apiSecret: parsed.apiSecret, environment: env };
+          testResult = await bybitTestConnection(creds);
+        } else {
+          const creds: BinanceCredentials = { apiKey: parsed.apiKey, apiSecret: parsed.apiSecret, environment: env };
+          testResult = await binanceTestConnection(creds);
+        }
       } catch (decryptError) {
         const msg = decryptError instanceof Error ? decryptError.message : 'Unknown';
         console.error(`[${requestId}] Decryption failed:`, msg);
@@ -242,14 +303,13 @@ exchangeConnectionsRouter.post(
         });
       }
 
-      // Test connection
-      const testResult = await testConnection(credentials);
+      // testResult already set above
 
-      // Update connection with test results
+      // Update connection with test results (testResult set above per exchange)
       const updateData: any = {
         last_tested_at: new Date().toISOString(),
-        last_test_status: testResult.ok ? 'ok' : 'fail',
-        last_error_message: testResult.error || null,
+        last_test_status: testResult!.ok ? 'ok' : 'fail',
+        last_error_message: testResult!.error || null,
         updated_at: new Date().toISOString(),
       };
 
@@ -292,7 +352,7 @@ exchangeConnectionsRouter.get('/balance', async (req: AuthenticatedRequest, res)
       .from('user_exchange_connections')
       .select('id, exchange, environment, encrypted_config_b64, encrypted_config')
       .eq('user_id', req.user!.id)
-      .eq('exchange', 'binance')
+      .in('exchange', ['binance', 'bybit'])
       .order('created_at', { ascending: false })
       .limit(1);
 
@@ -311,22 +371,35 @@ exchangeConnectionsRouter.get('/balance', async (req: AuthenticatedRequest, res)
     if (!hasB64) {
       return res.status(200).json({
         connected: false,
-        exchange: 'binance',
+        exchange: connection.exchange,
         connectionId: connection.id,
         balances: {},
         requestId,
       });
     }
 
-    let credentials: BinanceCredentials;
+    const env = (connection.environment || 'production') as 'production' | 'testnet';
+    let balances: Record<string, { free: string; locked: string }> = {};
     try {
       const decryptedJson = await decrypt(connection.encrypted_config_b64);
       const parsed = JSON.parse(decryptedJson);
-      credentials = {
-        apiKey: parsed.apiKey,
-        apiSecret: parsed.apiSecret,
-        environment: (connection.environment || 'production') as 'production' | 'testnet',
-      };
+      if (connection.exchange === 'bybit') {
+        const creds: BybitCredentials = { apiKey: parsed.apiKey, apiSecret: parsed.apiSecret, environment: env };
+        const wallet = await bybitGetWalletBalance(creds);
+        for (const b of wallet.balances) {
+          balances[b.asset] = { free: b.free, locked: b.locked };
+        }
+      } else {
+        const creds: BinanceCredentials = { apiKey: parsed.apiKey, apiSecret: parsed.apiSecret, environment: env };
+        const account = await binanceGetAccountInfo(creds);
+        for (const b of account.balances) {
+          const free = parseFloat(b.free);
+          const locked = parseFloat(b.locked);
+          if (free > 0 || locked > 0) {
+            balances[b.asset] = { free: b.free, locked: b.locked };
+          }
+        }
+      }
     } catch (decryptError) {
       console.error(`[${requestId}] Balance: decryption failed`);
       return res.status(500).json({
@@ -336,19 +409,9 @@ exchangeConnectionsRouter.get('/balance', async (req: AuthenticatedRequest, res)
       });
     }
 
-    const account = await getAccountInfo(credentials);
-    const balances: Record<string, { free: string; locked: string }> = {};
-    for (const b of account.balances) {
-      const free = parseFloat(b.free);
-      const locked = parseFloat(b.locked);
-      if (free > 0 || locked > 0) {
-        balances[b.asset] = { free: b.free, locked: b.locked };
-      }
-    }
-
     res.json({
       connected: true,
-      exchange: 'binance',
+      exchange: connection.exchange,
       connectionId: connection.id,
       balances,
       requestId,

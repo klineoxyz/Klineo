@@ -41,13 +41,14 @@ export function Settings() {
   const [exchangeConnectionsLoading, setExchangeConnectionsLoading] = useState(true);
   const [showAddForm, setShowAddForm] = useState(false);
   const [formData, setFormData] = useState({
-    exchange: 'binance' as const,
+    exchange: 'binance' as 'binance' | 'bybit',
     environment: 'production' as 'production' | 'testnet',
     label: '',
     apiKey: '',
     apiSecret: '',
   });
   const [formLoading, setFormLoading] = useState(false);
+  const [testBeforeSaveLoading, setTestBeforeSaveLoading] = useState(false);
   const [testingId, setTestingId] = useState<string | null>(null);
   // Update credentials (re-save API key/secret to fix decrypt errors)
   const [updateCredsConn, setUpdateCredsConn] = useState<ExchangeConnection | null>(null);
@@ -193,9 +194,35 @@ export function Settings() {
       });
   }, [user?.id]);
 
+  const handleTestBeforeSave = async () => {
+    if (!formData.apiKey?.trim() || !formData.apiSecret?.trim()) {
+      toast.error('Enter API Key and API Secret to test');
+      return;
+    }
+    setTestBeforeSaveLoading(true);
+    try {
+      const result = await exchangeConnections.testBeforeSave({
+        exchange: formData.exchange,
+        environment: formData.environment,
+        apiKey: formData.apiKey.trim(),
+        apiSecret: formData.apiSecret.trim(),
+      });
+      if (result.success && result.ok) {
+        toast.success('Connection test passed', { description: `Latency: ${result.latencyMs ?? 0}ms` });
+      } else {
+        toast.error('Connection test failed', { description: result.error || result.message || 'Invalid credentials' });
+      }
+    } catch (err: any) {
+      const msg = err?.message || 'Test failed';
+      toast.error('Connection test failed', { description: msg.replace(/api[_-]?key|secret/gi, '[REDACTED]') });
+    } finally {
+      setTestBeforeSaveLoading(false);
+    }
+  };
+
   const handleSaveConnection = async () => {
-    if (!formData.apiKey || !formData.apiSecret) {
-      toast.error('API Key and Secret are required');
+    if (!formData.apiKey?.trim() || !formData.apiSecret?.trim()) {
+      toast.error('API Key and API Secret are required');
       return;
     }
     setFormLoading(true);
@@ -204,7 +231,6 @@ export function Settings() {
       toast.success('Connection saved');
       setShowAddForm(false);
       setFormData({ exchange: 'binance', environment: 'production', label: '', apiKey: '', apiSecret: '' });
-      // Reload connections
       const data = await exchangeConnections.list();
       setExchangeConnectionsList(data.connections);
     } catch (err: any) {
@@ -527,7 +553,7 @@ export function Settings() {
             <AlertDescription className="text-sm">
               Your API keys are encrypted and stored securely. KLINEO never has withdrawal permissions.
               <br />
-              <strong>Recommended permissions:</strong> Enable Reading, Enable Spot & Margin Trading. <strong>Do NOT</strong> enable Withdrawals.
+              <strong>Required permissions:</strong> Spot trading, Read balances, Read orders. <strong>Withdraw permission must NOT be required.</strong>
             </AlertDescription>
           </Alert>
 
@@ -543,16 +569,22 @@ export function Settings() {
 
           {showAddForm && !isDemoMode && (
             <Card className="p-6 space-y-4">
-              <h4 className="font-semibold">Add Binance Connection</h4>
+              <h4 className="font-semibold">Add connection</h4>
               <div className="space-y-4">
                 <div className="space-y-2">
-                  <Label>Label (optional)</Label>
-                  <Input
-                    placeholder="My Binance Account"
-                    value={formData.label}
-                    onChange={(e) => setFormData({ ...formData, label: e.target.value })}
-                    maxLength={40}
-                  />
+                  <Label>Exchange</Label>
+                  <Select
+                    value={formData.exchange}
+                    onValueChange={(value: 'binance' | 'bybit') => setFormData({ ...formData, exchange: value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="binance">Binance (Spot)</SelectItem>
+                      <SelectItem value="bybit">Bybit (Spot)</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="space-y-2">
                   <Label>Environment</Label>
@@ -570,38 +602,55 @@ export function Settings() {
                   </Select>
                   <p className="text-xs text-muted-foreground">
                     Use Testnet for testing with fake funds. Get testnet keys from{" "}
-                    <a href="https://testnet.binance.vision/" target="_blank" rel="noopener noreferrer" className="text-primary underline">
-                      Binance Spot Testnet
-                    </a>
+                    {formData.exchange === 'binance' ? (
+                      <a href="https://testnet.binance.vision/" target="_blank" rel="noopener noreferrer" className="text-primary underline">Binance Spot Testnet</a>
+                    ) : (
+                      <a href="https://testnet.bybit.com/app/user/api-management" target="_blank" rel="noopener noreferrer" className="text-primary underline">Bybit Testnet</a>
+                    )}
                   </p>
+                </div>
+                <div className="space-y-2">
+                  <Label>Label (optional)</Label>
+                  <Input
+                    placeholder={formData.exchange === 'binance' ? 'My Binance Account' : 'My Bybit Account'}
+                    value={formData.label}
+                    onChange={(e) => setFormData({ ...formData, label: e.target.value })}
+                    maxLength={40}
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label>API Key</Label>
                   <Input
                     type="password"
-                    placeholder="Enter your Binance API key"
+                    placeholder="Enter your API key"
                     value={formData.apiKey}
                     onChange={(e) => setFormData({ ...formData, apiKey: e.target.value })}
                     className="font-mono"
+                    autoComplete="off"
                   />
                 </div>
                 <div className="space-y-2">
                   <Label>API Secret</Label>
                   <Input
                     type="password"
-                    placeholder="Enter your Binance API secret"
+                    placeholder="Enter your API secret"
                     value={formData.apiSecret}
                     onChange={(e) => setFormData({ ...formData, apiSecret: e.target.value })}
                     className="font-mono"
+                    autoComplete="off"
                   />
                 </div>
               </div>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
+                <Button variant="outline" onClick={handleTestBeforeSave} disabled={testBeforeSaveLoading || !formData.apiKey?.trim() || !formData.apiSecret?.trim()}>
+                  {testBeforeSaveLoading ? <Loader2 className="size-4 animate-spin mr-2" /> : null}
+                  Test Connection
+                </Button>
                 <Button onClick={handleSaveConnection} disabled={formLoading}>
                   {formLoading ? <Loader2 className="size-4 animate-spin mr-2" /> : null}
                   Save Connection
                 </Button>
-                <Button variant="outline" onClick={() => {
+                <Button variant="ghost" onClick={() => {
                   setShowAddForm(false);
                   setFormData({ exchange: 'binance', environment: 'production', label: '', apiKey: '', apiSecret: '' });
                 }}>
@@ -642,7 +691,7 @@ export function Settings() {
                   <div className="flex items-start justify-between">
                     <div className="flex-1 space-y-2">
                       <div className="flex items-center gap-3">
-                        <h4 className="font-semibold">{conn.label || 'Binance Connection'}</h4>
+                        <h4 className="font-semibold">{conn.label || `${conn.exchange === 'bybit' ? 'Bybit' : 'Binance'} Connection`}</h4>
                         <Badge variant={conn.environment === 'production' ? 'default' : 'secondary'}>
                           {conn.environment}
                         </Badge>
@@ -704,8 +753,10 @@ export function Settings() {
                         size="sm"
                         onClick={() => handleDeleteConnection(conn.id)}
                         className="text-[#EF4444] border-[#EF4444]/50 hover:bg-[#EF4444]/10"
+                        title="Revoke connection and remove stored credentials"
                       >
-                        <Trash2 className="size-4" />
+                        <Trash2 className="size-4 mr-1" />
+                        Revoke
                       </Button>
                     </div>
                   </div>
@@ -744,8 +795,9 @@ export function Settings() {
                     <Label>API Key</Label>
                     <Input
                       type="password"
-                      placeholder="Enter your Binance API key"
+                      placeholder="Enter your API key"
                       value={updateCredsForm.apiKey}
+                      autoComplete="off"
                       onChange={(e) => setUpdateCredsForm((f) => ({ ...f, apiKey: e.target.value }))}
                       className="font-mono"
                     />
@@ -754,8 +806,9 @@ export function Settings() {
                     <Label>API Secret</Label>
                     <Input
                       type="password"
-                      placeholder="Enter your Binance API secret"
+                      placeholder="Enter your API secret"
                       value={updateCredsForm.apiSecret}
+                      autoComplete="off"
                       onChange={(e) => setUpdateCredsForm((f) => ({ ...f, apiSecret: e.target.value }))}
                       className="font-mono"
                     />
