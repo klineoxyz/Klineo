@@ -45,9 +45,9 @@ export function Admin() {
   const [couponsLoading, setCouponsLoading] = useState(false);
   const [auditLogsLoading, setAuditLogsLoading] = useState(false);
 
-  // Platform settings state
+  // Platform settings state — aligned with packages: Entry 20%, Pro 15%, Elite 10% (lower fee for higher tier)
   const [starterFee, setStarterFee] = useState("20");
-  const [proFee, setProFee] = useState("20");
+  const [proFee, setProFee] = useState("15");
   const [unlimitedFee, setUnlimitedFee] = useState("10");
   const [showFeeConfirm, setShowFeeConfirm] = useState(false);
 
@@ -860,7 +860,7 @@ export function Admin() {
                       onChange={(e) => setStarterFee(e.target.value)}
                       className="font-mono"
                     />
-                    <p className="text-xs text-muted-foreground">Default: 20%</p>
+                    <p className="text-xs text-muted-foreground">Default: 20% (Entry tier)</p>
                   </div>
 
                   <div className="space-y-2">
@@ -875,7 +875,7 @@ export function Admin() {
                       onChange={(e) => setProFee(e.target.value)}
                       className="font-mono"
                     />
-                    <p className="text-xs text-muted-foreground">Default: 20%</p>
+                    <p className="text-xs text-muted-foreground">Default: 15% (Pro tier)</p>
                   </div>
 
                   <div className="space-y-2">
@@ -890,7 +890,7 @@ export function Admin() {
                       onChange={(e) => setUnlimitedFee(e.target.value)}
                       className="font-mono"
                     />
-                    <p className="text-xs text-muted-foreground">Default: 10%</p>
+                    <p className="text-xs text-muted-foreground">Default: 10% (Elite tier)</p>
                   </div>
                 </div>
 
@@ -906,9 +906,9 @@ export function Admin() {
                     variant="outline"
                     onClick={() => {
                       setStarterFee("20");
-                      setProFee("20");
+                      setProFee("15");
                       setUnlimitedFee("10");
-                      toast.info("Reset to default values");
+                      toast.info("Reset to default values (Entry 20%, Pro 15%, Elite 10%)");
                     }}
                   >
                     Reset to Defaults
