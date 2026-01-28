@@ -5,7 +5,7 @@ import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import { Separator } from "@/app/components/ui/separator";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/app/components/ui/table";
-import { Copy, Check, ExternalLink } from "lucide-react";
+import { Copy, Check, ExternalLink, User } from "lucide-react";
 import { useState } from "react";
 import { toast } from "@/app/lib/toast";
 import { copyToClipboard } from "@/app/lib/clipboard";
@@ -88,6 +88,30 @@ export function Referrals({ onNavigate }: ReferralsProps) {
             <li>• Rewards are from purchases only—not from trading PnL or balances</li>
             <li>• Minimum payout: $50.00 USDT</li>
           </ul>
+          {/* Hierarchical network diagram: simple icons like reference image (1 → 2 → 4 → 8, up to 7 levels) */}
+          <div className="space-y-2">
+            <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Network structure (up to 7 levels)</div>
+            <div className="flex flex-col items-center py-3 gap-3">
+              <div className="flex justify-center">
+                <div className="rounded-full bg-primary p-2 text-primary-foreground" title="L1"><User className="size-5" /></div>
+              </div>
+              <div className="flex justify-center gap-6">
+                <div className="rounded-full bg-primary/80 p-2 text-primary-foreground" title="L2"><User className="size-5" /></div>
+                <div className="rounded-full bg-primary/80 p-2 text-primary-foreground" title="L2"><User className="size-5" /></div>
+              </div>
+              <div className="flex justify-center gap-3">
+                {[1, 2, 3, 4].map((i) => (
+                  <div key={i} className="rounded-full bg-primary/60 p-2 text-primary-foreground" title="L3"><User className="size-4" /></div>
+                ))}
+              </div>
+              <div className="flex justify-center gap-2 flex-wrap max-w-[200px]">
+                {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
+                  <div key={i} className="rounded-full bg-primary/40 p-1.5 text-primary-foreground" title="L4"><User className="size-3" /></div>
+                ))}
+              </div>
+              <p className="text-[10px] text-muted-foreground mt-1">L1 → L2 → … → L7 · Rewards flow down your network</p>
+            </div>
+          </div>
           {/* Reward split diagram: 70% pool split across 7 levels */}
           <div className="space-y-2">
             <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Pool split (of 70%)</div>
