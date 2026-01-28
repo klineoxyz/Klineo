@@ -299,7 +299,7 @@ export function Admin() {
   };
 
   const copyCouponURL = (code: string) => {
-    const url = `https://klineo.xyz/subscribe?coupon=${code}`;
+    const url = `https://klineo.xyz/packages?coupon=${code}`;
     copyToClipboard(url);
     toast.success("Coupon URL copied", {
       description: `Users can claim ${code} at this URL`,
@@ -1007,13 +1007,13 @@ export function Admin() {
         </TabsContent>
 
         <TabsContent value="discounts" className="space-y-6" onFocus={loadCoupons}>
-          {/* Create New Coupon */}
+          {/* Create New Coupon — applies to onboarding fee & package purchases */}
           <Card className="p-6">
             <div className="flex items-center gap-3 mb-6">
               <Ticket className="size-6 text-primary" />
               <div>
                 <h3 className="text-lg font-semibold">Create Discount Coupon</h3>
-                <p className="text-sm text-muted-foreground">Generate shareable coupon codes for subscription discounts</p>
+                <p className="text-sm text-muted-foreground">Generate shareable codes for discounts on the joining fee and trading packages (one-time purchases)</p>
               </div>
             </div>
 
@@ -1058,7 +1058,7 @@ export function Admin() {
                     className="font-mono"
                   />
                   <p className="text-xs text-muted-foreground">
-                    Percentage off subscription (5-100%)
+                    Percentage off joining fee or package price (5–100%)
                   </p>
                 </div>
 
@@ -1074,14 +1074,14 @@ export function Admin() {
                     className="font-mono"
                   />
                   <p className="text-xs text-muted-foreground">
-                    How many users can claim this coupon
+                    How many users can redeem this coupon
                   </p>
                 </div>
               </div>
 
               <div className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="duration-months">Discount Duration (Months) *</Label>
+                  <Label htmlFor="duration-months">Validity (Months) *</Label>
                   <Input
                     id="duration-months"
                     type="number"
@@ -1093,7 +1093,7 @@ export function Admin() {
                     className="font-mono"
                   />
                   <p className="text-xs text-muted-foreground">
-                    How many months the discount applies (1-12)
+                    How long the code can be redeemed (1–12 months)
                   </p>
                 </div>
 
@@ -1107,17 +1107,17 @@ export function Admin() {
                     min={new Date().toISOString().split('T')[0]}
                   />
                   <p className="text-xs text-muted-foreground">
-                    When this coupon code stops working (leave empty for no expiry)
+                    When this code stops working (leave empty for no expiry)
                   </p>
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="coupon-description">Description *</Label>
+                  <Label htmlFor="coupon-description">Description</Label>
                   <Textarea
                     id="coupon-description"
                     value={couponDescription}
                     onChange={(e) => setCouponDescription(e.target.value)}
-                    placeholder="e.g., Launch promotion - 50% off first 3 months"
+                    placeholder="e.g., Launch promo – 50% off joining fee or first package"
                     rows={3}
                   />
                   <p className="text-xs text-muted-foreground">
@@ -1136,7 +1136,7 @@ export function Admin() {
                 Create Coupon
               </Button>
               <div className="text-xs text-muted-foreground">
-                A shareable URL will be generated automatically
+                Shareable link will auto-apply the coupon when users pay the joining fee or buy a package
               </div>
             </div>
           </Card>
@@ -1145,8 +1145,8 @@ export function Admin() {
           <Card>
             <div className="p-6 border-b border-border flex items-center justify-between">
               <div>
-                <h3 className="text-lg font-semibold">Active Coupons</h3>
-                <p className="text-sm text-muted-foreground mt-1">{coupons.filter(c => c.status === "Active").length} active coupon codes</p>
+                <h3 className="text-lg font-semibold">Discount Coupons</h3>
+                <p className="text-sm text-muted-foreground mt-1">{coupons.filter(c => c.status === "Active").length} active · Apply to joining fee & package purchases</p>
               </div>
               <div className="flex gap-2">
                 <Button variant="outline" size="sm" onClick={loadCoupons}>
@@ -1203,7 +1203,7 @@ export function Admin() {
                       </div>
                     </TableCell>
                     <TableCell className="text-sm">
-                      {coupon.durationMonths} {coupon.durationMonths === 1 ? "month" : "months"}
+                      {coupon.durationMonths} {coupon.durationMonths === 1 ? "month" : "months"} validity
                     </TableCell>
                     <TableCell className="text-muted-foreground text-sm">
                       {coupon.expiresAt === "—" ? (
@@ -1263,8 +1263,8 @@ export function Admin() {
             <div className="flex items-center gap-3 mb-4">
               <Link2 className="size-5 text-primary" />
               <div>
-                <h3 className="text-sm font-semibold">Shareable Coupon URLs</h3>
-                <p className="text-xs text-muted-foreground">Share these links to auto-apply coupons at checkout</p>
+                <h3 className="text-sm font-semibold">Shareable Coupon Links</h3>
+                <p className="text-xs text-muted-foreground">Share these links; coupon auto-applies when the user pays the joining fee or buys a package</p>
               </div>
             </div>
             <div className="space-y-2">
@@ -1275,7 +1275,7 @@ export function Admin() {
                 >
                   <div className="flex-1 min-w-0">
                     <div className="font-mono text-xs text-muted-foreground truncate">
-                      https://klineo.xyz/subscribe?coupon={coupon.code}
+                      https://klineo.xyz/packages?coupon={coupon.code}
                     </div>
                   </div>
                   <Button 
