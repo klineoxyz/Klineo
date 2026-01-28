@@ -5,7 +5,7 @@ import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import { Separator } from "@/app/components/ui/separator";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/app/components/ui/table";
-import { Copy, Check, ExternalLink, User } from "lucide-react";
+import { Copy, Check, ExternalLink } from "lucide-react";
 import { useState } from "react";
 import { toast } from "@/app/lib/toast";
 import { copyToClipboard } from "@/app/lib/clipboard";
@@ -90,59 +90,68 @@ export function Referrals({ onNavigate }: ReferralsProps) {
             <li>• Rewards are from purchases only—not from trading PnL or balances</li>
             <li>• Minimum payout: $50.00 USDT</li>
           </ul>
-          {/* Hierarchical network diagram with connecting lines (1 → 2 → 4 → 8, up to 7 levels) */}
+          {/* Pure SVG hierarchical network diagram (1 → 2 → 4 → 8) */}
           <div className="space-y-2">
             <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Network structure (up to 7 levels)</div>
-            <div className="relative w-full aspect-[2/1.6] max-h-[220px] min-h-[160px]">
-              <svg className="absolute inset-0 w-full h-full text-primary" viewBox="0 0 100 80" preserveAspectRatio="xMidYMid meet" aria-hidden>
+            <div className="w-full rounded-lg overflow-hidden bg-muted/20 border border-border/50" style={{ aspectRatio: "2/1.6", maxHeight: 220, minHeight: 160 }}>
+              <svg className="w-full h-full text-primary" viewBox="0 0 100 80" preserveAspectRatio="xMidYMid meet" aria-hidden="true" role="img">
                 <defs>
                   <linearGradient id="ref-line" x1="0%" y1="0%" x2="0%" y2="100%">
-                    <stop offset="0%" stopColor="currentColor" stopOpacity="0.85" />
-                    <stop offset="100%" stopColor="currentColor" stopOpacity="0.35" />
+                    <stop offset="0%" stopColor="currentColor" stopOpacity="0.7" />
+                    <stop offset="100%" stopColor="currentColor" stopOpacity="0.25" />
                   </linearGradient>
+                  <linearGradient id="ref-node-top" x1="0%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%" stopColor="currentColor" stopOpacity="1" />
+                    <stop offset="100%" stopColor="currentColor" stopOpacity="0.75" />
+                  </linearGradient>
+                  <linearGradient id="ref-node-bottom" x1="0%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%" stopColor="currentColor" stopOpacity="0.6" />
+                    <stop offset="100%" stopColor="currentColor" stopOpacity="0.4" />
+                  </linearGradient>
+                  <filter id="ref-node-shadow" x="-20%" y="-20%" width="140%" height="140%">
+                    <feDropShadow dx="0" dy="1" stdDeviation="1" floodOpacity="0.2" />
+                  </filter>
                 </defs>
-                {/* L1 → L2 */}
-                <line x1="50" y1="10" x2="28" y2="28" stroke="url(#ref-line)" strokeWidth="1.2" fill="none" />
-                <line x1="50" y1="10" x2="72" y2="28" stroke="url(#ref-line)" strokeWidth="1.2" fill="none" />
-                {/* L2 → L3 */}
-                <line x1="28" y1="28" x2="14" y2="46" stroke="url(#ref-line)" strokeWidth="1.1" fill="none" />
-                <line x1="28" y1="28" x2="42" y2="46" stroke="url(#ref-line)" strokeWidth="1.1" fill="none" />
-                <line x1="72" y1="28" x2="58" y2="46" stroke="url(#ref-line)" strokeWidth="1.1" fill="none" />
-                <line x1="72" y1="28" x2="86" y2="46" stroke="url(#ref-line)" strokeWidth="1.1" fill="none" />
-                {/* L3 → L4 */}
-                <line x1="14" y1="46" x2="7" y2="64" stroke="url(#ref-line)" strokeWidth="1" fill="none" />
-                <line x1="14" y1="46" x2="21" y2="64" stroke="url(#ref-line)" strokeWidth="1" fill="none" />
-                <line x1="42" y1="46" x2="35" y2="64" stroke="url(#ref-line)" strokeWidth="1" fill="none" />
-                <line x1="42" y1="46" x2="49" y2="64" stroke="url(#ref-line)" strokeWidth="1" fill="none" />
-                <line x1="58" y1="46" x2="51" y2="64" stroke="url(#ref-line)" strokeWidth="1" fill="none" />
-                <line x1="58" y1="46" x2="65" y2="64" stroke="url(#ref-line)" strokeWidth="1" fill="none" />
-                <line x1="86" y1="46" x2="79" y2="64" stroke="url(#ref-line)" strokeWidth="1" fill="none" />
-                <line x1="86" y1="46" x2="93" y2="64" stroke="url(#ref-line)" strokeWidth="1" fill="none" />
+                {/* Edges (rounded appearance via stroke) */}
+                <g stroke="url(#ref-line)" strokeWidth="1.25" fill="none" strokeLinecap="round">
+                  <line x1="50" y1="12" x2="28" y2="28" />
+                  <line x1="50" y1="12" x2="72" y2="28" />
+                  <line x1="28" y1="28" x2="14" y2="46" />
+                  <line x1="28" y1="28" x2="42" y2="46" />
+                  <line x1="72" y1="28" x2="58" y2="46" />
+                  <line x1="72" y1="28" x2="86" y2="46" />
+                  <line x1="14" y1="46" x2="7" y2="64" />
+                  <line x1="14" y1="46" x2="21" y2="64" />
+                  <line x1="42" y1="46" x2="35" y2="64" />
+                  <line x1="42" y1="46" x2="49" y2="64" />
+                  <line x1="58" y1="46" x2="51" y2="64" />
+                  <line x1="58" y1="46" x2="65" y2="64" />
+                  <line x1="86" y1="46" x2="79" y2="64" />
+                  <line x1="86" y1="46" x2="93" y2="64" />
+                </g>
+                {/* L1 node */}
+                <circle cx="50" cy="12" r="5.5" fill="url(#ref-node-top)" filter="url(#ref-node-shadow)" />
+                <text x="50" y="12.8" textAnchor="middle" fontSize="3.2" fontWeight="600" fill="hsl(var(--primary-foreground))">L1</text>
+                {/* L2 nodes */}
+                <circle cx="28" cy="28" r="4.5" fill="url(#ref-node-top)" filter="url(#ref-node-shadow)" />
+                <text x="28" y="29" textAnchor="middle" fontSize="2.8" fontWeight="600" fill="hsl(var(--primary-foreground))">L2</text>
+                <circle cx="72" cy="28" r="4.5" fill="url(#ref-node-top)" filter="url(#ref-node-shadow)" />
+                <text x="72" y="29" textAnchor="middle" fontSize="2.8" fontWeight="600" fill="hsl(var(--primary-foreground))">L2</text>
+                {/* L3 nodes */}
+                {[14, 42, 58, 86].map((cx, i) => (
+                  <g key={`l3-${i}`}>
+                    <circle cx={cx} cy="46" r="4" fill="url(#ref-node-bottom)" filter="url(#ref-node-shadow)" />
+                    <text x={cx} y="46.9" textAnchor="middle" fontSize="2.6" fontWeight="600" fill="hsl(var(--primary-foreground))">L3</text>
+                  </g>
+                ))}
+                {/* L4 nodes */}
+                {[7, 21, 35, 49, 51, 65, 79, 93].map((cx, i) => (
+                  <g key={`l4-${i}`}>
+                    <circle cx={cx} cy="64" r="3.2" fill="url(#ref-node-bottom)" filter="url(#ref-node-shadow)" />
+                    <text x={cx} y="64.7" textAnchor="middle" fontSize="2.2" fontWeight="600" fill="hsl(var(--primary-foreground))">L4</text>
+                  </g>
+                ))}
               </svg>
-              {/* Nodes (positions match SVG coordinates: x,y in viewBox 0 0 100 80 → left %, top %) */}
-              <div className="absolute rounded-full bg-primary p-1.5 text-primary-foreground shadow-sm -translate-x-1/2 -translate-y-1/2" style={{ left: "50%", top: "12.5%" }} title="L1"><User className="size-4 sm:size-5" /></div>
-              <div className="absolute rounded-full bg-primary/85 p-1.5 text-primary-foreground shadow-sm -translate-x-1/2 -translate-y-1/2" style={{ left: "28%", top: "35%" }} title="L2"><User className="size-3 sm:size-4" /></div>
-              <div className="absolute rounded-full bg-primary/85 p-1.5 text-primary-foreground shadow-sm -translate-x-1/2 -translate-y-1/2" style={{ left: "72%", top: "35%" }} title="L2"><User className="size-3 sm:size-4" /></div>
-              {[
-                { left: 14, top: 57.5 },
-                { left: 42, top: 57.5 },
-                { left: 58, top: 57.5 },
-                { left: 86, top: 57.5 },
-              ].map((pos, i) => (
-                <div key={i} className="absolute rounded-full bg-primary/65 p-1.5 text-primary-foreground shadow-sm -translate-x-1/2 -translate-y-1/2" style={{ left: `${pos.left}%`, top: `${pos.top}%` }} title="L3"><User className="size-3" /></div>
-              ))}
-              {[
-                { left: 7, top: 80 },
-                { left: 21, top: 80 },
-                { left: 35, top: 80 },
-                { left: 49, top: 80 },
-                { left: 51, top: 80 },
-                { left: 65, top: 80 },
-                { left: 79, top: 80 },
-                { left: 93, top: 80 },
-              ].map((pos, i) => (
-                <div key={i} className="absolute rounded-full bg-primary/45 p-1 text-primary-foreground shadow-sm -translate-x-1/2 -translate-y-1/2" style={{ left: `${pos.left}%`, top: `${pos.top}%` }} title="L4"><User className="size-2.5 sm:size-3" /></div>
-              ))}
             </div>
             <p className="text-[10px] text-muted-foreground text-center">L1 → L2 → … → L7 · Rewards flow down your network</p>
           </div>
