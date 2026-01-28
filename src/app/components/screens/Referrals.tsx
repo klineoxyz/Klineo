@@ -43,8 +43,8 @@ export function Referrals({ onNavigate }: ReferralsProps) {
   return (
     <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
       <div>
-        <h1 className="text-xl sm:text-2xl font-semibold mb-1">Referrals</h1>
-        <p className="text-sm text-muted-foreground">Earn from the 70% referral rewards pool when people in your upline pay onboarding fees or buy packages</p>
+        <h1 className="text-xl sm:text-2xl font-semibold mb-1">Community Rewards</h1>
+        <p className="text-sm text-muted-foreground">Earn from the 70% community rewards pool when people in your network pay onboarding fees or buy packages</p>
       </div>
 
       {/* Referral Info */}
@@ -81,14 +81,35 @@ export function Referrals({ onNavigate }: ReferralsProps) {
           </div>
         </div>
 
-        <div className="p-4 bg-secondary/30 rounded space-y-2">
-          <h4 className="font-semibold text-sm">7-Level Referral Rewards (70% pool)</h4>
+        <div className="p-4 bg-secondary/30 rounded space-y-4">
+          <h4 className="font-semibold text-sm">Community Rewards (70% pool)</h4>
           <ul className="space-y-1 text-sm text-muted-foreground">
-            <li>• <span className="text-primary font-medium">70%</span> of every onboarding fee and package purchase goes to the referral pool</li>
-            <li>• Split across 7 levels: L1 30%, L2 20%, L3 10%, L4 8%, L5 6%, L6 4%, L7 2% (of that 70%)</li>
+            <li>• <span className="text-primary font-medium">70%</span> of every onboarding fee and package purchase goes to the community rewards pool</li>
             <li>• Rewards are from purchases only—not from trading PnL or balances</li>
             <li>• Minimum payout: $50.00 USDT</li>
           </ul>
+          {/* Reward split diagram: 70% pool split across 7 levels */}
+          <div className="space-y-2">
+            <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Pool split (of 70%)</div>
+            <div className="flex h-10 rounded-md overflow-hidden border border-border/50 bg-muted/30" role="img" aria-label="Community rewards pool: Level 1 30%, Level 2 20%, Level 3 10%, Level 4 8%, Level 5 6%, Level 6 4%, Level 7 2%">
+              <div className="flex items-center justify-center text-[10px] font-medium text-primary-foreground bg-primary/90 hover:bg-primary min-w-0 flex-1" style={{ flex: "30" }} title="Level 1: 30%">30%</div>
+              <div className="flex items-center justify-center text-[10px] font-medium text-primary-foreground bg-primary/80 hover:bg-primary/90 min-w-0 flex-1" style={{ flex: "20" }} title="Level 2: 20%">20%</div>
+              <div className="flex items-center justify-center text-[10px] font-medium text-primary-foreground bg-primary/70 hover:bg-primary/80 min-w-0 flex-1" style={{ flex: "10" }} title="Level 3: 10%">10%</div>
+              <div className="flex items-center justify-center text-[10px] font-medium text-primary-foreground bg-primary/60 hover:bg-primary/70 min-w-0 flex-1" style={{ flex: "8" }} title="Level 4: 8%">8%</div>
+              <div className="flex items-center justify-center text-[10px] font-medium text-primary-foreground bg-primary/50 hover:bg-primary/60 min-w-0 flex-1" style={{ flex: "6" }} title="Level 5: 6%">6%</div>
+              <div className="flex items-center justify-center text-[10px] font-medium text-primary-foreground bg-primary/40 hover:bg-primary/50 min-w-0 flex-1" style={{ flex: "4" }} title="Level 6: 4%">4%</div>
+              <div className="flex items-center justify-center text-[10px] font-medium text-primary-foreground bg-primary/30 hover:bg-primary/40 min-w-0 flex-1 rounded-r-md" style={{ flex: "2" }} title="Level 7: 2%">2%</div>
+            </div>
+            <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
+              <span>L1 30%</span>
+              <span>L2 20%</span>
+              <span>L3 10%</span>
+              <span>L4 8%</span>
+              <span>L5 6%</span>
+              <span>L6 4%</span>
+              <span>L7 2%</span>
+            </div>
+          </div>
         </div>
       </Card>
 
@@ -97,7 +118,7 @@ export function Referrals({ onNavigate }: ReferralsProps) {
         <Card className="p-3 sm:p-4 space-y-2">
           <div className="text-xs text-muted-foreground uppercase tracking-wide">L1–L7 Earnings</div>
           <div className="text-xl sm:text-2xl font-semibold text-primary truncate">${(referralData.tier1Earnings + referralData.tier2Earnings).toFixed(2)}</div>
-          <div className="text-xs text-muted-foreground">From referral pool (purchases)</div>
+          <div className="text-xs text-muted-foreground">From community rewards (purchases)</div>
         </Card>
 
         <Card className="p-4 space-y-2">
