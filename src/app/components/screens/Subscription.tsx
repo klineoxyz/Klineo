@@ -263,7 +263,7 @@ function SubscriptionContent({
             elite_500: "Unlock full allowance",
           };
           const packageFeatures: Record<string, { copyTrades: number | string; bots: number | string; canCreateStrategy: boolean; listStrategyInMarket: boolean }> = {
-            entry_100: { copyTrades: 1, bots: 5, canCreateStrategy: false, listStrategyInMarket: false },
+            entry_100: { copyTrades: 1, bots: 5, canCreateStrategy: true, listStrategyInMarket: false },
             pro_200: { copyTrades: 5, bots: 10, canCreateStrategy: true, listStrategyInMarket: true },
             elite_500: { copyTrades: "Unlimited", bots: "Unlimited", canCreateStrategy: true, listStrategyInMarket: true },
           };
@@ -271,7 +271,7 @@ function SubscriptionContent({
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
               {packages.map((pkg) => {
                 const popular = pkg.id === "pro_200";
-                const features = packageFeatures[pkg.id] ?? { copyTrades: 1, bots: 5, canCreateStrategy: false, listStrategyInMarket: false };
+                const features = packageFeatures[pkg.id] ?? { copyTrades: 1, bots: 5, canCreateStrategy: true, listStrategyInMarket: false };
                 const displayName = packageDisplayNames[pkg.id] ?? `$${pkg.priceUsd} package`;
                 const subtext = packageSubtext[pkg.id] ?? "Top up profit allowance";
                 return (
@@ -315,7 +315,7 @@ function SubscriptionContent({
                       </li>
                       <li className="flex items-center gap-2">
                         <Check className="size-4 shrink-0 text-primary" />
-                        <span>List in Market: {features.listStrategyInMarket ? "yes" : "no"}</span>
+                        <span>List in Market: {features.listStrategyInMarket ? "yes" : "no (upgrade to list)"}</span>
                       </li>
                     </ul>
                     <Button
