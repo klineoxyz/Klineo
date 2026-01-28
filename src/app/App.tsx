@@ -175,16 +175,9 @@ export default function App() {
         }
         return <UIStatesDemo onNavigate={handleNavigate} />;
       case "smoke-test":
-        // Prod: only when VITE_ENABLE_SMOKE_TEST_PAGE=true AND admin
+        // Prod: admin-only; no env var required (Smoke Test enabled for all admins in production)
         if (import.meta.env.PROD && !isAdmin) {
           setTimeout(() => toast.error("Admin only", { description: "Smoke test is restricted to admins." }), 100);
-          return <Dashboard onNavigate={handleNavigate} />;
-        }
-        if (import.meta.env.PROD && import.meta.env.VITE_ENABLE_SMOKE_TEST_PAGE !== 'true') {
-          setTimeout(() =>
-            toast.error("Smoke test disabled", {
-              description: "Smoke Test page is disabled in production. To enable it, set VITE_ENABLE_SMOKE_TEST_PAGE=true in your deployment environment (e.g. Vercel)."
-            }), 100);
           return <Dashboard onNavigate={handleNavigate} />;
         }
         return <SmokeTest />;
