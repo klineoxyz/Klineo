@@ -21,6 +21,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/app/components/ui/dialog";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/app/components/ui/collapsible";
+import { ChevronDown, ChevronRight, CheckSquare } from "lucide-react";
 
 export function Settings() {
   const { user } = useAuth();
@@ -50,6 +52,9 @@ export function Settings() {
   const [formLoading, setFormLoading] = useState(false);
   const [testBeforeSaveLoading, setTestBeforeSaveLoading] = useState(false);
   const [testingId, setTestingId] = useState<string | null>(null);
+  const [reEnableId, setReEnableId] = useState<string | null>(null);
+  const [permissionChecklistOpen, setPermissionChecklistOpen] = useState(false);
+  const [entitlement, setEntitlement] = useState<{ remainingUsd: number; status: string } | null>(null);
   // Update credentials (re-save API key/secret to fix decrypt errors)
   const [updateCredsConn, setUpdateCredsConn] = useState<ExchangeConnection | null>(null);
   const [updateCredsForm, setUpdateCredsForm] = useState({ apiKey: "", apiSecret: "", environment: "production" as "production" | "testnet" });
@@ -194,6 +199,13 @@ export function Settings() {
       });
   }, [user?.id]);
 
+  useEffect(() => {
+    if (!user?.id || isDemoMode) return;
+    api.get<{ status: string; remainingUsd?: number }>("/api/me/entitlement")
+      .then((d) => setEntitlement({ remainingUsd: d.remainingUsd ?? 0, status: d.status ?? "inactive" }))
+      .catch(() => setEntitlement(null));
+  }, [user?.id, isDemoMode]);
+
   const handleTestBeforeSave = async () => {
     if (!formData.apiKey?.trim() || !formData.apiSecret?.trim()) {
       toast.error('Enter API Key and API Secret to test');
@@ -304,11 +316,24 @@ export function Settings() {
     try {
       await exchangeConnections.delete(id);
       toast.success('Connection deleted');
-      // Reload connections
       const data = await exchangeConnections.list();
       setExchangeConnectionsList(data.connections);
     } catch (err: any) {
       toast.error('Failed to delete connection', { description: err?.message });
+    }
+  };
+
+  const handleReEnableConnection = async (id: string) => {
+    setReEnableId(id);
+    try {
+      await exchangeConnections.reEnable(id);
+      toast.success('Connection re-enabled. Run Test to verify.');
+      const data = await exchangeConnections.list();
+      setExchangeConnectionsList(data.connections);
+    } catch (err: any) {
+      toast.error('Failed to re-enable', { description: err?.message });
+    } finally {
+      setReEnableId(null);
     }
   };
 
@@ -557,8 +582,71 @@ export function Settings() {
             </AlertDescription>
           </Alert>
 
-          <div className="flex items-center justify-between">
-            <h3 className="text-lg font-semibold">Exchange Connections (Binance & Bybit)</h3>
+          <Collapsible open={permissionChecklistOpen} onOpenChange={setPermissionChecklistOpen}>
+            <CollapsibleTrigger asChild>
+              <Button variant="outline" size="sm" className="gap-2 w-full sm:w-auto">
+                {permissionChecklistOpen ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
+                API key permissions checklist (copy-paste)
+              </Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <Card className="mt-2 p-4 space-y-4">
+                <p className="text-xs text-muted-foreground">When creating API keys on the exchange, enable only what is below. Do <strong>not</strong> enable Withdrawals.</p>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <div className="font-medium text-sm flex items-center gap-2">
+                      <CheckSquare className="size-4 text-primary" /> Binance (Spot)
+                    </div>
+                    <ul className="text-xs text-muted-foreground space-y-1 list-disc list-inside">
+                      <li>Enable Reading</li>
+                      <li>Enable Spot & Margin Trading</li>
+                      <li>Do NOT enable Withdrawals</li>
+                    </ul>
+                    <div className="flex flex-wrap gap-2">
+                      <Button variant="outline" size="sm" asChild>
+                        <a href="https://www.binance.com/en/my/settings/api-management" target="_blank" rel="noopener noreferrer">Mainnet API</a>
+                      </Button>
+                      <Button variant="outline" size="sm" asChild>
+                        <a href="https://testnet.binance.vision/" target="_blank" rel="noopener noreferrer">Testnet</a>
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="font-medium text-sm flex items-center gap-2">
+                      <CheckSquare className="size-4 text-primary" /> Bybit (Spot)
+                    </div>
+                    <ul className="text-xs text-muted-foreground space-y-1 list-disc list-inside">
+                      <li>Read-Write (Spot trading, Read balances, Read orders)</li>
+                      <li>Do NOT enable Withdrawals</li>
+                    </ul>
+                    <div className="flex flex-wrap gap-2">
+                      <Button variant="outline" size="sm" asChild>
+                        <a href="https://www.bybit.com/app/user/api-management" target="_blank" rel="noopener noreferrer">Mainnet API</a>
+                      </Button>
+                      <Button variant="outline" size="sm" asChild>
+                        <a href="https://testnet.bybit.com/app/user/api-management" target="_blank" rel="noopener noreferrer">Testnet</a>
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </Card>
+            </CollapsibleContent>
+          </Collapsible>
+
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div>
+              <h3 className="text-lg font-semibold">Exchange Connections (Binance & Bybit)</h3>
+              {!isDemoMode && entitlement && (
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Profit allowance applies to all connected exchanges.
+                  {entitlement.status === "active" ? (
+                    <span className="text-primary font-medium"> ${entitlement.remainingUsd.toFixed(2)} remaining</span>
+                  ) : (
+                    <span> No active package — buy a package to trade.</span>
+                  )}
+                </p>
+              )}
+            </div>
             {!showAddForm && !isDemoMode && (
               <Button onClick={() => setShowAddForm(true)} className="gap-2">
                 <Plus className="size-4" />
@@ -710,6 +798,11 @@ export function Settings() {
                         {!conn.last_test_status && (
                           <Badge variant="outline">Never tested</Badge>
                         )}
+                        {conn.disabled_at && (
+                          <Badge variant="secondary" className="bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30">
+                            Disabled (too many errors)
+                          </Badge>
+                        )}
                       </div>
                       <div className="text-sm text-muted-foreground space-y-1">
                         <div>Exchange: {conn.exchange}</div>
@@ -719,7 +812,12 @@ export function Settings() {
                         {conn.last_error_message && (
                           <div className="text-[#EF4444]">Error: {conn.last_error_message}</div>
                         )}
-                        {(conn.last_test_status === "fail" || !conn.last_test_status) && (
+                        {conn.disabled_at && (
+                          <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+                            Connection was auto-disabled after 5 consecutive failures. Use <strong>Re-enable</strong> then run Test (or Update credentials and Test).
+                          </p>
+                        )}
+                        {(conn.last_test_status === "fail" || !conn.last_test_status) && !conn.disabled_at && (
                           <p className="text-xs text-muted-foreground mt-1">
                             If Test fails with a decrypt error, use <strong>Update credentials</strong> to re-enter your API key and secret.
                           </p>
@@ -727,6 +825,18 @@ export function Settings() {
                       </div>
                     </div>
                     <div className="flex flex-wrap gap-2">
+                      {conn.disabled_at && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleReEnableConnection(conn.id)}
+                          disabled={reEnableId === conn.id}
+                          className="border-amber-500/50 text-amber-700 dark:text-amber-400 gap-1"
+                        >
+                          {reEnableId === conn.id ? <Loader2 className="size-4 animate-spin" /> : null}
+                          {reEnableId === conn.id ? "Re-enabling…" : "Re-enable"}
+                        </Button>
+                      )}
                       <Button
                         variant="outline"
                         size="sm"

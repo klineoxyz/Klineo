@@ -75,6 +75,9 @@ export interface ExchangeConnection {
   last_tested_at: string | null;
   last_test_status: 'ok' | 'fail' | null;
   last_error_message: string | null;
+  /** Auto-disabled after 5 consecutive failures */
+  consecutive_failures?: number;
+  disabled_at?: string | null;
 }
 
 export interface CreateConnectionRequest {
@@ -195,6 +198,13 @@ export const exchangeConnections = {
     data: { apiKey: string; apiSecret: string; environment?: 'production' | 'testnet' }
   ): Promise<{ message: string; requestId: string }> => {
     return api.put(`/api/exchange-connections/${id}/credentials`, data);
+  },
+
+  /**
+   * Re-enable connection after auto-disable (clears disabled_at and consecutive_failures)
+   */
+  reEnable: async (id: string): Promise<{ message: string; requestId: string }> => {
+    return api.patch(`/api/exchange-connections/${id}/re-enable`);
   },
 
   /**

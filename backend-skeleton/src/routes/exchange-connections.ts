@@ -128,7 +128,7 @@ exchangeConnectionsRouter.get('/', async (req: AuthenticatedRequest, res) => {
   try {
     const { data: connections, error } = await client
       .from('user_exchange_connections')
-      .select('id, exchange, label, environment, created_at, updated_at, last_tested_at, last_test_status, last_error_message')
+      .select('id, exchange, label, environment, created_at, updated_at, last_tested_at, last_test_status, last_error_message, consecutive_failures, disabled_at')
       .eq('user_id', req.user!.id)
       .order('created_at', { ascending: false });
 
@@ -261,7 +261,7 @@ exchangeConnectionsRouter.post(
       // Fetch connection (prefer encrypted_config_b64 TEXT over bytea for reliable read)
       const { data: connection, error: fetchError } = await client
         .from('user_exchange_connections')
-        .select('id, exchange, environment, encrypted_config_b64, encrypted_config')
+        .select('id, exchange, environment, encrypted_config_b64, encrypted_config, consecutive_failures, disabled_at')
         .eq('id', connectionId)
         .eq('user_id', req.user!.id)
         .single();
@@ -305,11 +305,15 @@ exchangeConnectionsRouter.post(
 
       // testResult already set above
 
-      // Update connection with test results (testResult set above per exchange)
+      // Update connection with test results; auto-disable after 5 consecutive failures
+      const prevFailures = Number(connection.consecutive_failures ?? 0);
+      const failures = testResult!.ok ? 0 : prevFailures + 1;
       const updateData: any = {
         last_tested_at: new Date().toISOString(),
         last_test_status: testResult!.ok ? 'ok' : 'fail',
         last_error_message: testResult!.error || null,
+        consecutive_failures: failures,
+        disabled_at: testResult!.ok ? null : (failures >= 5 ? new Date().toISOString() : (connection.disabled_at ?? null)),
         updated_at: new Date().toISOString(),
       };
 
@@ -350,9 +354,10 @@ exchangeConnectionsRouter.get('/balance', async (req: AuthenticatedRequest, res)
   try {
     const { data: connections, error: listError } = await client
       .from('user_exchange_connections')
-      .select('id, exchange, environment, encrypted_config_b64, encrypted_config')
+      .select('id, exchange, environment, encrypted_config_b64, encrypted_config, disabled_at')
       .eq('user_id', req.user!.id)
       .in('exchange', ['binance', 'bybit'])
+      .is('disabled_at', null)
       .order('created_at', { ascending: false })
       .limit(1);
 
@@ -467,6 +472,8 @@ exchangeConnectionsRouter.put(
 
       const updateData: any = {
         encrypted_config_b64: encryptedConfig,
+        consecutive_failures: 0,
+        disabled_at: null,
         updated_at: new Date().toISOString(),
       };
       if (environment) updateData.environment = environment;
@@ -487,6 +494,47 @@ exchangeConnectionsRouter.put(
       const errorMessage = err instanceof Error ? err.message : 'Unknown error';
       console.error(`[${requestId}] Update credentials error:`, errorMessage);
       res.status(500).json({ error: 'Failed to update credentials', requestId });
+    }
+  }
+);
+
+/**
+ * PATCH /api/exchange-connections/:id/re-enable
+ * Clear disabled_at and consecutive_failures so connection is used again for balance/orders.
+ */
+exchangeConnectionsRouter.patch(
+  '/:id/re-enable',
+  uuidParam('id'),
+  async (req: AuthenticatedRequest, res) => {
+    const client = getSupabase();
+    if (!client) {
+      return res.status(503).json({ error: 'Database unavailable' });
+    }
+
+    const requestId = (req as any).requestId || 'unknown';
+    const connectionId = req.params.id;
+
+    try {
+      const { error } = await client
+        .from('user_exchange_connections')
+        .update({
+          consecutive_failures: 0,
+          disabled_at: null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', connectionId)
+        .eq('user_id', req.user!.id);
+
+      if (error) {
+        console.error(`[${requestId}] Error re-enabling connection:`, error);
+        return res.status(500).json({ error: 'Failed to re-enable connection', requestId });
+      }
+
+      res.json({ message: 'Connection re-enabled. Run Test to verify.', requestId });
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+      console.error(`[${requestId}] Re-enable error:`, errorMessage);
+      res.status(500).json({ error: 'Internal server error', requestId });
     }
   }
 );

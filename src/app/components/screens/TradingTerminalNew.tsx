@@ -28,6 +28,7 @@ import { toast } from "sonner";
 import { Alert, AlertDescription } from "@/app/components/ui/alert";
 import { useDemo } from "@/app/contexts/DemoContext";
 import { useExchangeBalances } from "@/app/hooks/useExchangeBalances";
+import { api, type EntitlementResponse } from "@/lib/api";
 import { TradingViewChart } from "@/app/components/TradingViewChart";
 import { 
   TradingViewMarketOverview,
@@ -166,6 +167,23 @@ function formatBalance(value: number): string {
 export function TradingTerminalNew({ onNavigate }: TradingTerminalProps) {
   const { isDemoMode } = useDemo();
   const { connected: exchangeConnected, balances, loading: balanceLoading, error: balanceError } = useExchangeBalances();
+  const [entitlement, setEntitlement] = useState<EntitlementResponse | null>(null);
+  const [entitlementLoading, setEntitlementLoading] = useState(true);
+
+  useEffect(() => {
+    if (isDemoMode) {
+      setEntitlementLoading(false);
+      return;
+    }
+    api.get<EntitlementResponse>("/api/me/entitlement")
+      .then(setEntitlement)
+      .catch(() => setEntitlement(null))
+      .finally(() => setEntitlementLoading(false));
+  }, [isDemoMode]);
+
+  const tradingAllowed = isDemoMode || (entitlement?.status === "active" && (entitlement?.remainingUsd ?? 0) > 0);
+  const remainingAllowance = entitlement?.remainingUsd ?? 0;
+
   const [pairs, setPairs] = useState<UsdtPairInfo[]>(DEFAULT_PAIRS);
   const [selectedPair, setSelectedPair] = useState("BTC/USDT");
   const [orderType, setOrderType] = useState("limit");
@@ -326,6 +344,10 @@ export function TradingTerminalNew({ onNavigate }: TradingTerminalProps) {
   }, []);
 
   const handleBuyOrder = () => {
+    if (!tradingAllowed && !isDemoMode) {
+      toast.error("Trading is disabled until you have an active package.");
+      return;
+    }
     if (!buyAmount || (orderType === "limit" && !buyPrice)) {
       toast.error("Please enter all required fields");
       return;
@@ -336,6 +358,10 @@ export function TradingTerminalNew({ onNavigate }: TradingTerminalProps) {
   };
 
   const handleSellOrder = () => {
+    if (!tradingAllowed && !isDemoMode) {
+      toast.error("Trading is disabled until you have an active package.");
+      return;
+    }
     if (!sellAmount || (orderType === "limit" && !sellPrice)) {
       toast.error("Please enter all required fields");
       return;
@@ -350,6 +376,14 @@ export function TradingTerminalNew({ onNavigate }: TradingTerminalProps) {
       {isDemoMode && (
         <div className="shrink-0 px-3 py-1.5 bg-primary/10 border-b border-primary/20 text-center text-xs text-muted-foreground">
           Demo mode — charts and order book use sample data. Switch to <strong className="text-foreground">Live</strong> (user menu) and connect Binance/Bybit in Settings to trade with real funds.
+        </div>
+      )}
+      {!isDemoMode && !entitlementLoading && !tradingAllowed && (
+        <div className="shrink-0 px-3 py-2.5 bg-amber-500/10 border-b border-amber-500/30 flex flex-wrap items-center justify-center gap-2 text-xs text-amber-800 dark:text-amber-200">
+          <span>Trading is disabled until you have an active package. Pay joining fee and buy a package to enable.</span>
+          <Button variant="outline" size="sm" className="h-7 border-amber-500/50 text-amber-800 dark:text-amber-200" onClick={() => onNavigate("subscription")}>
+            Go to Packages
+          </Button>
         </div>
       )}
       {/* CSP-safe ticker: Binance data only, no external script — avoids Content-Security-Policy eval violations */}
@@ -397,6 +431,13 @@ export function TradingTerminalNew({ onNavigate }: TradingTerminalProps) {
             <span>{isPositiveChange ? '+' : ''}{priceChange24h}%</span>
           </div>
         </div>
+
+        {!isDemoMode && entitlement && tradingAllowed && (
+          <div className="text-[10px] sm:text-xs">
+            <div className="text-muted-foreground">Profit allowance</div>
+            <div className="font-mono font-medium text-primary">${remainingAllowance.toFixed(2)} left</div>
+          </div>
+        )}
 
         <div className="hidden lg:block">
           <div className="text-xs text-muted-foreground">24h High</div>
@@ -883,6 +924,7 @@ export function TradingTerminalNew({ onNavigate }: TradingTerminalProps) {
                 <Button
                   className="w-full bg-green-600 hover:bg-green-700 text-white h-10 sm:h-9 min-h-[44px] font-medium"
                   onClick={handleBuyOrder}
+                  disabled={!isDemoMode && !tradingAllowed}
                 >
                   Buy {selectedPair.split("/")[0]}
                 </Button>
@@ -989,6 +1031,7 @@ export function TradingTerminalNew({ onNavigate }: TradingTerminalProps) {
                 <Button
                   className="w-full bg-red-600 hover:bg-red-700 text-white h-10 sm:h-9 min-h-[44px] font-medium"
                   onClick={handleSellOrder}
+                  disabled={!isDemoMode && !tradingAllowed}
                 >
                   Sell {selectedPair.split("/")[0]}
                 </Button>
