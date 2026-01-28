@@ -151,6 +151,25 @@ export function Admin() {
     }
   };
 
+  const handleMarkPaid = async () => {
+    if (!markPaidPayout) return;
+    setMarkPaidLoading(true);
+    try {
+      await api.patch(`/api/admin/referrals/${markPaidPayout.id}/mark-paid`, {
+        transactionId: markPaidTransactionId.trim() || undefined,
+      });
+      toast.success('Payout marked as paid');
+      setMarkPaidPayout(null);
+      setMarkPaidTransactionId("");
+      loadReferrals();
+    } catch (err: any) {
+      console.error('Mark paid error:', err);
+      toast.error(err?.message || 'Failed to mark payout as paid');
+    } finally {
+      setMarkPaidLoading(false);
+    }
+  };
+
   const loadCoupons = async () => {
     setCouponsLoading(true);
     try {
@@ -760,38 +779,104 @@ export function Admin() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Referrer</TableHead>
+                  <TableHead>Referrer (earner)</TableHead>
+                  <TableHead>Referred (buyer)</TableHead>
                   <TableHead>Level</TableHead>
                   <TableHead>Purchase type</TableHead>
-                  <TableHead>Buyer</TableHead>
-                  <TableHead>Amount</TableHead>
+                  <TableHead>Amount earned</TableHead>
                   <TableHead>Date</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Transaction</TableHead>
+                  <TableHead className="w-[100px]">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {referralPayouts.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                    <TableCell colSpan={9} className="text-center text-muted-foreground py-8">
                       No community rewards yet. Rewards are created when users pay onboarding fees or buy packages.
                     </TableCell>
                   </TableRow>
                 ) : (
                   referralPayouts.map((payout, i) => (
-                    <TableRow key={i}>
-                      <TableCell className="text-sm">{payout.referrer ?? '—'}</TableCell>
+                    <TableRow key={payout.id ?? i}>
+                      <TableCell className="text-sm font-medium">{payout.referrer ?? '—'}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{payout.buyerEmail ?? '—'}</TableCell>
                       <TableCell>
                         <Badge variant="secondary">L{payout.level ?? '—'}</Badge>
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">{payout.purchaseType ?? '—'}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground">{payout.buyerEmail ?? '—'}</TableCell>
                       <TableCell className="font-mono text-primary">${Number(payout.amount ?? 0).toFixed(2)}</TableCell>
                       <TableCell className="text-muted-foreground text-sm">{payout.date ?? '—'}</TableCell>
+                      <TableCell>
+                        {(payout as any).payoutStatus === 'paid' ? (
+                          <Badge className="bg-[#10B981]/15 text-[#10B981] border-[#10B981]/30">
+                            <CheckCircle className="size-3 mr-1 inline" /> Paid
+                          </Badge>
+                        ) : (
+                          <Badge variant="secondary">Pending</Badge>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-sm font-mono text-muted-foreground max-w-[140px] truncate" title={(payout as any).transactionId ?? undefined}>
+                        {(payout as any).transactionId ?? '—'}
+                      </TableCell>
+                      <TableCell>
+                        {(payout as any).payoutStatus === 'pending' ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="text-primary border-primary/50"
+                            onClick={() => {
+                              setMarkPaidPayout({ id: (payout as any).id, referrer: payout.referrer ?? '', amount: payout.amount ?? 0 });
+                              setMarkPaidTransactionId("");
+                            }}
+                          >
+                            <Banknote className="size-3.5 mr-1" /> Mark paid
+                          </Button>
+                        ) : (
+                          '—'
+                        )}
+                      </TableCell>
                     </TableRow>
                   ))
                 )}
               </TableBody>
             </Table>
           </Card>
+
+          {/* Mark payout as paid — enter transaction ID (e.g. tx hash) */}
+          <Dialog open={!!markPaidPayout} onOpenChange={(open) => !open && setMarkPaidPayout(null)}>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>Mark payout as paid</DialogTitle>
+              </DialogHeader>
+              {markPaidPayout && (
+                <>
+                  <p className="text-sm text-muted-foreground">
+                    Referrer <span className="font-medium text-foreground">{markPaidPayout.referrer}</span> — amount <span className="font-mono text-primary">${markPaidPayout.amount.toFixed(2)}</span>
+                  </p>
+                  <div className="space-y-2">
+                    <Label htmlFor="mark-paid-tx">Transaction ID (optional)</Label>
+                    <Input
+                      id="mark-paid-tx"
+                      placeholder="e.g. tx hash or payment reference"
+                      value={markPaidTransactionId}
+                      onChange={(e) => setMarkPaidTransactionId(e.target.value)}
+                      className="font-mono text-sm"
+                    />
+                  </div>
+                </>
+              )}
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setMarkPaidPayout(null)} disabled={markPaidLoading}>
+                  Cancel
+                </Button>
+                <Button onClick={handleMarkPaid} disabled={markPaidLoading}>
+                  {markPaidLoading ? 'Saving…' : 'Mark paid'}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </TabsContent>
 
         <TabsContent value="platform-settings" className="space-y-6">
