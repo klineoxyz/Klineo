@@ -183,7 +183,7 @@ export default function App() {
         if (import.meta.env.PROD && import.meta.env.VITE_ENABLE_SMOKE_TEST_PAGE !== 'true') {
           setTimeout(() =>
             toast.error("Smoke test disabled", {
-              description: "Set VITE_ENABLE_SMOKE_TEST_PAGE=true to enable in production."
+              description: "Smoke Test page is disabled in production. To enable it, set VITE_ENABLE_SMOKE_TEST_PAGE=true in your deployment environment (e.g. Vercel)."
             }), 100);
           return <Dashboard onNavigate={handleNavigate} />;
         }
