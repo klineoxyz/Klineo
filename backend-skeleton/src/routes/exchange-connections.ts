@@ -213,18 +213,19 @@ exchangeConnectionsRouter.post(
       }
 
       const hasB64 = typeof connection.encrypted_config_b64 === 'string' && connection.encrypted_config_b64.length > 0;
-      const hasBytea = connection.encrypted_config != null;
-      if (!hasB64 && !hasBytea) {
-        return res.status(400).json({ error: 'Connection has no credentials', requestId });
+      if (!hasB64) {
+        return res.status(400).json({
+          error: 'Credentials need to be re-saved',
+          message: 'This connection was saved before a security update. Use **Update credentials** in Settings to re-enter your API key and secret, then run Test again.',
+          code: 'UPDATE_CREDENTIALS_REQUIRED',
+          requestId,
+        });
       }
 
-      // Decrypt credentials (prefer base64 TEXT; fallback to bytea)
+      // Decrypt credentials (only from encrypted_config_b64; old bytea is not used)
       let credentials: BinanceCredentials;
       try {
-        const encryptedBase64 = hasB64
-          ? connection.encrypted_config_b64
-          : encryptedConfigToBase64(connection.encrypted_config);
-        const decryptedJson = await decrypt(encryptedBase64);
+        const decryptedJson = await decrypt(connection.encrypted_config_b64);
         const parsed = JSON.parse(decryptedJson);
         credentials = {
           apiKey: parsed.apiKey,
@@ -236,7 +237,7 @@ exchangeConnectionsRouter.post(
         console.error(`[${requestId}] Decryption failed:`, msg);
         return res.status(500).json({
           error: 'Failed to decrypt credentials',
-          message: 'Credentials could not be decrypted. Ensure ENCRYPTION_KEY is set on the server and unchanged since the connection was saved. Try removing and re-adding the exchange in Settings.',
+          message: 'Credentials could not be decrypted. Ensure ENCRYPTION_KEY is set on the server and unchanged. Use **Update credentials** in Settings to re-enter your API key and secret.',
           requestId,
         });
       }
@@ -307,8 +308,7 @@ exchangeConnectionsRouter.get('/balance', async (req: AuthenticatedRequest, res)
 
     const connection = connections[0];
     const hasB64 = typeof connection.encrypted_config_b64 === 'string' && connection.encrypted_config_b64.length > 0;
-    const hasBytea = connection.encrypted_config != null;
-    if (!hasB64 && !hasBytea) {
+    if (!hasB64) {
       return res.status(200).json({
         connected: false,
         exchange: 'binance',
@@ -320,10 +320,7 @@ exchangeConnectionsRouter.get('/balance', async (req: AuthenticatedRequest, res)
 
     let credentials: BinanceCredentials;
     try {
-      const encryptedBase64 = hasB64
-        ? connection.encrypted_config_b64
-        : encryptedConfigToBase64(connection.encrypted_config);
-      const decryptedJson = await decrypt(encryptedBase64);
+      const decryptedJson = await decrypt(connection.encrypted_config_b64);
       const parsed = JSON.parse(decryptedJson);
       credentials = {
         apiKey: parsed.apiKey,
@@ -334,7 +331,7 @@ exchangeConnectionsRouter.get('/balance', async (req: AuthenticatedRequest, res)
       console.error(`[${requestId}] Balance: decryption failed`);
       return res.status(500).json({
         error: 'Failed to decrypt credentials',
-        message: 'Credentials could not be decrypted. Ensure ENCRYPTION_KEY is set on the server and unchanged since the connection was saved. Try removing and re-adding the exchange in Settings.',
+        message: 'Use **Update credentials** in Settings to re-enter your API key and secret.',
         requestId,
       });
     }
