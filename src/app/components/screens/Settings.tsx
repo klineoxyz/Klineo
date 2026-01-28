@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/app/components/ui/ta
 import { Alert, AlertDescription } from "@/app/components/ui/alert";
 import { AlertTriangle, Key, Shield, Wifi, Trash2, CheckCircle2, XCircle, Loader2, Plus } from "lucide-react";
 import { useAuth } from "@/app/contexts/AuthContext";
+import { useDemo } from "@/app/contexts/DemoContext";
 import { api, exchangeConnections, type ExchangeConnection } from "@/lib/api";
 import { toast } from "@/app/lib/toast";
 import { Badge } from "@/app/components/ui/badge";
@@ -15,6 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 
 export function Settings() {
   const { user } = useAuth();
+  const { isDemoMode } = useDemo();
   const [fullName, setFullName] = useState("");
   const [username, setUsername] = useState("");
   const [timezone, setTimezone] = useState("UTC");
@@ -460,6 +462,14 @@ export function Settings() {
         </TabsContent>
 
         <TabsContent value="exchange" className="space-y-6">
+          {isDemoMode && (
+            <Alert className="border-amber-500/30 bg-amber-500/10">
+              <AlertTriangle className="size-4 text-amber-600 dark:text-amber-400" />
+              <AlertDescription className="text-sm">
+                You're in <strong>Demo mode</strong>. Switch to <strong>Live</strong> (toggle top left) to connect real Binance and Bybit APIs. In Demo you can explore the app with sample data only.
+              </AlertDescription>
+            </Alert>
+          )}
           <Alert className="border-primary/20 bg-primary/5">
             <Key className="size-4 text-primary" />
             <AlertDescription className="text-sm">
@@ -470,8 +480,8 @@ export function Settings() {
           </Alert>
 
           <div className="flex items-center justify-between">
-            <h3 className="text-lg font-semibold">Exchange Connections (Binance)</h3>
-            {!showAddForm && (
+            <h3 className="text-lg font-semibold">Exchange Connections (Binance & Bybit)</h3>
+            {!showAddForm && !isDemoMode && (
               <Button onClick={() => setShowAddForm(true)} className="gap-2">
                 <Plus className="size-4" />
                 Add Connection
@@ -479,7 +489,7 @@ export function Settings() {
             )}
           </div>
 
-          {showAddForm && (
+          {showAddForm && !isDemoMode && (
             <Card className="p-6 space-y-4">
               <h4 className="font-semibold">Add Binance Connection</h4>
               <div className="space-y-4">
@@ -559,14 +569,16 @@ export function Settings() {
           ) : exchangeConnectionsList.length === 0 ? (
             <Card className="p-6 text-center border-primary/20 bg-primary/5">
               <Key className="size-12 mx-auto mb-4 text-primary" />
-              <h4 className="font-semibold mb-2">Connect Your Binance Account</h4>
+              <h4 className="font-semibold mb-2">Connect Binance or Bybit</h4>
               <p className="text-muted-foreground mb-4">
-                Connect your Binance API keys to enable copy trading and portfolio tracking
+                In <strong>Live</strong> mode, connect your Binance or Bybit API keys to enable copy trading and portfolio tracking. Switch to Live using the toggle in the top left.
               </p>
-              <Button onClick={() => setShowAddForm(true)} className="gap-2">
-                <Plus className="size-4" />
-                Add Your First Connection
-              </Button>
+              {!isDemoMode && (
+                <Button onClick={() => setShowAddForm(true)} className="gap-2">
+                  <Plus className="size-4" />
+                  Add Your First Connection
+                </Button>
+              )}
               <p className="text-xs text-muted-foreground mt-4">
                 Your API keys are encrypted and stored securely. KLINEO never has withdrawal permissions.
               </p>

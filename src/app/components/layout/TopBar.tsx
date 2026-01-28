@@ -75,15 +75,23 @@ export function TopBar({
     <>
       <div className="h-14 border-b border-border bg-card flex items-center justify-between gap-2 px-3 sm:px-4 md:px-6 shrink-0">
         <div className="flex items-center gap-2 sm:gap-4 md:gap-6 min-w-0">
-          {isDemoMode ? (
-            <Badge variant="secondary" className="bg-primary/15 text-primary border-primary/30 shrink-0 text-xs">
-              Demo
-            </Badge>
-          ) : (
-            <Badge variant="outline" className="shrink-0 text-xs border-green-500/50 text-green-600 dark:text-green-400">
-              Live
-            </Badge>
-          )}
+          <button
+            type="button"
+            onClick={() => setDemoMode(!isDemoMode)}
+            className="shrink-0 focus:outline-none focus:ring-2 focus:ring-ring rounded"
+            title={isDemoMode ? "Switch to Live — connect real Binance/Bybit API" : "Switch to Demo — play with sample data"}
+            aria-label={isDemoMode ? "Switch to Live" : "Switch to Demo"}
+          >
+            {isDemoMode ? (
+              <Badge variant="secondary" className="bg-primary/15 text-primary border-primary/30 shrink-0 text-xs cursor-pointer hover:opacity-90">
+                Demo
+              </Badge>
+            ) : (
+              <Badge variant="outline" className="shrink-0 text-xs border-green-500/50 text-green-600 dark:text-green-400 cursor-pointer hover:opacity-90">
+                Live
+              </Badge>
+            )}
+          </button>
           {/* Mobile menu trigger */}
           {onOpenMobileNav && (
             <Button
