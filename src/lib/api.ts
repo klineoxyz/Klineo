@@ -125,12 +125,35 @@ export interface PackageCheckoutResponse {
   method?: string;
 }
 
+/** Balance for one asset (e.g. USDT or BTC) */
+export interface AssetBalance {
+  free: string;
+  locked: string;
+}
+
+/** Response from GET /api/exchange-connections/balance */
+export interface ExchangeBalanceResponse {
+  connected: boolean;
+  exchange: string | null;
+  connectionId: string | null;
+  balances: Record<string, AssetBalance>;
+  requestId: string;
+}
+
 export const exchangeConnections = {
   /**
    * List all exchange connections for current user
    */
   list: async (): Promise<{ connections: ExchangeConnection[]; requestId: string }> => {
     return api.get('/api/exchange-connections');
+  },
+
+  /**
+   * Fetch account balances from connected exchange (Binance). Used by trading terminal.
+   * Returns empty balances when not connected or API key not set.
+   */
+  getBalance: async (): Promise<ExchangeBalanceResponse> => {
+    return api.get('/api/exchange-connections/balance');
   },
 
   /**

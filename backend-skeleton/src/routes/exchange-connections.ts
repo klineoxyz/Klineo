@@ -5,7 +5,7 @@ import { validate, uuidParam } from '../middleware/validation.js';
 import { body } from 'express-validator';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { encrypt, decrypt, maskApiKey } from '../lib/crypto.js';
-import { testConnection, type BinanceCredentials } from '../lib/binance.js';
+import { testConnection, getAccountInfo, type BinanceCredentials } from '../lib/binance.js';
 
 let supabase: SupabaseClient | null = null;
 
@@ -234,6 +234,92 @@ exchangeConnectionsRouter.post(
     }
   }
 );
+
+/**
+ * GET /api/exchange-connections/balance
+ * Fetch account balances from first Binance connection (for trading terminal).
+ * Returns USDT and all asset balances so UI can show Available for buy/sell.
+ */
+exchangeConnectionsRouter.get('/balance', async (req: AuthenticatedRequest, res) => {
+  const client = getSupabase();
+  if (!client) {
+    return res.status(503).json({ error: 'Database unavailable' });
+  }
+
+  const requestId = (req as any).requestId || 'unknown';
+
+  try {
+    const { data: connections, error: listError } = await client
+      .from('user_exchange_connections')
+      .select('id, exchange, environment, encrypted_config')
+      .eq('user_id', req.user!.id)
+      .eq('exchange', 'binance')
+      .order('created_at', { ascending: false })
+      .limit(1);
+
+    if (listError || !connections?.length) {
+      return res.status(200).json({
+        connected: false,
+        exchange: null,
+        connectionId: null,
+        balances: {},
+        requestId,
+      });
+    }
+
+    const connection = connections[0];
+    if (!connection.encrypted_config) {
+      return res.status(200).json({
+        connected: false,
+        exchange: 'binance',
+        connectionId: connection.id,
+        balances: {},
+        requestId,
+      });
+    }
+
+    let credentials: BinanceCredentials;
+    try {
+      const encryptedBase64 = Buffer.from(connection.encrypted_config).toString('base64');
+      const decryptedJson = await decrypt(encryptedBase64);
+      const parsed = JSON.parse(decryptedJson);
+      credentials = {
+        apiKey: parsed.apiKey,
+        apiSecret: parsed.apiSecret,
+        environment: (connection.environment || 'production') as 'production' | 'testnet',
+      };
+    } catch (decryptError) {
+      console.error(`[${requestId}] Balance: decryption failed`);
+      return res.status(500).json({ error: 'Failed to decrypt credentials', requestId });
+    }
+
+    const account = await getAccountInfo(credentials);
+    const balances: Record<string, { free: string; locked: string }> = {};
+    for (const b of account.balances) {
+      const free = parseFloat(b.free);
+      const locked = parseFloat(b.locked);
+      if (free > 0 || locked > 0) {
+        balances[b.asset] = { free: b.free, locked: b.locked };
+      }
+    }
+
+    res.json({
+      connected: true,
+      exchange: 'binance',
+      connectionId: connection.id,
+      balances,
+      requestId,
+    });
+  } catch (err) {
+    const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+    console.error(`[${requestId}] Balance error:`, errorMessage);
+    res.status(500).json({
+      error: 'Failed to fetch balance',
+      message: errorMessage.replace(/api[_-]?key/gi, '[REDACTED]').replace(/secret/gi, '[REDACTED]'),
+      requestId,
+    });
+  }
+});
 
 /**
  * DELETE /api/exchange-connections/:id

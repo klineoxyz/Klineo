@@ -27,6 +27,7 @@ import {
 import { toast } from "sonner";
 import { Alert, AlertDescription } from "@/app/components/ui/alert";
 import { useDemo } from "@/app/contexts/DemoContext";
+import { useExchangeBalances } from "@/app/hooks/useExchangeBalances";
 import { TradingViewChart } from "@/app/components/TradingViewChart";
 import { 
   TradingViewMarketOverview,
@@ -154,8 +155,17 @@ interface TradingTerminalProps {
   onNavigate: (view: string) => void;
 }
 
+/** Format balance for display (compact for small UI) */
+function formatBalance(value: number): string {
+  if (value >= 1e6) return value.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+  if (value >= 1e3) return value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  if (value >= 1) return value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 4 });
+  return value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 6 });
+}
+
 export function TradingTerminalNew({ onNavigate }: TradingTerminalProps) {
   const { isDemoMode } = useDemo();
+  const { connected: exchangeConnected, balances, loading: balanceLoading, error: balanceError } = useExchangeBalances();
   const [pairs, setPairs] = useState<UsdtPairInfo[]>(DEFAULT_PAIRS);
   const [selectedPair, setSelectedPair] = useState("BTC/USDT");
   const [orderType, setOrderType] = useState("limit");
@@ -181,6 +191,15 @@ export function TradingTerminalNew({ onNavigate }: TradingTerminalProps) {
   const currentPairData = pairs.find((p) => p.symbol === selectedPair) || pairs[0];
   const basePrice = parseFloat(currentPairData.price.replace(/,/g, ""));
   const priceChange = parseFloat(currentPairData.change);
+
+  // Real balances from connected exchange (Binance); null when not connected
+  const baseAsset = selectedPair.split("/")[0];
+  const usdtFree =
+    exchangeConnected && balances?.USDT != null ? parseFloat(balances.USDT.free) : null;
+  const baseAssetFree =
+    exchangeConnected && baseAsset
+      ? (balances?.[baseAsset] ? parseFloat(balances[baseAsset].free) : 0)
+      : null;
 
   // Chart: real Binance klines (fallback to mock on error)
   const [chartData, setChartData] = useState<OhlcvItem[]>([]);
@@ -783,8 +802,27 @@ export function TradingTerminalNew({ onNavigate }: TradingTerminalProps) {
                 </div>
 
                 <div className="text-[11px] sm:text-xs text-muted-foreground mb-1">
-                  Available: <span className="text-foreground truncate" title={isDemoMode ? "Demo balance" : "Live balance from connected exchange"}>12,345.67 USDT</span>
-                  <span className="ml-1 text-[10px] text-muted-foreground/80">({isDemoMode ? "demo" : "live"})</span>
+                  Available:{" "}
+                  {balanceLoading ? (
+                    <span className="text-muted-foreground">Loading…</span>
+                  ) : isDemoMode ? (
+                    <>
+                      <span className="text-foreground truncate" title="Demo balance">12,345.67 USDT</span>
+                      <span className="ml-1 text-[10px] text-muted-foreground/80">(demo)</span>
+                    </>
+                  ) : exchangeConnected ? (
+                    <>
+                      <span className="text-foreground truncate" title="Live balance from connected exchange">
+                        {formatBalance(usdtFree ?? 0)} USDT
+                      </span>
+                      <span className="ml-1 text-[10px] text-muted-foreground/80">(live)</span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="text-foreground truncate" title="Connect Binance in Settings to see balance">— USDT</span>
+                      <span className="ml-1 text-[10px] text-muted-foreground/80">(connect in Settings)</span>
+                    </>
+                  )}
                 </div>
 
                 {orderType === "limit" && (
@@ -812,23 +850,26 @@ export function TradingTerminalNew({ onNavigate }: TradingTerminalProps) {
                 </div>
 
                 <div className="flex gap-1">
-                  {[25, 50, 75, 100].map((percent) => (
-                    <Button
-                      key={percent}
-                      variant="outline"
-                      size="sm"
-                      className="flex-1 h-7 sm:h-6 text-[11px] sm:text-xs min-h-[40px] sm:min-h-0"
-                      onClick={() => {
-                        const balance = 12345.67;
-                        const price = orderType === "limit" ? parseFloat(buyPrice) : currentPrice;
-                        if (price) {
-                          setBuyAmount(((balance * percent) / 100 / price).toFixed(6));
-                        }
-                      }}
-                    >
-                      {percent}%
-                    </Button>
-                  ))}
+                  {[25, 50, 75, 100].map((percent) => {
+                    const buyBalance = isDemoMode ? 12345.67 : (usdtFree ?? 0);
+                    return (
+                      <Button
+                        key={percent}
+                        variant="outline"
+                        size="sm"
+                        className="flex-1 h-7 sm:h-6 text-[11px] sm:text-xs min-h-[40px] sm:min-h-0"
+                        disabled={!isDemoMode && !exchangeConnected}
+                        onClick={() => {
+                          const price = orderType === "limit" ? parseFloat(buyPrice) : currentPrice;
+                          if (price && buyBalance > 0) {
+                            setBuyAmount(((buyBalance * percent) / 100 / price).toFixed(6));
+                          }
+                        }}
+                      >
+                        {percent}%
+                      </Button>
+                    );
+                  })}
                 </div>
 
                 {buyAmount && (orderType === "market" || buyPrice) && (
@@ -868,8 +909,27 @@ export function TradingTerminalNew({ onNavigate }: TradingTerminalProps) {
                 </div>
 
                 <div className="text-[11px] sm:text-xs text-muted-foreground mb-1">
-                  Available: <span className="text-foreground" title={isDemoMode ? "Demo balance" : "Live balance from connected exchange"}>0.5234 {selectedPair.split("/")[0]}</span>
-                  <span className="ml-1 text-[10px] text-muted-foreground/80">({isDemoMode ? "demo" : "live"})</span>
+                  Available:{" "}
+                  {balanceLoading ? (
+                    <span className="text-muted-foreground">Loading…</span>
+                  ) : isDemoMode ? (
+                    <>
+                      <span className="text-foreground" title="Demo balance">0.5234 {baseAsset}</span>
+                      <span className="ml-1 text-[10px] text-muted-foreground/80">(demo)</span>
+                    </>
+                  ) : exchangeConnected ? (
+                    <>
+                      <span className="text-foreground truncate" title="Live balance from connected exchange">
+                        {formatBalance(baseAssetFree ?? 0)} {baseAsset}
+                      </span>
+                      <span className="ml-1 text-[10px] text-muted-foreground/80">(live)</span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="text-foreground truncate" title="Connect Binance in Settings to see balance">— {baseAsset}</span>
+                      <span className="ml-1 text-[10px] text-muted-foreground/80">(connect in Settings)</span>
+                    </>
+                  )}
                 </div>
 
                 {orderType === "limit" && (
@@ -897,20 +957,25 @@ export function TradingTerminalNew({ onNavigate }: TradingTerminalProps) {
                 </div>
 
                 <div className="flex gap-1">
-                  {[25, 50, 75, 100].map((percent) => (
-                    <Button
-                      key={percent}
-                      variant="outline"
-                      size="sm"
-                      className="flex-1 h-7 sm:h-6 text-[11px] sm:text-xs min-h-[40px] sm:min-h-0"
-                      onClick={() => {
-                        const balance = 0.5234;
-                        setSellAmount(((balance * percent) / 100).toFixed(6));
-                      }}
-                    >
-                      {percent}%
-                    </Button>
-                  ))}
+                  {[25, 50, 75, 100].map((percent) => {
+                    const sellBalance = isDemoMode ? 0.5234 : (baseAssetFree ?? 0);
+                    return (
+                      <Button
+                        key={percent}
+                        variant="outline"
+                        size="sm"
+                        className="flex-1 h-7 sm:h-6 text-[11px] sm:text-xs min-h-[40px] sm:min-h-0"
+                        disabled={!isDemoMode && !exchangeConnected}
+                        onClick={() => {
+                          if (sellBalance > 0) {
+                            setSellAmount(((sellBalance * percent) / 100).toFixed(6));
+                          }
+                        }}
+                      >
+                        {percent}%
+                      </Button>
+                    );
+                  })}
                 </div>
 
                 {sellAmount && (orderType === "market" || sellPrice) && (
