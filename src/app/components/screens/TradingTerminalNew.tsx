@@ -25,6 +25,8 @@ import {
   BookOpen,
 } from "lucide-react";
 import { toast } from "sonner";
+import { Alert, AlertDescription } from "@/app/components/ui/alert";
+import { useDemo } from "@/app/contexts/DemoContext";
 import { TradingViewChart } from "@/app/components/TradingViewChart";
 import { 
   TradingViewMarketOverview,
@@ -153,6 +155,7 @@ interface TradingTerminalProps {
 }
 
 export function TradingTerminalNew({ onNavigate }: TradingTerminalProps) {
+  const { isDemoMode } = useDemo();
   const [pairs, setPairs] = useState<UsdtPairInfo[]>(DEFAULT_PAIRS);
   const [selectedPair, setSelectedPair] = useState("BTC/USDT");
   const [orderType, setOrderType] = useState("limit");
@@ -325,6 +328,11 @@ export function TradingTerminalNew({ onNavigate }: TradingTerminalProps) {
 
   return (
     <div className="h-screen flex flex-col bg-background overflow-hidden min-h-0">
+      {isDemoMode && (
+        <div className="shrink-0 px-3 py-1.5 bg-primary/10 border-b border-primary/20 text-center text-xs text-muted-foreground">
+          Demo mode — charts and order book use sample data. Switch to <strong className="text-foreground">Live</strong> (user menu) and connect Binance/Bybit in Settings to trade with real funds.
+        </div>
+      )}
       {/* CSP-safe ticker: Binance data only, no external script — avoids Content-Security-Policy eval violations */}
       <div className="h-10 sm:h-12 border-b border-border shrink-0 overflow-hidden">
         <div className="h-full flex items-center gap-4 overflow-x-auto px-2 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">

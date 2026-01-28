@@ -2,8 +2,10 @@ import { useState, useEffect } from "react";
 import { Card } from "@/app/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/app/components/ui/table";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { Alert, AlertDescription } from "@/app/components/ui/alert";
 import { api } from "@/lib/api";
 import { toast } from "@/app/lib/toast";
+import { useDemo } from "@/app/contexts/DemoContext";
 import { LoadingWrapper } from "@/app/components/ui/loading-wrapper";
 import { ErrorState } from "@/app/components/ui/error-state";
 
@@ -17,6 +19,7 @@ interface PortfolioSummary {
 }
 
 export function Portfolio() {
+  const { isDemoMode } = useDemo();
   const [summary, setSummary] = useState<PortfolioSummary | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -37,10 +40,11 @@ export function Portfolio() {
       }
     };
 
-    loadSummary();
-  }, []);
+    if (!isDemoMode) loadSummary();
+    else setIsLoading(false);
+  }, [isDemoMode]);
 
-  if (isLoading) {
+  if (isLoading && !isDemoMode) {
     return (
       <div className="p-4 sm:p-6">
         <div className="animate-pulse space-y-6">
@@ -56,7 +60,7 @@ export function Portfolio() {
     );
   }
 
-  if (error && !summary) {
+  if (!isDemoMode && error && !summary) {
     return (
       <div className="p-4 sm:p-6">
         <ErrorState
@@ -75,6 +79,11 @@ export function Portfolio() {
     );
   }
 
+  // In demo mode, show placeholder and banner; real data only in Live
+  const effectiveSummary = isDemoMode
+    ? { totalPnl: 0, unrealizedPnl: 0, realizedPnl: 0, totalVolume: 0, openPositions: 0, activeCopySetups: 0 }
+    : summary;
+
   // Mock chart data (in real app, this would come from historical data)
   const equityData = [
     { date: "Jan 15", value: 20000 },
@@ -90,6 +99,13 @@ export function Portfolio() {
 
   return (
     <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
+      {isDemoMode && (
+        <Alert className="bg-primary/10 border-primary/30">
+          <AlertDescription>
+            Demo mode — portfolio is placeholder. Switch to <strong>Live</strong> via the user menu (top right) to see your real portfolio and connect Binance/Bybit.
+          </AlertDescription>
+        </Alert>
+      )}
       <div>
         <h1 className="text-xl sm:text-2xl font-semibold mb-1">Portfolio</h1>
         <p className="text-sm text-muted-foreground">Overview of your asset balances and equity</p>
@@ -99,31 +115,31 @@ export function Portfolio() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <Card className="p-3 sm:p-4 space-y-2">
           <div className="text-xs text-muted-foreground uppercase tracking-wide">Total PnL</div>
-          <div className={`text-xl sm:text-2xl font-semibold truncate ${(summary?.totalPnl || 0) >= 0 ? "text-[#10B981]" : "text-[#EF4444]"}`}>
-            ${(summary?.totalPnl || 0).toFixed(2)}
+          <div className={`text-xl sm:text-2xl font-semibold truncate ${(effectiveSummary?.totalPnl || 0) >= 0 ? "text-[#10B981]" : "text-[#EF4444]"}`}>
+            ${(effectiveSummary?.totalPnl || 0).toFixed(2)}
           </div>
           <div className="text-xs text-muted-foreground">All time</div>
         </Card>
 
         <Card className="p-3 sm:p-4 space-y-2">
           <div className="text-xs text-muted-foreground uppercase tracking-wide">Unrealized PnL</div>
-          <div className={`text-xl sm:text-2xl font-semibold truncate ${(summary?.unrealizedPnl || 0) >= 0 ? "text-[#10B981]" : "text-[#EF4444]"}`}>
-            ${(summary?.unrealizedPnl || 0).toFixed(2)}
+          <div className={`text-xl sm:text-2xl font-semibold truncate ${(effectiveSummary?.unrealizedPnl || 0) >= 0 ? "text-[#10B981]" : "text-[#EF4444]"}`}>
+            ${(effectiveSummary?.unrealizedPnl || 0).toFixed(2)}
           </div>
           <div className="text-xs text-muted-foreground">Open positions</div>
         </Card>
 
         <Card className="p-3 sm:p-4 space-y-2">
           <div className="text-xs text-muted-foreground uppercase tracking-wide">Realized PnL</div>
-          <div className={`text-xl sm:text-2xl font-semibold truncate ${(summary?.realizedPnl || 0) >= 0 ? "text-[#10B981]" : "text-[#EF4444]"}`}>
-            ${(summary?.realizedPnl || 0).toFixed(2)}
+          <div className={`text-xl sm:text-2xl font-semibold truncate ${(effectiveSummary?.realizedPnl || 0) >= 0 ? "text-[#10B981]" : "text-[#EF4444]"}`}>
+            ${(effectiveSummary?.realizedPnl || 0).toFixed(2)}
           </div>
           <div className="text-xs text-muted-foreground">Closed positions</div>
         </Card>
 
         <Card className="p-3 sm:p-4 space-y-2">
           <div className="text-xs text-muted-foreground uppercase tracking-wide">Total Volume</div>
-          <div className="text-xl sm:text-2xl font-semibold truncate">${((summary?.totalVolume || 0) / 1000).toFixed(1)}k</div>
+          <div className="text-xl sm:text-2xl font-semibold truncate">${((effectiveSummary?.totalVolume || 0) / 1000).toFixed(1)}k</div>
           <div className="text-xs text-muted-foreground">USDT</div>
         </Card>
       </div>
@@ -132,11 +148,11 @@ export function Portfolio() {
       <div className="grid grid-cols-2 gap-3 sm:gap-4">
         <Card className="p-3 sm:p-4 space-y-2">
           <div className="text-xs text-muted-foreground uppercase tracking-wide">Open Positions</div>
-          <div className="text-xl sm:text-2xl font-semibold">{summary?.openPositions || 0}</div>
+          <div className="text-xl sm:text-2xl font-semibold">{effectiveSummary?.openPositions || 0}</div>
         </Card>
         <Card className="p-3 sm:p-4 space-y-2">
           <div className="text-xs text-muted-foreground uppercase tracking-wide">Active Copy Setups</div>
-          <div className="text-xl sm:text-2xl font-semibold">{summary?.activeCopySetups || 0}</div>
+          <div className="text-xl sm:text-2xl font-semibold">{effectiveSummary?.activeCopySetups || 0}</div>
         </Card>
       </div>
 

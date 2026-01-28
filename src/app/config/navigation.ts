@@ -82,12 +82,8 @@ export function showUIStatesDemo(isAdmin: boolean): boolean {
   return import.meta.env.DEV || (import.meta.env.PROD && !!isAdmin);
 }
 
-/** In prod, smoke test is shown only when VITE_ENABLE_SMOKE_TEST_PAGE=true and user is admin. Dev: always show. */
+/** Smoke Test: in dev everyone sees it (non-admins via Developer section, admins via Admin). In prod, admins always see the link; page access still requires VITE_ENABLE_SMOKE_TEST_PAGE when needed. */
 export function showSmokeTest(isAdmin: boolean): boolean {
   if (import.meta.env.DEV) return true;
-  return !!(
-    import.meta.env.PROD &&
-    isAdmin &&
-    import.meta.env.VITE_ENABLE_SMOKE_TEST_PAGE === 'true'
-  );
+  return !!isAdmin;
 }

@@ -43,7 +43,7 @@ export function TopBar({
   activeCopies = 3,
   exchangeLatency = 45
 }: TopBarProps) {
-  const { isDemoMode, clearDemo, demoCopySetups } = useDemo();
+  const { isDemoMode, setDemoMode, clearDemo, demoCopySetups } = useDemo();
   const demoActiveCount = demoCopySetups.filter((s) => s.status === "active").length;
   const displayedActiveCopies = isDemoMode ? demoActiveCount : activeCopies;
   const unreadNotifications = useUnreadNotificationsCount(activeView);
@@ -75,9 +75,13 @@ export function TopBar({
     <>
       <div className="h-14 border-b border-border bg-card flex items-center justify-between gap-2 px-3 sm:px-4 md:px-6 shrink-0">
         <div className="flex items-center gap-2 sm:gap-4 md:gap-6 min-w-0">
-          {isDemoMode && (
+          {isDemoMode ? (
             <Badge variant="secondary" className="bg-primary/15 text-primary border-primary/30 shrink-0 text-xs">
               Demo
+            </Badge>
+          ) : (
+            <Badge variant="outline" className="shrink-0 text-xs border-green-500/50 text-green-600 dark:text-green-400">
+              Live
             </Badge>
           )}
           {/* Mobile menu trigger */}
@@ -165,7 +169,19 @@ export function TopBar({
                 <User className="size-4" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48">
+            <DropdownMenuContent align="end" className="w-52">
+              <DropdownMenuItem
+                onClick={() => {
+                  setDemoMode(!isDemoMode);
+                  onNavigate(isDemoMode ? "portfolio" : "copy-trading");
+                }}
+              >
+                <span className="size-4 mr-2 flex items-center justify-center rounded border border-current text-[10px] font-bold">
+                  {isDemoMode ? "L" : "D"}
+                </span>
+                {isDemoMode ? "Switch to Live" : "Switch to Demo"}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
               <DropdownMenuItem onClick={() => onNavigate("settings")}>
                 <Settings className="size-4 mr-2" />
                 Settings

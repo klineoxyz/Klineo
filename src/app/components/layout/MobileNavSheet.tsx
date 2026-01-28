@@ -80,6 +80,38 @@ export function MobileNavSheet({
             </div>
           ))}
 
+          {/* Developer: Smoke Test in dev for non-admins */}
+          {import.meta.env.DEV && !isAdmin && (
+            <>
+              <div className="my-3 mx-4 border-t border-border/50" />
+              <div className="px-4 mb-2">
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">
+                  Developer
+                </span>
+              </div>
+              <button
+                onClick={() => handleNav("smoke-test")}
+                className={cn(
+                  "w-full flex items-center gap-3 px-4 py-3 min-h-[44px] text-left text-sm transition-colors hover:bg-secondary/50 relative",
+                  activeView === "smoke-test" && "bg-secondary text-primary"
+                )}
+              >
+                {activeView === "smoke-test" && (
+                  <div className="absolute left-0 top-0 bottom-0 w-1 bg-accent" />
+                )}
+                <Zap
+                  className={cn(
+                    "size-4 shrink-0",
+                    activeView === "smoke-test" ? "text-accent" : "text-muted-foreground"
+                  )}
+                />
+                <span className={cn("flex items-center gap-2", activeView === "smoke-test" && "font-medium")}>
+                  Smoke Test
+                </span>
+              </button>
+            </>
+          )}
+
           {showAdminSection(!!isAdmin) && (
             <>
               <div className="my-3 mx-4 border-t border-border" />

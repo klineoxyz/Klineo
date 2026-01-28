@@ -82,6 +82,37 @@ export function Sidebar({ activeView, onNavigate, isCollapsed, onToggleCollapse,
           </div>
         ))}
 
+        {/* Developer section: Smoke Test visible in dev for non-admins (admins see it in Admin below) */}
+        {import.meta.env.DEV && !isAdmin && (
+          <>
+            <div className={cn("my-3 border-t border-border/50", isCollapsed ? "mx-2" : "mx-4")} />
+            {!isCollapsed && (
+              <div className="px-4 mb-2">
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">
+                  Developer
+                </span>
+              </div>
+            )}
+            <button
+              onClick={() => onNavigate("smoke-test")}
+              className={cn(
+                "w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors hover:bg-secondary/50 relative",
+                activeView === "smoke-test" && "bg-secondary text-primary",
+                isCollapsed && "justify-center px-2"
+              )}
+              title={isCollapsed ? "Smoke Test" : undefined}
+            >
+              {activeView === "smoke-test" && <div className="absolute left-0 top-0 bottom-0 w-1 bg-accent" />}
+              <Zap className={cn("size-4 shrink-0", activeView === "smoke-test" ? "text-accent" : "text-muted-foreground")} />
+              {!isCollapsed && (
+                <span className={cn("flex items-center gap-2", activeView === "smoke-test" && "font-medium")}>
+                  Smoke Test
+                </span>
+              )}
+            </button>
+          </>
+        )}
+
         {/* Admin Section */}
         {showAdminSection(!!isAdmin) && (
           <>
