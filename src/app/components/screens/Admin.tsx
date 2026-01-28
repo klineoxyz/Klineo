@@ -776,6 +776,9 @@ export function Admin() {
           </Card>
 
           <Card>
+            <p className="text-xs text-muted-foreground px-4 pt-4 pb-1">
+              For each reward you can set paid status and, when paid, add the transaction ID (e.g. tx hash) of the sent amount.
+            </p>
             <Table>
               <TableHeader>
                 <TableRow>
@@ -794,7 +797,8 @@ export function Admin() {
                 {referralPayouts.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={9} className="text-center text-muted-foreground py-8">
-                      No community rewards yet. Rewards are created when users pay onboarding fees or buy packages.
+                      <span className="block">No community rewards yet.</span>
+                      <span className="block text-xs mt-1">Rewards are created when users pay onboarding fees or buy packages. When they appear here, use &quot;Mark paid&quot; and enter the transaction ID of the sent amount.</span>
                     </TableCell>
                   </TableRow>
                 ) : (
