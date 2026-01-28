@@ -146,26 +146,28 @@ export function Referrals({ onNavigate }: ReferralsProps) {
             </div>
             <p className="text-[10px] text-muted-foreground text-center">L1 → L2 → … → L7 · Rewards flow down your network</p>
           </div>
-          {/* Reward split diagram: 70% pool split across 7 levels */}
+          {/* Reward split diagram: each segment (bar) with label directly underneath */}
           <div className="space-y-2">
             <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Pool split (of 70%)</div>
-            <div className="flex h-10 rounded-md overflow-hidden border border-border/50 bg-muted/30" role="img" aria-label="Community rewards pool: Level 1 30%, Level 2 20%, Level 3 10%, Level 4 8%, Level 5 6%, Level 6 4%, Level 7 2%">
-              <div className="flex items-center justify-center text-[10px] font-medium text-primary-foreground bg-primary/90 hover:bg-primary min-w-0 flex-1" style={{ flex: "30" }} title="Level 1: 30%">30%</div>
-              <div className="flex items-center justify-center text-[10px] font-medium text-primary-foreground bg-primary/80 hover:bg-primary/90 min-w-0 flex-1" style={{ flex: "20" }} title="Level 2: 20%">20%</div>
-              <div className="flex items-center justify-center text-[10px] font-medium text-primary-foreground bg-primary/70 hover:bg-primary/80 min-w-0 flex-1" style={{ flex: "10" }} title="Level 3: 10%">10%</div>
-              <div className="flex items-center justify-center text-[10px] font-medium text-primary-foreground bg-primary/60 hover:bg-primary/70 min-w-0 flex-1" style={{ flex: "8" }} title="Level 4: 8%">8%</div>
-              <div className="flex items-center justify-center text-[10px] font-medium text-primary-foreground bg-primary/50 hover:bg-primary/60 min-w-0 flex-1" style={{ flex: "6" }} title="Level 5: 6%">6%</div>
-              <div className="flex items-center justify-center text-[10px] font-medium text-primary-foreground bg-primary/40 hover:bg-primary/50 min-w-0 flex-1" style={{ flex: "4" }} title="Level 6: 4%">4%</div>
-              <div className="flex items-center justify-center text-[10px] font-medium text-primary-foreground bg-primary/30 hover:bg-primary/40 min-w-0 flex-1 rounded-r-md" style={{ flex: "2" }} title="Level 7: 2%">2%</div>
-            </div>
-            <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
-              <span>L1 30%</span>
-              <span>L2 20%</span>
-              <span>L3 10%</span>
-              <span>L4 8%</span>
-              <span>L5 6%</span>
-              <span>L6 4%</span>
-              <span>L7 2%</span>
+            <div className="flex min-w-0 rounded-md border border-border/50 bg-muted/30 overflow-hidden" role="img" aria-label="Community rewards pool: Level 1 30%, Level 2 20%, Level 3 10%, Level 4 8%, Level 5 6%, Level 6 4%, Level 7 2%">
+              {[
+                { flex: 30, label: "L1 30%", barClass: "bg-primary/90 hover:bg-primary" },
+                { flex: 20, label: "L2 20%", barClass: "bg-primary/80 hover:bg-primary/90" },
+                { flex: 10, label: "L3 10%", barClass: "bg-primary/70 hover:bg-primary/80" },
+                { flex: 8, label: "L4 8%", barClass: "bg-primary/60 hover:bg-primary/70" },
+                { flex: 6, label: "L5 6%", barClass: "bg-primary/50 hover:bg-primary/60" },
+                { flex: 4, label: "L6 4%", barClass: "bg-primary/40 hover:bg-primary/50" },
+                { flex: 2, label: "L7 2%", barClass: "bg-primary/30 hover:bg-primary/40 rounded-r-md" },
+              ].map((item, i) => (
+                <div key={i} className="flex flex-col min-w-0 flex-1" style={{ flex: item.flex }}>
+                  <div className={`h-10 flex items-center justify-center text-[10px] font-medium text-primary-foreground ${item.barClass}`} title={item.label}>
+                    {item.flex}%
+                  </div>
+                  <div className="py-1.5 text-center text-[10px] sm:text-xs text-muted-foreground font-medium border-t border-border/50 bg-muted/20">
+                    {item.label}
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         </section>
