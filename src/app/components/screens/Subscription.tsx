@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
 import { Badge } from "@/app/components/ui/badge";
-import { Info, Loader2, Zap, ChevronDown, ChevronUp, Copy, Bot, Sparkles, Store } from "lucide-react";
+import { Info, Loader2, Zap, ChevronDown, ChevronUp, Copy, Bot, Sparkles, Store, Check } from "lucide-react";
 import { api } from "@/lib/api";
 import type { BillingPlansResponse } from "@/lib/api";
 import { toast } from "@/app/lib/toast";
@@ -238,17 +238,29 @@ function SubscriptionContent({
         </CollapsibleContent>
       </Collapsible>
 
-      {/* Trading Packages — per-package: profit cap message, copy trades, bots, strategy creation */}
+      {/* Trading Packages — similar wording to reference: top up, profit allowance, checklist, Start now */}
       <div>
-        <h2 className="text-lg font-semibold mb-3">Trading packages</h2>
-        <p className="text-sm text-muted-foreground mb-4">
-          Buy a package to unlock a profit allowance. You can use this package until you manage to earn the amount below; then buy again to continue or upgrade.
+        <h2 className="text-lg font-semibold mb-2">Trading packages</h2>
+        <p className="text-sm text-muted-foreground mb-2">
+          Top up your profit allowance. Use a package until you earn up to the allowance below; then top up again or upgrade.
         </p>
+        <div className="flex flex-wrap gap-x-4 gap-y-1 mb-4 text-sm font-medium">
+          <span className="text-foreground">Starter — <span className="text-primary font-semibold">$100</span></span>
+          <span className="text-muted-foreground">·</span>
+          <span className="text-foreground">Booster — <span className="text-primary font-semibold">$200</span></span>
+          <span className="text-muted-foreground">·</span>
+          <span className="text-foreground">Establish — <span className="text-primary font-semibold">$500</span></span>
+        </div>
         {(() => {
           const packageDisplayNames: Record<string, string> = {
             entry_100: "Starter Package",
-            pro_200: "Boost Package",
-            elite_500: "Established Package",
+            pro_200: "Booster Package",
+            elite_500: "Establish Package",
+          };
+          const packageSubtext: Record<string, string> = {
+            entry_100: "Top up profit allowance",
+            pro_200: "Top up profit allowance",
+            elite_500: "Unlock full allowance",
           };
           const packageFeatures: Record<string, { copyTrades: number | string; bots: number | string; canCreateStrategy: boolean; listStrategyInMarket: boolean }> = {
             entry_100: { copyTrades: 1, bots: 5, canCreateStrategy: false, listStrategyInMarket: false },
@@ -261,6 +273,7 @@ function SubscriptionContent({
                 const popular = pkg.id === "pro_200";
                 const features = packageFeatures[pkg.id] ?? { copyTrades: 1, bots: 5, canCreateStrategy: false, listStrategyInMarket: false };
                 const displayName = packageDisplayNames[pkg.id] ?? `$${pkg.priceUsd} package`;
+                const subtext = packageSubtext[pkg.id] ?? "Top up profit allowance";
                 return (
                   <Card
                     key={pkg.id}
@@ -270,41 +283,40 @@ function SubscriptionContent({
                       <Badge className="mb-3 w-fit bg-primary text-primary-foreground">Most popular</Badge>
                     )}
                     <div className="mb-3">
-                      <h3 className="text-lg font-semibold">
-                        {displayName}
-                      </h3>
+                      <div className="flex flex-wrap items-baseline gap-2">
+                        <h3 className="text-lg font-semibold">
+                          {displayName}
+                        </h3>
+                        <span className="text-2xl font-bold text-primary">${pkg.priceUsd}</span>
+                      </div>
                       <p className="text-sm text-muted-foreground mt-2 font-medium">
-                        This package you can use until you manage to earn{" "}
-                        <span className="text-foreground font-semibold">${pkg.profitAllowanceUsd.toLocaleString()}</span>.
+                        Profit allowance: <span className="text-foreground font-semibold">${pkg.profitAllowanceUsd.toLocaleString()}</span>
                       </p>
                       <p className="text-xs text-muted-foreground mt-1">
-                        ${pkg.priceUsd} · {pkg.multiplier}x — then buy again or upgrade to continue.
+                        {subtext}
                       </p>
                     </div>
                     <ul className="space-y-2 text-sm text-muted-foreground flex-1">
                       <li className="flex items-center gap-2">
-                        <Copy className="size-4 shrink-0 text-accent" />
-                        <span><strong className="text-foreground">{features.copyTrades}</strong> copy trade{features.copyTrades === 1 ? "" : "s"} at a time</span>
+                        <Check className="size-4 shrink-0 text-primary" />
+                        <span>Duration: until allowance used</span>
                       </li>
                       <li className="flex items-center gap-2">
-                        <Bot className="size-4 shrink-0 text-accent" />
-                        <span><strong className="text-foreground">{features.bots}</strong> auto-trade bot{features.bots === 1 ? "" : "s"}</span>
+                        <Check className="size-4 shrink-0 text-primary" />
+                        <span>Copy trading: <strong className="text-foreground">{features.copyTrades}</strong> trader{features.copyTrades === 1 ? "" : "s"} at a time</span>
                       </li>
                       <li className="flex items-center gap-2">
-                        <Sparkles className="size-4 shrink-0 text-accent" />
-                        <span className="text-foreground">Create your own strategy</span>
+                        <Check className="size-4 shrink-0 text-primary" />
+                        <span>Auto-trade bots: <strong className="text-foreground">{features.bots}</strong></span>
                       </li>
-                      {features.listStrategyInMarket ? (
-                        <li className="flex items-center gap-2">
-                          <Store className="size-4 shrink-0 text-accent" />
-                          <span className="text-foreground">Share your strategy as a bot — list in Market so your community can follow</span>
-                        </li>
-                      ) : (
-                        <li className="flex items-center gap-2 opacity-75">
-                          <Store className="size-4 shrink-0" />
-                          <span>Share strategy as bot (list in Market) — upgrade to Boost or higher</span>
-                        </li>
-                      )}
+                      <li className="flex items-center gap-2">
+                        <Check className="size-4 shrink-0 text-primary" />
+                        <span>Create strategy: {features.canCreateStrategy ? "yes" : "no"}</span>
+                      </li>
+                      <li className="flex items-center gap-2">
+                        <Check className="size-4 shrink-0 text-primary" />
+                        <span>List in Market: {features.listStrategyInMarket ? "yes" : "no"}</span>
+                      </li>
                     </ul>
                     <Button
                       className="mt-4 w-full"
@@ -315,7 +327,7 @@ function SubscriptionContent({
                       {packageLoading === pkg.id ? (
                         <Loader2 className="size-4 animate-spin" />
                       ) : (
-                        "Buy package"
+                        "Start now"
                       )}
                     </Button>
                   </Card>
