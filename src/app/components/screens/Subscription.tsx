@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
 import { Badge } from "@/app/components/ui/badge";
-import { Info, Loader2, Zap, ChevronDown, ChevronUp, Copy, Bot, Sparkles } from "lucide-react";
+import { Info, Loader2, Zap, ChevronDown, ChevronUp, Copy, Bot, Sparkles, Store } from "lucide-react";
 import { api } from "@/lib/api";
 import type { BillingPlansResponse } from "@/lib/api";
 import { toast } from "@/app/lib/toast";
@@ -227,7 +227,7 @@ function SubscriptionContent({
             className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition"
           >
             <Info className="size-4" />
-            Revenue Allocation: {revenueSplit.mlmPct}% Community Rewards · {revenueSplit.platformPct}% Platform · {revenueSplit.marketingPct}% Marketing
+            REV Distribution
             {revenueOpen ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
           </button>
         </CollapsibleTrigger>
@@ -245,16 +245,22 @@ function SubscriptionContent({
           Buy a package to unlock a profit allowance. You can use this package until you manage to earn the amount below; then buy again to continue or upgrade.
         </p>
         {(() => {
-          const packageFeatures: Record<string, { copyTrades: number | string; bots: number | string; canCreateStrategy: boolean }> = {
-            entry_100: { copyTrades: 1, bots: 5, canCreateStrategy: false },
-            pro_200: { copyTrades: 5, bots: 10, canCreateStrategy: true },
-            elite_500: { copyTrades: "Unlimited", bots: "Unlimited", canCreateStrategy: true },
+          const packageDisplayNames: Record<string, string> = {
+            entry_100: "Starter Package",
+            pro_200: "Boost Package",
+            elite_500: "Established Package",
+          };
+          const packageFeatures: Record<string, { copyTrades: number | string; bots: number | string; canCreateStrategy: boolean; listStrategyInMarket: boolean }> = {
+            entry_100: { copyTrades: 1, bots: 5, canCreateStrategy: false, listStrategyInMarket: false },
+            pro_200: { copyTrades: 5, bots: 10, canCreateStrategy: true, listStrategyInMarket: true },
+            elite_500: { copyTrades: "Unlimited", bots: "Unlimited", canCreateStrategy: true, listStrategyInMarket: true },
           };
           return (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
               {packages.map((pkg) => {
                 const popular = pkg.id === "pro_200";
-                const features = packageFeatures[pkg.id] ?? { copyTrades: 1, bots: 5, canCreateStrategy: false };
+                const features = packageFeatures[pkg.id] ?? { copyTrades: 1, bots: 5, canCreateStrategy: false, listStrategyInMarket: false };
+                const displayName = packageDisplayNames[pkg.id] ?? `$${pkg.priceUsd} package`;
                 return (
                   <Card
                     key={pkg.id}
@@ -265,14 +271,14 @@ function SubscriptionContent({
                     )}
                     <div className="mb-3">
                       <h3 className="text-lg font-semibold">
-                        ${pkg.priceUsd} package
+                        {displayName}
                       </h3>
                       <p className="text-sm text-muted-foreground mt-2 font-medium">
                         This package you can use until you manage to earn{" "}
                         <span className="text-foreground font-semibold">${pkg.profitAllowanceUsd.toLocaleString()}</span>.
                       </p>
                       <p className="text-xs text-muted-foreground mt-1">
-                        {pkg.multiplier}x profit allowance — then buy again or upgrade to continue.
+                        ${pkg.priceUsd} · {pkg.multiplier}x — then buy again or upgrade to continue.
                       </p>
                     </div>
                     <ul className="space-y-2 text-sm text-muted-foreground flex-1">
@@ -293,6 +299,17 @@ function SubscriptionContent({
                         <li className="flex items-center gap-2 opacity-75">
                           <Sparkles className="size-4 shrink-0" />
                           <span>Create strategy — upgrade to Most Popular</span>
+                        </li>
+                      )}
+                      {features.listStrategyInMarket ? (
+                        <li className="flex items-center gap-2">
+                          <Store className="size-4 shrink-0 text-accent" />
+                          <span className="text-foreground">List Strategy bot in the Market so your community can follow your strategy</span>
+                        </li>
+                      ) : (
+                        <li className="flex items-center gap-2 opacity-75">
+                          <Store className="size-4 shrink-0" />
+                          <span>List strategy in Market — upgrade to Boost or higher</span>
                         </li>
                       )}
                     </ul>
