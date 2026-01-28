@@ -138,7 +138,7 @@ export function Subscription({ onNavigate }: SubscriptionProps) {
       <div>
         <h1 className="text-xl sm:text-2xl font-semibold mb-1">Packages & Membership</h1>
         <p className="text-sm text-muted-foreground">
-          Pay a one-time joining fee, then buy trading packages to unlock profit allowance.
+          Pay a one-time joining fee, then buy a package and trade until you make the profit shown (e.g. $100 → $300 profit). Then top up or upgrade to continue.
         </p>
       </div>
 
@@ -238,11 +238,11 @@ function SubscriptionContent({
         </CollapsibleContent>
       </Collapsible>
 
-      {/* Trading Packages — similar wording to reference: top up, profit allowance, checklist, Start now */}
+      {/* Trading Packages — clear: buy package, trade until you make X profit (multiplier), then top up */}
       <div>
         <h2 className="text-lg font-semibold mb-2">Trading packages</h2>
         <p className="text-sm text-muted-foreground mb-2">
-          Top up your profit allowance. Use a package until you earn up to the allowance below; then top up again or upgrade.
+          Buy a package and trade until you make the profit shown below (e.g. $100 package → trade until you make $300 profit). Then top up or upgrade to continue.
         </p>
         <div className="flex flex-wrap gap-x-4 gap-y-1 mb-4 text-sm font-medium">
           <span className="text-foreground">Starter — <span className="text-primary font-semibold">$100</span></span>
@@ -257,11 +257,7 @@ function SubscriptionContent({
             pro_200: "Booster Package",
             elite_500: "Establish Package",
           };
-          const packageSubtext: Record<string, string> = {
-            entry_100: "Top up profit allowance",
-            pro_200: "Top up profit allowance",
-            elite_500: "Unlock full allowance",
-          };
+          const packageSubtext = "Then top up or upgrade to continue.";
           const packageFeatures: Record<string, { copyTrades: number | string; bots: number | string; canCreateStrategy: boolean; listStrategyInMarket: boolean }> = {
             entry_100: { copyTrades: 1, bots: 5, canCreateStrategy: true, listStrategyInMarket: false },
             pro_200: { copyTrades: 5, bots: 10, canCreateStrategy: true, listStrategyInMarket: true },
@@ -273,7 +269,6 @@ function SubscriptionContent({
                 const popular = pkg.id === "pro_200";
                 const features = packageFeatures[pkg.id] ?? { copyTrades: 1, bots: 5, canCreateStrategy: true, listStrategyInMarket: false };
                 const displayName = packageDisplayNames[pkg.id] ?? `$${pkg.priceUsd} package`;
-                const subtext = packageSubtext[pkg.id] ?? "Top up profit allowance";
                 return (
                   <Card
                     key={pkg.id}
@@ -290,10 +285,10 @@ function SubscriptionContent({
                         <span className="text-2xl font-bold text-primary">${pkg.priceUsd}</span>
                       </div>
                       <p className="text-sm text-muted-foreground mt-2 font-medium">
-                        Profit allowance: <span className="text-foreground font-semibold">${pkg.profitAllowanceUsd.toLocaleString()}</span>
+                        Buy ${pkg.priceUsd}. Trade until you make <span className="text-foreground font-semibold">${pkg.profitAllowanceUsd.toLocaleString()}</span> profit ({pkg.multiplier}x).
                       </p>
                       <p className="text-xs text-muted-foreground mt-1">
-                        {subtext}
+                        {packageSubtext}
                       </p>
                     </div>
                     <ul className="space-y-2 text-sm text-muted-foreground flex-1">

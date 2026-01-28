@@ -34,15 +34,15 @@ const faqCategories = [
     questions: [
       {
         q: "What are the packages and joining fee?",
-        a: "A one-time $100 Joining Fee is required to create your profile and enable CEX API connection. Then you buy trading packages: Entry ($100 → $300 profit allowance), Level 2 ($200 → $1,000), Level 3 ($500 → $5,000). Trade until you earn up to that profit cap, then buy again to continue."
+        a: "A one-time $100 Joining Fee is required to create your profile and enable CEX API connection. Then you buy a package and trade until you make the profit: Starter $100 → $300 profit (3x), Booster $200 → $1,000 profit (5x), Establish $500 → $5,000 profit (10x). Then top up or upgrade to continue."
       },
       {
         q: "How does the profit allowance work?",
-        a: "You pay upfront for a package (e.g. $100 = $300 profit allowance). You can trade until you earn up to that amount in profit. When you hit the cap, buy another package to unlock more allowance. There is no per-trade fee."
+        a: "Buy a package (e.g. $100) and trade until you make the profit shown (e.g. $300 for the $100 package, 3x). Then top up or upgrade to continue. There is no per-trade fee."
       },
       {
         q: "How is allowance used?",
-        a: "Profit from your copied trades counts toward your allowance. Example: $100 Entry package gives $300 allowance. Once your realized profit from copied trades reaches $300, you need to buy another package to continue copying."
+        a: "Profit from your copied trades counts toward your allowance. Example: buy the $100 package and trade until you make $300 profit (3x). Then top up or upgrade to continue copying."
       },
       {
         q: "What payment methods do you accept?",

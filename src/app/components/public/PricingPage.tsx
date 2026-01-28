@@ -118,9 +118,9 @@ export function PricingPage({ onNavigate }: PricingPageProps) {
               <Badge variant="outline" className="mb-4 bg-accent/10 text-accent border-accent/30">
                 Credit-based allowance
               </Badge>
-              <h2 className="text-3xl font-bold mb-3">Pay upfront, trade until you hit your profit cap</h2>
+              <h2 className="text-3xl font-bold mb-3">Buy a package, trade until you make the profit</h2>
               <p className="text-muted-foreground text-lg">
-                Buy a package to unlock a profit allowance. Trade until you earn up to that amount in profit, then buy again to continue.
+                Buy a package (e.g. $100) and trade until you make the profit shown (e.g. $300 for the $100 package). Then top up or upgrade to continue.
               </p>
             </div>
 
@@ -130,10 +130,10 @@ export function PricingPage({ onNavigate }: PricingPageProps) {
                   Example: $100 package
                 </div>
                 <div className="text-sm text-muted-foreground mb-4">
-                  Profit allowance: <span className="font-mono font-semibold">$300</span> (3x)
+                  Buy $100. Trade until you make <span className="font-mono font-semibold">$300</span> profit (3x)
                 </div>
                 <div className="text-xl font-mono font-semibold">
-                  Trade until you earn up to $300 profit
+                  Then top up or upgrade to continue
                 </div>
               </div>
 
@@ -176,7 +176,7 @@ export function PricingPage({ onNavigate }: PricingPageProps) {
           <div className="text-center mb-12">
             <h2 className="text-3xl font-bold mb-4">Trading Packages</h2>
             <p className="text-muted-foreground max-w-2xl mx-auto">
-              Buy a package to unlock a profit allowance. Trade until you earn up to the cap, then buy again.
+              Buy a package and trade until you make the profit shown (e.g. $100 → $300 profit). Then top up or upgrade to continue.
             </p>
             <Badge variant="outline" className="mt-4 bg-accent/10 text-accent border-accent/30">
               Joining fee $100 required first
@@ -192,18 +192,18 @@ export function PricingPage({ onNavigate }: PricingPageProps) {
                 <div className="text-sm text-muted-foreground">one-time package</div>
                 <div className="text-sm text-accent flex items-center gap-2 mt-2">
                   <Zap className="size-4" />
-                  <span className="font-mono">3x</span> → <span className="font-mono font-semibold">$300</span> profit allowance
+                  Buy $100. Trade until you make <span className="font-mono font-semibold">$300</span> profit (3x)
                 </div>
               </div>
 
               <ul className="space-y-3 mb-8">
                 <li className="flex items-start gap-3">
                   <CheckCircle2 className="size-5 text-accent flex-shrink-0 mt-0.5" />
-                  <span className="text-sm">Trade until you earn up to $300 profit</span>
+                  <span className="text-sm">Trade until you make $300 profit</span>
                 </li>
                 <li className="flex items-start gap-3">
                   <CheckCircle2 className="size-5 text-accent flex-shrink-0 mt-0.5" />
-                  <span className="text-sm">Then buy another package to continue</span>
+                  <span className="text-sm">Then top up or upgrade to continue</span>
                 </li>
               </ul>
 
@@ -230,18 +230,18 @@ export function PricingPage({ onNavigate }: PricingPageProps) {
                 <div className="text-sm text-muted-foreground">one-time package</div>
                 <div className="text-sm text-accent flex items-center gap-2 mt-2">
                   <Zap className="size-4" />
-                  <span className="font-mono">5x</span> → <span className="font-mono font-semibold">$1,000</span> profit allowance
+                  Buy $200. Trade until you make <span className="font-mono font-semibold">$1,000</span> profit (5x)
                 </div>
               </div>
 
               <ul className="space-y-3 mb-8">
                 <li className="flex items-start gap-3">
                   <CheckCircle2 className="size-5 text-accent flex-shrink-0 mt-0.5" />
-                  <span className="text-sm font-semibold">Trade until you earn up to $1,000 profit</span>
+                  <span className="text-sm font-semibold">Trade until you make $1,000 profit</span>
                 </li>
                 <li className="flex items-start gap-3">
                   <CheckCircle2 className="size-5 text-accent flex-shrink-0 mt-0.5" />
-                  <span className="text-sm font-semibold">Then buy another package to continue</span>
+                  <span className="text-sm font-semibold">Then top up or upgrade to continue</span>
                 </li>
               </ul>
 
@@ -261,18 +261,18 @@ export function PricingPage({ onNavigate }: PricingPageProps) {
                 <div className="text-sm text-muted-foreground">one-time package</div>
                 <div className="text-sm text-accent flex items-center gap-2 mt-2">
                   <Zap className="size-4" />
-                  <span className="font-mono">10x</span> → <span className="font-mono font-semibold">$5,000</span> profit allowance
+                  Buy $500. Trade until you make <span className="font-mono font-semibold">$5,000</span> profit (10x)
                 </div>
               </div>
 
               <ul className="space-y-3 mb-8">
                 <li className="flex items-start gap-3">
                   <CheckCircle2 className="size-5 text-accent flex-shrink-0 mt-0.5" />
-                  <span className="text-sm font-semibold">Trade until you earn up to $5,000 profit</span>
+                  <span className="text-sm font-semibold">Trade until you make $5,000 profit</span>
                 </li>
                 <li className="flex items-start gap-3">
                   <CheckCircle2 className="size-5 text-accent flex-shrink-0 mt-0.5" />
-                  <span className="text-sm font-semibold">Then buy another package to continue</span>
+                  <span className="text-sm font-semibold">Then top up or upgrade to continue</span>
                 </li>
               </ul>
 
@@ -352,7 +352,7 @@ export function PricingPage({ onNavigate }: PricingPageProps) {
             <Card className="p-6">
               <h3 className="font-semibold mb-2">How does the profit allowance work?</h3>
               <p className="text-sm text-muted-foreground leading-relaxed">
-                You pay upfront for a package (e.g. $100 Entry = $300 profit allowance). You can trade until you earn up to that amount in profit. When you hit the cap, buy another package to unlock more allowance. No per-trade fee.
+                Buy a package (e.g. $100) and trade until you make the profit shown (e.g. $300 for the $100 package, 3x). Then top up or upgrade to continue. No per-trade fee.
               </p>
             </Card>
 
@@ -367,7 +367,7 @@ export function PricingPage({ onNavigate }: PricingPageProps) {
             <Card className="p-6">
               <h3 className="font-semibold mb-2">Do I need to pay the joining fee first?</h3>
               <p className="text-sm text-muted-foreground leading-relaxed">
-                Yes. The $100 joining fee is required before you can connect your CEX API and copy trade. It enables profile creation and API connection. After that, buy a trading package to unlock your profit allowance.
+                Yes. The $100 joining fee is required before you can connect your CEX API and copy trade. It enables profile creation and API connection. After that, buy a package and trade until you make the profit (e.g. $100 → $300).
               </p>
             </Card>
 
