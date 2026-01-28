@@ -6,13 +6,21 @@ import { Button } from "@/app/components/ui/button";
 import { Switch } from "@/app/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/app/components/ui/tabs";
 import { Alert, AlertDescription } from "@/app/components/ui/alert";
-import { AlertTriangle, Key, Shield, Wifi, Trash2, CheckCircle2, XCircle, Loader2, Plus } from "lucide-react";
+import { AlertTriangle, Key, Shield, Wifi, Trash2, CheckCircle2, XCircle, Loader2, Plus, KeyRound } from "lucide-react";
 import { useAuth } from "@/app/contexts/AuthContext";
 import { useDemo } from "@/app/contexts/DemoContext";
 import { api, exchangeConnections, type ExchangeConnection } from "@/lib/api";
 import { toast } from "@/app/lib/toast";
 import { Badge } from "@/app/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/app/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/app/components/ui/dialog";
 
 export function Settings() {
   const { user } = useAuth();
@@ -41,6 +49,10 @@ export function Settings() {
   });
   const [formLoading, setFormLoading] = useState(false);
   const [testingId, setTestingId] = useState<string | null>(null);
+  // Update credentials (re-save API key/secret to fix decrypt errors)
+  const [updateCredsConn, setUpdateCredsConn] = useState<ExchangeConnection | null>(null);
+  const [updateCredsForm, setUpdateCredsForm] = useState({ apiKey: "", apiSecret: "", environment: "production" as "production" | "testnet" });
+  const [updateCredsLoading, setUpdateCredsLoading] = useState(false);
 
   useEffect(() => {
     if (!user?.id) {
@@ -226,6 +238,38 @@ export function Settings() {
       toast.error('Test failed', { description });
     } finally {
       setTestingId(null);
+    }
+  };
+
+  const handleUpdateCredentialsOpen = (conn: ExchangeConnection) => {
+    setUpdateCredsConn(conn);
+    setUpdateCredsForm({
+      apiKey: "",
+      apiSecret: "",
+      environment: (conn.environment === "testnet" ? "testnet" : "production") as "production" | "testnet",
+    });
+  };
+
+  const handleUpdateCredentialsSubmit = async () => {
+    if (!updateCredsConn || !updateCredsForm.apiKey.trim() || !updateCredsForm.apiSecret.trim()) {
+      toast.error("Please enter API key and secret");
+      return;
+    }
+    setUpdateCredsLoading(true);
+    try {
+      await exchangeConnections.updateCredentials(updateCredsConn.id, {
+        apiKey: updateCredsForm.apiKey.trim(),
+        apiSecret: updateCredsForm.apiSecret.trim(),
+        environment: updateCredsForm.environment,
+      });
+      toast.success("Credentials updated. Run Test to verify.");
+      setUpdateCredsConn(null);
+      const data = await exchangeConnections.list();
+      setExchangeConnectionsList(data.connections);
+    } catch (err: any) {
+      toast.error("Failed to update credentials", { description: err?.message });
+    } finally {
+      setUpdateCredsLoading(false);
     }
   };
 
@@ -626,9 +670,14 @@ export function Settings() {
                         {conn.last_error_message && (
                           <div className="text-[#EF4444]">Error: {conn.last_error_message}</div>
                         )}
+                        {(conn.last_test_status === "fail" || !conn.last_test_status) && (
+                          <p className="text-xs text-muted-foreground mt-1">
+                            If Test fails with a decrypt error, use <strong>Update credentials</strong> to re-enter your API key and secret.
+                          </p>
+                        )}
                       </div>
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2">
                       <Button
                         variant="outline"
                         size="sm"
@@ -638,8 +687,17 @@ export function Settings() {
                         {testingId === conn.id ? (
                           <Loader2 className="size-4 animate-spin" />
                         ) : (
-                          'Test'
+                          "Test"
                         )}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleUpdateCredentialsOpen(conn)}
+                        className="gap-1"
+                      >
+                        <KeyRound className="size-3.5" />
+                        Update credentials
                       </Button>
                       <Button
                         variant="outline"
@@ -655,6 +713,66 @@ export function Settings() {
               ))}
             </div>
           )}
+
+          {/* Update credentials dialog — re-enter API key/secret to fix decrypt errors */}
+          <Dialog open={!!updateCredsConn} onOpenChange={(open) => !open && setUpdateCredsConn(null)}>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>Update credentials</DialogTitle>
+                <DialogDescription>
+                  Re-enter your API key and secret. This fixes &quot;decrypt&quot; errors when Test fails. Keys are encrypted and saved securely.
+                </DialogDescription>
+              </DialogHeader>
+              {updateCredsConn && (
+                <div className="space-y-4 py-2">
+                  <div className="space-y-2">
+                    <Label>Environment</Label>
+                    <Select
+                      value={updateCredsForm.environment}
+                      onValueChange={(v: "production" | "testnet") => setUpdateCredsForm((f) => ({ ...f, environment: v }))}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="production">Production</SelectItem>
+                        <SelectItem value="testnet">Testnet</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>API Key</Label>
+                    <Input
+                      type="password"
+                      placeholder="Enter your Binance API key"
+                      value={updateCredsForm.apiKey}
+                      onChange={(e) => setUpdateCredsForm((f) => ({ ...f, apiKey: e.target.value }))}
+                      className="font-mono"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>API Secret</Label>
+                    <Input
+                      type="password"
+                      placeholder="Enter your Binance API secret"
+                      value={updateCredsForm.apiSecret}
+                      onChange={(e) => setUpdateCredsForm((f) => ({ ...f, apiSecret: e.target.value }))}
+                      className="font-mono"
+                    />
+                  </div>
+                </div>
+              )}
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setUpdateCredsConn(null)} disabled={updateCredsLoading}>
+                  Cancel
+                </Button>
+                <Button onClick={handleUpdateCredentialsSubmit} disabled={updateCredsLoading}>
+                  {updateCredsLoading ? <Loader2 className="size-4 animate-spin mr-2" /> : null}
+                  Save credentials
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
 
           <Card className="p-6 space-y-4">
             <h3 className="text-lg font-semibold">API Permissions Guide</h3>

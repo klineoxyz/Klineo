@@ -171,6 +171,16 @@ export const exchangeConnections = {
   },
 
   /**
+   * Re-save API key/secret for an existing connection (fixes decrypt errors after storage change).
+   */
+  updateCredentials: async (
+    id: string,
+    data: { apiKey: string; apiSecret: string; environment?: 'production' | 'testnet' }
+  ): Promise<{ message: string; requestId: string }> => {
+    return api.put(`/api/exchange-connections/${id}/credentials`, data);
+  },
+
+  /**
    * Delete exchange connection
    */
   delete: async (id: string): Promise<{ message: string; requestId: string }> => {

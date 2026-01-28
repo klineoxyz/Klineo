@@ -368,6 +368,70 @@ exchangeConnectionsRouter.get('/balance', async (req: AuthenticatedRequest, res)
 });
 
 /**
+ * PUT /api/exchange-connections/:id/credentials
+ * Re-save API key/secret for an existing connection (updates encrypted_config_b64).
+ * Use this when Test fails with "decrypt" — re-enter keys and save to fix storage.
+ */
+exchangeConnectionsRouter.put(
+  '/:id/credentials',
+  uuidParam('id'),
+  validate([
+    body('apiKey').isString().isLength({ min: 10, max: 200 }).withMessage('API key must be 10-200 characters'),
+    body('apiSecret').isString().isLength({ min: 10, max: 200 }).withMessage('API secret must be 10-200 characters'),
+    body('environment').optional().isIn(['production', 'testnet']).withMessage('Environment must be production or testnet'),
+  ]),
+  async (req: AuthenticatedRequest, res) => {
+    const client = getSupabase();
+    if (!client) {
+      return res.status(503).json({ error: 'Database unavailable' });
+    }
+
+    const requestId = (req as any).requestId || 'unknown';
+    const connectionId = req.params.id;
+    const { apiKey, apiSecret, environment } = req.body;
+
+    try {
+      const { data: connection, error: fetchError } = await client
+        .from('user_exchange_connections')
+        .select('id, exchange, environment')
+        .eq('id', connectionId)
+        .eq('user_id', req.user!.id)
+        .single();
+
+      if (fetchError || !connection) {
+        return res.status(404).json({ error: 'Connection not found', requestId });
+      }
+
+      const credentialsJson = JSON.stringify({ apiKey, apiSecret });
+      const encryptedConfig = await encrypt(credentialsJson);
+
+      const updateData: any = {
+        encrypted_config_b64: encryptedConfig,
+        updated_at: new Date().toISOString(),
+      };
+      if (environment) updateData.environment = environment;
+
+      const { error: updateError } = await client
+        .from('user_exchange_connections')
+        .update(updateData)
+        .eq('id', connectionId)
+        .eq('user_id', req.user!.id);
+
+      if (updateError) {
+        console.error(`[${requestId}] Error updating credentials:`, updateError);
+        return res.status(500).json({ error: 'Failed to update credentials', requestId });
+      }
+
+      res.json({ message: 'Credentials updated. Run Test to verify.', requestId });
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+      console.error(`[${requestId}] Update credentials error:`, errorMessage);
+      res.status(500).json({ error: 'Failed to update credentials', requestId });
+    }
+  }
+);
+
+/**
  * DELETE /api/exchange-connections/:id
  * Delete exchange connection
  */
