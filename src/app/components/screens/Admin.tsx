@@ -34,7 +34,7 @@ export function Admin() {
   const [feeTransactions, setFeeTransactions] = useState<any[]>([]);
   const [feeSummary, setFeeSummary] = useState({ totalFees: 0, referralPayouts: 0, netRevenue: 0 });
   const [referralPayouts, setReferralPayouts] = useState<any[]>([]);
-  const [referralStats, setReferralStats] = useState({ totalCommissions: 0, pendingPayouts: 0, activeReferrers: 0 });
+  const [referralStats, setReferralStats] = useState({ totalEarnings: 0, activeReferrers: 0 });
   const [coupons, setCoupons] = useState<any[]>([]);
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
 
@@ -129,8 +129,8 @@ export function Admin() {
       setFeeTransactions((data as any).transactions || []);
       setFeeSummary((data as any).summary || { totalFees: 0, referralPayouts: 0, netRevenue: 0 });
     } catch (err: any) {
-      console.error('Failed to load fees:', err);
-      toast.error('Failed to load fees');
+      console.error('Failed to load revenue:', err);
+      toast.error('Failed to load revenue & payments');
     }
   };
 
@@ -138,7 +138,7 @@ export function Admin() {
     try {
       const data = await api.get('/api/admin/referrals');
       setReferralPayouts((data as any).payouts || []);
-      setReferralStats((data as any).summary || { totalCommissions: 0, pendingPayouts: 0, activeReferrers: 0 });
+      setReferralStats((data as any).summary || { totalEarnings: 0, activeReferrers: 0 });
     } catch (err: any) {
       console.error('Failed to load referrals:', err);
       toast.error('Failed to load referrals');
@@ -309,7 +309,7 @@ export function Admin() {
         </Card>
 
         <Card className="p-4 space-y-2">
-          <div className="text-xs text-muted-foreground uppercase tracking-wide">Platform Fees</div>
+          <div className="text-xs text-muted-foreground uppercase tracking-wide">Package & Onboarding Revenue</div>
           <div className="text-2xl font-semibold">{loading ? "—" : `$${stats.platformFees.toLocaleString()}`}</div>
         </Card>
 
@@ -325,7 +325,7 @@ export function Admin() {
           <TabsTrigger value="users">Users</TabsTrigger>
           <TabsTrigger value="traders">Traders</TabsTrigger>
           <TabsTrigger value="subscriptions">Subscriptions</TabsTrigger>
-          <TabsTrigger value="fees">Fees & Payments</TabsTrigger>
+          <TabsTrigger value="fees">Revenue & Payments</TabsTrigger>
           <TabsTrigger value="referrals">Referrals</TabsTrigger>
           <TabsTrigger value="platform-settings">Platform Settings</TabsTrigger>
           <TabsTrigger value="discounts">Discount Coupons</TabsTrigger>
@@ -648,11 +648,14 @@ export function Admin() {
         </TabsContent>
 
         <TabsContent value="fees" className="space-y-4" onFocus={loadFees}>
+          <p className="text-sm text-muted-foreground">
+            Revenue is from package sales and one-time onboarding fees only. We do not charge per-trade fees.
+          </p>
           <Card className="p-6">
-            <h3 className="text-lg font-semibold mb-4">Platform Fee Summary (This Month)</h3>
+            <h3 className="text-lg font-semibold mb-4">Revenue Summary (This Month)</h3>
             <div className="grid grid-cols-3 gap-4 mb-6">
               <div className="p-4 bg-secondary/30 rounded">
-                <div className="text-sm text-muted-foreground mb-1">Total Fees Collected</div>
+                <div className="text-sm text-muted-foreground mb-1">Packages & Onboarding Revenue</div>
                 <div className="text-2xl font-semibold text-primary">${feeSummary.totalFees.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
               </div>
               <div className="p-4 bg-secondary/30 rounded">
@@ -667,7 +670,7 @@ export function Admin() {
           </Card>
 
           <Card className="p-4 flex items-center justify-between">
-            <h3 className="text-lg font-semibold">Fee Transaction History</h3>
+            <h3 className="text-lg font-semibold">Payment History</h3>
             <div className="flex gap-2">
               <Button variant="outline" size="sm" onClick={loadFees}>
                 <RefreshCw className="size-4 mr-2" />
@@ -685,29 +688,29 @@ export function Admin() {
               <TableHeader>
                 <TableRow>
                   <TableHead>User ID</TableHead>
-                  <TableHead>Trade</TableHead>
-                  <TableHead>Profit</TableHead>
-                  <TableHead>Fee (20%)</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead>Description</TableHead>
+                  <TableHead>Amount</TableHead>
                   <TableHead>Timestamp</TableHead>
-                  <TableHead>Copied Trader</TableHead>
+                  <TableHead>Reference</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {feeTransactions.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
-                      No fee transactions found.
+                      No payments yet. Revenue comes from package sales and onboarding fees.
                     </TableCell>
                   </TableRow>
                 ) : (
                   feeTransactions.map((tx, i) => (
                     <TableRow key={i}>
                       <TableCell className="font-mono text-xs">{tx.userId?.substring(0, 8)}...</TableCell>
-                      <TableCell className="font-mono text-sm">{tx.trade}</TableCell>
-                      <TableCell className="font-mono text-[#10B981]">+${tx.profit?.toFixed(2) || '0.00'}</TableCell>
-                      <TableCell className="font-mono text-primary">${tx.fee?.toFixed(2) || '0.00'}</TableCell>
+                      <TableCell className="text-sm">{tx.type ?? tx.trade ?? '—'}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{tx.description ?? tx.profit != null ? `Profit ${tx.profit}` : '—'}</TableCell>
+                      <TableCell className="font-mono text-primary">${Number(tx.amount ?? tx.fee ?? 0).toFixed(2)}</TableCell>
                       <TableCell className="text-muted-foreground text-xs">{tx.date}</TableCell>
-                      <TableCell className="text-sm">{tx.trader}</TableCell>
+                      <TableCell className="text-sm">{tx.reference ?? tx.trader ?? '—'}</TableCell>
                     </TableRow>
                   ))
                 )}
@@ -717,20 +720,14 @@ export function Admin() {
         </TabsContent>
 
         <TabsContent value="referrals" className="space-y-4" onFocus={loadReferrals}>
+          <p className="text-sm text-muted-foreground">
+            Community rewards from the 70% referral pool. Allocated automatically when users pay onboarding fees or buy packages (7-level upline: L1 30%, L2 20%, L3 10%, L4 8%, L5 6%, L6 4%, L7 2%). No per-trade fees.
+          </p>
           <Card className="p-6 space-y-4">
-            <div>
-              <h3 className="text-lg font-semibold mb-2">Referral Payout Queue</h3>
-              <div className="text-sm text-muted-foreground">
-                {referralStats.pendingPayouts} pending payout requests totaling ${referralPayouts
-                  .filter((p) => p.status === "Pending")
-                  .reduce((sum, p) => sum + p.commission, 0)
-                  .toLocaleString(undefined, { minimumFractionDigits: 2 })}
-              </div>
-            </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="p-4 bg-secondary/30 rounded">
-                <div className="text-sm text-muted-foreground mb-1">Total Commissions Paid</div>
-                <div className="text-2xl font-semibold">${referralStats.totalCommissions.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
+                <div className="text-sm text-muted-foreground mb-1">Total Community Rewards</div>
+                <div className="text-2xl font-semibold">${referralStats.totalEarnings.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
               </div>
               <div className="p-4 bg-secondary/30 rounded">
                 <div className="text-sm text-muted-foreground mb-1">Active Referrers</div>
@@ -740,7 +737,7 @@ export function Admin() {
           </Card>
 
           <Card className="p-4 flex items-center justify-between">
-            <h3 className="text-lg font-semibold">Commission History</h3>
+            <h3 className="text-lg font-semibold">Community Rewards History</h3>
             <div className="flex gap-2">
               <Button variant="outline" size="sm" onClick={loadReferrals}>
                 <RefreshCw className="size-4 mr-2" />
@@ -757,51 +754,32 @@ export function Admin() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Referred User</TableHead>
                   <TableHead>Referrer</TableHead>
-                  <TableHead>Tier</TableHead>
-                  <TableHead>Referral Fees</TableHead>
-                  <TableHead>Commission</TableHead>
-                  <TableHead>Status</TableHead>
+                  <TableHead>Level</TableHead>
+                  <TableHead>Purchase type</TableHead>
+                  <TableHead>Buyer</TableHead>
+                  <TableHead>Amount</TableHead>
                   <TableHead>Date</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {referralPayouts.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
-                      No referral payouts found.
+                    <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                      No community rewards yet. Rewards are created when users pay onboarding fees or buy packages.
                     </TableCell>
                   </TableRow>
                 ) : (
                   referralPayouts.map((payout, i) => (
                     <TableRow key={i}>
-                      <TableCell className="font-mono text-xs">{payout.userId}</TableCell>
-                      <TableCell className="font-mono text-xs">{payout.referrer}</TableCell>
+                      <TableCell className="text-sm">{payout.referrer ?? '—'}</TableCell>
                       <TableCell>
-                        <Badge variant={payout.tier === "Tier 1" ? "default" : "secondary"}>
-                          {payout.tier}
-                        </Badge>
+                        <Badge variant="secondary">L{payout.level ?? '—'}</Badge>
                       </TableCell>
-                      <TableCell className="font-mono text-sm">${payout.referralFees.toFixed(2)}</TableCell>
-                      <TableCell className="font-mono text-primary">${payout.commission.toFixed(2)}</TableCell>
-                      <TableCell>
-                        <Badge 
-                          variant={payout.status === "Paid" ? "default" : payout.status === "Pending" ? "secondary" : "destructive"}
-                          className={payout.status === "Paid" ? "bg-[#10B981]/10 text-[#10B981] border-[#10B981]/50" : ""}
-                        >
-                          {payout.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-muted-foreground text-sm">{payout.date}</TableCell>
-                      <TableCell className="text-right">
-                        {payout.status === "Pending" && (
-                          <Button variant="outline" size="sm" className="bg-[#10B981]/10 text-[#10B981] border-[#10B981]/50">
-                            Process
-                          </Button>
-                        )}
-                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{payout.purchaseType ?? '—'}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{payout.buyerEmail ?? '—'}</TableCell>
+                      <TableCell className="font-mono text-primary">${Number(payout.amount ?? 0).toFixed(2)}</TableCell>
+                      <TableCell className="text-muted-foreground text-sm">{payout.date ?? '—'}</TableCell>
                     </TableRow>
                   ))
                 )}

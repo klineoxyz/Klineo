@@ -35,16 +35,16 @@ adminRouter.get('/stats', async (req, res) => {
   }
 
   try {
-    const [usersResult, tradersResult, subscriptionsResult, feesResult, referralsResult] = await Promise.all([
+    const [usersResult, tradersResult, subscriptionsResult, feesResult, referralEarningsResult] = await Promise.all([
       client.from('user_profiles').select('*', { count: 'exact', head: true }),
       client.from('traders').select('*', { count: 'exact', head: true }).eq('status', 'approved'),
       client.from('subscriptions').select('*', { count: 'exact', head: true }).eq('status', 'active'),
       client.from('fee_ledger').select('amount'),
-      client.from('referral_earnings').select('amount'),
+      client.from('purchase_referral_earnings').select('amount'),
     ]);
 
     const totalFees = feesResult.data?.reduce((sum, f) => sum + parseFloat(f.amount?.toString() || '0'), 0) || 0;
-    const totalReferralPayouts = referralsResult.data?.reduce((sum, r) => sum + parseFloat(r.amount?.toString() || '0'), 0) || 0;
+    const totalReferralPayouts = referralEarningsResult.data?.reduce((sum, r) => sum + parseFloat(r.amount?.toString() || '0'), 0) || 0;
 
     // Monthly revenue (last 30 days subscriptions)
     const thirtyDaysAgo = new Date();
@@ -473,9 +473,9 @@ adminRouter.get('/fees', async (req, res) => {
 
     const totalFees = fees?.reduce((sum, f) => sum + parseFloat(f.amount?.toString() || '0'), 0) || 0;
 
-    // Get referral payouts (this month)
+    // Community rewards (this month) — purchase-based referral system
     const { data: referralEarnings } = await client
-      .from('referral_earnings')
+      .from('purchase_referral_earnings')
       .select('amount')
       .gte('created_at', startOfMonth.toISOString());
     const referralPayouts = referralEarnings?.reduce((sum, r) => sum + parseFloat(r.amount?.toString() || '0'), 0) || 0;
@@ -517,7 +517,7 @@ adminRouter.get('/fees', async (req, res) => {
 
 /**
  * GET /api/admin/referrals
- * Referral earnings and payouts
+ * Purchase-based referral system: community rewards from onboarding + package purchases (7-level upline).
  */
 adminRouter.get('/referrals', async (req, res) => {
   const client = getSupabase();
@@ -526,69 +526,64 @@ adminRouter.get('/referrals', async (req, res) => {
   }
 
   try {
-    const { data: earnings, error } = await client
-      .from('referral_earnings')
-      .select('id, referral_id, amount, currency, tier, rate_pct, status, created_at')
-      .order('created_at', { ascending: false });
+    const { data: earnings, error: earningsErr } = await client
+      .from('purchase_referral_earnings')
+      .select('id, purchase_id, level, user_id, amount, currency, rate_pct, created_at')
+      .order('created_at', { ascending: false })
+      .limit(500);
 
-    // Get referral details
-    const referralIds = [...new Set(earnings?.map((e) => e.referral_id).filter(Boolean) || [])];
-    const { data: referrals } = await client
-      .from('referrals')
-      .select('id, referrer_id, referred_id')
-      .in('id', referralIds);
+    if (earningsErr) {
+      console.error('Error fetching purchase_referral_earnings:', earningsErr);
+      return res.status(500).json({ error: 'Failed to fetch referral earnings' });
+    }
 
-    // Get user emails
-    const allUserIds = [
-      ...new Set([
-        ...(referrals?.map((r) => r.referrer_id) || []),
-        ...(referrals?.map((r) => r.referred_id) || []),
-      ]),
-    ];
-    const { data: refUserProfiles } = await client
+    const purchaseIds = [...new Set(earnings?.map((e) => e.purchase_id).filter(Boolean) || [])];
+    const referrerIds = [...new Set(earnings?.map((e) => e.user_id).filter(Boolean) || [])];
+
+    const { data: purchases } = await client
+      .from('eligible_purchases')
+      .select('id, user_id, purchase_type, amount, created_at')
+      .in('id', purchaseIds);
+    const purchaseMap = new Map(purchases?.map((p) => [p.id, p]) || []);
+
+    const allUserIds = [...new Set([...(purchases?.map((p) => p.user_id) || []), ...referrerIds])];
+    const { data: profiles } = await client
       .from('user_profiles')
       .select('id, email')
       .in('id', allUserIds);
-    const refEmailMap = new Map(refUserProfiles?.map((u) => [u.id, u.email]) || []);
-    const referralMap = new Map(referrals?.map((r) => [r.id, r]) || []);
+    const emailMap = new Map(profiles?.map((u) => [u.id, u.email]) || []);
 
-    if (error) {
-      console.error('Error fetching referrals:', error);
-      return res.status(500).json({ error: 'Failed to fetch referrals' });
-    }
+    const totalEarnings = earnings?.reduce((sum, e) => sum + parseFloat(e.amount?.toString() || '0'), 0) || 0;
+    const activeReferrers = new Set(referrerIds).size;
 
-    const totalCommissions = earnings?.reduce((sum, e) => sum + parseFloat(e.amount?.toString() || '0'), 0) || 0;
-    const pendingCount = earnings?.filter((e) => true).length || 0; // TODO: Add status field
-
-    const referralPayouts = earnings?.map((earning) => {
-      const ref = referralMap.get(earning.referral_id);
-      const referrerEmail = ref ? refEmailMap.get(ref.referrer_id) || 'Unknown' : 'Unknown';
-      const referredEmail = ref ? refEmailMap.get(ref.referred_id) || 'Unknown' : 'Unknown';
+    const payouts = (earnings || []).map((e) => {
+      const purchase = purchaseMap.get(e.purchase_id);
+      const referrerEmail = emailMap.get(e.user_id) || 'Unknown';
+      const buyerEmail = purchase ? emailMap.get(purchase.user_id) || 'Unknown' : 'Unknown';
+      const purchaseType = purchase?.purchase_type === 'onboarding_fee' ? 'Onboarding fee' : purchase?.purchase_type === 'package' ? 'Package' : purchase?.purchase_type || '—';
 
       return {
-        userId: ref?.referred_id || '',
         referrer: referrerEmail,
-        tier: `Tier ${earning.tier}`,
-        commission: parseFloat(earning.amount?.toString() || '0'),
-        status: earning.status === 'paid' ? 'Paid' : earning.status === 'failed' ? 'Failed' : 'Pending',
-        date: new Date(earning.created_at).toLocaleDateString('en-US', {
+        referrerId: e.user_id,
+        level: e.level,
+        purchaseType,
+        buyerEmail,
+        amount: parseFloat(e.amount?.toString() || '0'),
+        ratePct: parseFloat(e.rate_pct?.toString() || '0'),
+        date: new Date(e.created_at).toLocaleDateString('en-US', {
           month: 'short',
           day: 'numeric',
           year: 'numeric',
         }),
-        referralFees: earning.rate_pct > 0
-          ? parseFloat(earning.amount?.toString() || '0') / (earning.rate_pct / 100)
-          : 0,
       };
     });
 
     res.json({
       summary: {
-        totalCommissions: Math.round(totalCommissions * 100) / 100,
-        pendingPayouts: referralPayouts?.filter((p) => p.status === 'Pending').length || 0,
-        activeReferrers: new Set(referrals?.map((r) => r.referrer_id)).size,
+        totalEarnings: Math.round(totalEarnings * 100) / 100,
+        activeReferrers,
       },
-      payouts: referralPayouts || [],
+      payouts,
     });
   } catch (err) {
     console.error('Admin referrals error:', err);
