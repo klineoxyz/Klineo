@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
 import { Badge } from "@/app/components/ui/badge";
-import { Info, Loader2, Zap, ChevronDown, ChevronUp } from "lucide-react";
+import { Info, Loader2, Zap, ChevronDown, ChevronUp, Copy, Bot, Sparkles } from "lucide-react";
 import { api } from "@/lib/api";
 import type { BillingPlansResponse } from "@/lib/api";
 import { toast } from "@/app/lib/toast";
@@ -238,54 +238,82 @@ function SubscriptionContent({
         </CollapsibleContent>
       </Collapsible>
 
-      {/* Trading Packages */}
+      {/* Trading Packages — per-package: profit cap message, copy trades, bots, strategy creation */}
       <div>
         <h2 className="text-lg font-semibold mb-3">Trading packages</h2>
         <p className="text-sm text-muted-foreground mb-4">
-          Buy a package to unlock a profit allowance. Trade until you earn up to that profit cap, then buy again to continue.
+          Buy a package to unlock a profit allowance. You can use this package until you manage to earn the amount below; then buy again to continue or upgrade.
         </p>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
-          {packages.map((pkg, i) => {
-            const popular = pkg.id === "pro_200";
-            return (
-              <Card
-                key={pkg.id}
-                className={`p-4 sm:p-6 flex flex-col ${popular ? "border-primary/50 ring-2 ring-primary/20" : ""}`}
-              >
-                {popular && (
-                  <Badge className="mb-3 w-fit bg-primary text-primary-foreground">Most popular</Badge>
-                )}
-                <div className="mb-2">
-                  <h3 className="text-lg font-semibold">
-                    ${pkg.priceUsd} package
-                  </h3>
-                  <div className="text-2xl sm:text-3xl font-semibold mt-1">
-                    ${pkg.profitAllowanceUsd.toLocaleString()}
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Profit allowance ({pkg.multiplier}x — trade until you earn up to this much profit)
-                  </p>
-                </div>
-                <div className="flex items-center gap-2 mt-2 text-sm text-accent">
-                  <Zap className="size-4 shrink-0" />
-                  <span>Unlock {pkg.multiplier}x allowance</span>
-                </div>
-                <Button
-                  className="mt-4 w-full"
-                  variant={popular ? "default" : "outline"}
-                  onClick={() => onPackageCheckout(pkg.id)}
-                  disabled={!!packageLoading}
-                >
-                  {packageLoading === pkg.id ? (
-                    <Loader2 className="size-4 animate-spin" />
-                  ) : (
-                    "Buy package"
-                  )}
-                </Button>
-              </Card>
-            );
-          })}
-        </div>
+        {(() => {
+          const packageFeatures: Record<string, { copyTrades: number | string; bots: number | string; canCreateStrategy: boolean }> = {
+            entry_100: { copyTrades: 1, bots: 5, canCreateStrategy: false },
+            pro_200: { copyTrades: 5, bots: 10, canCreateStrategy: true },
+            elite_500: { copyTrades: "Unlimited", bots: "Unlimited", canCreateStrategy: true },
+          };
+          return (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
+              {packages.map((pkg) => {
+                const popular = pkg.id === "pro_200";
+                const features = packageFeatures[pkg.id] ?? { copyTrades: 1, bots: 5, canCreateStrategy: false };
+                return (
+                  <Card
+                    key={pkg.id}
+                    className={`p-4 sm:p-6 flex flex-col ${popular ? "border-primary/50 ring-2 ring-primary/20" : ""}`}
+                  >
+                    {popular && (
+                      <Badge className="mb-3 w-fit bg-primary text-primary-foreground">Most popular</Badge>
+                    )}
+                    <div className="mb-3">
+                      <h3 className="text-lg font-semibold">
+                        ${pkg.priceUsd} package
+                      </h3>
+                      <p className="text-sm text-muted-foreground mt-2 font-medium">
+                        This package you can use until you manage to earn{" "}
+                        <span className="text-foreground font-semibold">${pkg.profitAllowanceUsd.toLocaleString()}</span>.
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {pkg.multiplier}x profit allowance — then buy again or upgrade to continue.
+                      </p>
+                    </div>
+                    <ul className="space-y-2 text-sm text-muted-foreground flex-1">
+                      <li className="flex items-center gap-2">
+                        <Copy className="size-4 shrink-0 text-accent" />
+                        <span><strong className="text-foreground">{features.copyTrades}</strong> copy trade{features.copyTrades === 1 ? "" : "s"} at a time</span>
+                      </li>
+                      <li className="flex items-center gap-2">
+                        <Bot className="size-4 shrink-0 text-accent" />
+                        <span><strong className="text-foreground">{features.bots}</strong> auto-trade bot{features.bots === 1 ? "" : "s"}</span>
+                      </li>
+                      {features.canCreateStrategy ? (
+                        <li className="flex items-center gap-2">
+                          <Sparkles className="size-4 shrink-0 text-accent" />
+                          <span className="text-foreground">Create your own strategy</span>
+                        </li>
+                      ) : (
+                        <li className="flex items-center gap-2 opacity-75">
+                          <Sparkles className="size-4 shrink-0" />
+                          <span>Create strategy — upgrade to Most Popular</span>
+                        </li>
+                      )}
+                    </ul>
+                    <Button
+                      className="mt-4 w-full"
+                      variant={popular ? "default" : "outline"}
+                      onClick={() => onPackageCheckout(pkg.id)}
+                      disabled={!!packageLoading}
+                    >
+                      {packageLoading === pkg.id ? (
+                        <Loader2 className="size-4 animate-spin" />
+                      ) : (
+                        "Buy package"
+                      )}
+                    </Button>
+                  </Card>
+                );
+              })}
+            </div>
+          );
+        })()}
       </div>
     </>
   );
