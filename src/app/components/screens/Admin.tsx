@@ -55,10 +55,24 @@ export function Admin() {
   // Coupon creation state
   const [couponCode, setCouponCode] = useState("");
   const [discountPercent, setDiscountPercent] = useState("");
+  const [couponAppliesTo, setCouponAppliesTo] = useState<"onboarding" | "trading_packages" | "both">("both");
+  const [couponPackageIds, setCouponPackageIds] = useState<string[]>([]);
   const [maxRedemptions, setMaxRedemptions] = useState("");
   const [durationMonths, setDurationMonths] = useState("");
   const [couponExpiry, setCouponExpiry] = useState("");
   const [couponDescription, setCouponDescription] = useState("");
+
+  // User-specific discounts
+  const [userDiscounts, setUserDiscounts] = useState<any[]>([]);
+  const [userDiscountsLoading, setUserDiscountsLoading] = useState(false);
+  const [userDiscountUserId, setUserDiscountUserId] = useState("");
+  const [userDiscountScope, setUserDiscountScope] = useState<"onboarding" | "trading_packages">("onboarding");
+  const [userDiscountOnboardingPercent, setUserDiscountOnboardingPercent] = useState("");
+  const [userDiscountOnboardingFixed, setUserDiscountOnboardingFixed] = useState("");
+  const [userDiscountTradingPercent, setUserDiscountTradingPercent] = useState("");
+  const [userDiscountTradingPackages, setUserDiscountTradingPackages] = useState<string[]>([]);
+  const [userDiscountTradingMax, setUserDiscountTradingMax] = useState("");
+  const [userDiscountEditId, setUserDiscountEditId] = useState<string | null>(null);
 
   // Mark referral payout as paid
   const [markPaidPayout, setMarkPaidPayout] = useState<{ id: string; referrer: string; amount: number } | null>(null);
@@ -183,6 +197,19 @@ export function Admin() {
     }
   };
 
+  const loadUserDiscounts = async () => {
+    setUserDiscountsLoading(true);
+    try {
+      const data = await api.get('/api/admin/user-discounts');
+      setUserDiscounts((data as any).userDiscounts || []);
+    } catch (err: any) {
+      console.error('Failed to load user discounts:', err);
+      toast.error('Failed to load user discounts');
+    } finally {
+      setUserDiscountsLoading(false);
+    }
+  };
+
   const loadAuditLogs = async () => {
     setAuditLogsLoading(true);
     try {
@@ -255,17 +282,20 @@ export function Admin() {
       await api.post('/api/admin/coupons', {
         code: couponCode,
         discount: parseFloat(discountPercent),
-        maxRedemptions: maxRedemptions ? parseInt(maxRedemptions) : null,
-        durationMonths: parseInt(durationMonths),
-        expiresAt: couponExpiry || null,
+        appliesTo: couponAppliesTo,
+        packageIds: (couponAppliesTo === "trading_packages" || couponAppliesTo === "both") && couponPackageIds.length > 0 ? couponPackageIds : undefined,
+        maxRedemptions: maxRedemptions ? parseInt(maxRedemptions, 10) : undefined,
+        durationMonths: parseInt(durationMonths, 10),
+        expiresAt: couponExpiry || undefined,
         description: couponDescription || '',
       });
       toast.success("Coupon created successfully", {
-        description: `${couponCode} - ${discountPercent}% off for ${durationMonths} months`,
+        description: `${couponCode} - ${discountPercent}% off (${couponAppliesTo}) for ${durationMonths} months`,
       });
-      // Reset form
       setCouponCode("");
       setDiscountPercent("");
+      setCouponAppliesTo("both");
+      setCouponPackageIds([]);
       setMaxRedemptions("");
       setDurationMonths("");
       setCouponExpiry("");
@@ -275,6 +305,83 @@ export function Admin() {
       toast.error("Failed to create coupon", {
         description: err.message || "Please try again",
       });
+    }
+  };
+
+  const handleCouponStatus = async (couponId: string, status: "active" | "disabled") => {
+    try {
+      await api.patch(`/api/admin/coupons/${couponId}`, { status });
+      toast.success(status === "disabled" ? "Coupon disabled" : "Coupon re-enabled");
+      loadCoupons();
+    } catch (err: any) {
+      toast.error("Failed to update coupon");
+    }
+  };
+
+  const togglePackageId = (id: string) => {
+    setCouponPackageIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  };
+
+  const PACKAGE_OPTIONS = [
+    { id: "entry_100", label: "Entry $100" },
+    { id: "pro_200", label: "Pro $200" },
+    { id: "elite_500", label: "Elite $500" },
+  ];
+
+  const handleCreateUserDiscount = async () => {
+    if (!userDiscountUserId) {
+      toast.error("Select a user");
+      return;
+    }
+    if (userDiscountScope === "onboarding" && !userDiscountOnboardingPercent && !userDiscountOnboardingFixed) {
+      toast.error("Enter onboarding discount (% or fixed $)");
+      return;
+    }
+    if (userDiscountScope === "trading_packages" && (!userDiscountTradingPercent || !userDiscountTradingMax)) {
+      toast.error("Enter trading discount % and max packages");
+      return;
+    }
+    try {
+      await api.post("/api/admin/user-discounts", {
+        userId: userDiscountUserId,
+        scope: userDiscountScope,
+        onboardingDiscountPercent: userDiscountScope === "onboarding" && userDiscountOnboardingPercent ? parseFloat(userDiscountOnboardingPercent) : undefined,
+        onboardingDiscountFixedUsd: userDiscountScope === "onboarding" && userDiscountOnboardingFixed ? parseFloat(userDiscountOnboardingFixed) : undefined,
+        tradingDiscountPercent: userDiscountScope === "trading_packages" && userDiscountTradingPercent ? parseFloat(userDiscountTradingPercent) : undefined,
+        tradingPackageIds: userDiscountScope === "trading_packages" && userDiscountTradingPackages.length > 0 ? userDiscountTradingPackages : undefined,
+        tradingMaxPackages: userDiscountScope === "trading_packages" && userDiscountTradingMax ? parseInt(userDiscountTradingMax, 10) : undefined,
+      });
+      toast.success("User discount created");
+      setUserDiscountUserId("");
+      setUserDiscountScope("onboarding");
+      setUserDiscountOnboardingPercent("");
+      setUserDiscountOnboardingFixed("");
+      setUserDiscountTradingPercent("");
+      setUserDiscountTradingPackages([]);
+      setUserDiscountTradingMax("");
+      loadUserDiscounts();
+    } catch (err: any) {
+      toast.error("Failed to create user discount", { description: err.message });
+    }
+  };
+
+  const handleUserDiscountStatus = async (id: string, status: "active" | "paused" | "revoked") => {
+    try {
+      await api.patch(`/api/admin/user-discounts/${id}`, { status });
+      toast.success(status === "revoked" ? "Discount revoked" : status === "paused" ? "Discount paused" : "Discount re-enabled");
+      loadUserDiscounts();
+    } catch (err: any) {
+      toast.error("Failed to update user discount");
+    }
+  };
+
+  const handleRevokeUserDiscount = async (id: string) => {
+    try {
+      await api.delete(`/api/admin/user-discounts/${id}`);
+      toast.success("User discount revoked");
+      loadUserDiscounts();
+    } catch (err: any) {
+      toast.error("Failed to revoke user discount");
     }
   };
 
@@ -1006,18 +1113,18 @@ export function Admin() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="discounts" className="space-y-6" onFocus={loadCoupons}>
-          {/* Create New Coupon — applies to onboarding fee & package purchases */}
+        <TabsContent value="discounts" className="space-y-6" onFocus={() => { loadCoupons(); loadUserDiscounts(); loadUsers(1, ""); }}>
+          {/* Create New Coupon — onboarding and/or trading packages */}
           <Card className="p-6">
             <div className="flex items-center gap-3 mb-6">
               <Ticket className="size-6 text-primary" />
               <div>
                 <h3 className="text-lg font-semibold">Create Discount Coupon</h3>
-                <p className="text-sm text-muted-foreground">Generate shareable codes for discounts on the joining fee and trading packages (one-time purchases)</p>
+                <p className="text-sm text-muted-foreground">Onboarding (joining fee) and/or trading packages. Choose applies-to, which packages, expiry, and max redemptions.</p>
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="coupon-code">Coupon Code *</Label>
@@ -1030,18 +1137,12 @@ export function Admin() {
                       className="font-mono uppercase"
                       maxLength={20}
                     />
-                    <Button 
-                      variant="outline" 
-                      onClick={generateCouponCode}
-                      className="shrink-0"
-                    >
+                    <Button variant="outline" onClick={generateCouponCode} className="shrink-0">
                       <RefreshCw className="size-4 mr-2" />
                       Generate
                     </Button>
                   </div>
-                  <p className="text-xs text-muted-foreground">
-                    Enter custom code or auto-generate
-                  </p>
+                  <p className="text-xs text-muted-foreground">Enter custom code or auto-generate</p>
                 </div>
 
                 <div className="space-y-2">
@@ -1057,25 +1158,60 @@ export function Admin() {
                     placeholder="e.g., 50"
                     className="font-mono"
                   />
-                  <p className="text-xs text-muted-foreground">
-                    Percentage off joining fee or package price (5–100%)
-                  </p>
+                  <p className="text-xs text-muted-foreground">Percentage off (5–100%)</p>
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="max-redemptions">Max Redemptions *</Label>
+                  <Label>Applies To *</Label>
+                  <Select value={couponAppliesTo} onValueChange={(v: "onboarding" | "trading_packages" | "both") => setCouponAppliesTo(v)}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="onboarding">Onboarding (joining fee only)</SelectItem>
+                      <SelectItem value="trading_packages">Trading packages only</SelectItem>
+                      <SelectItem value="both">Both onboarding & trading packages</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">Where this discount applies</p>
+                </div>
+
+                {(couponAppliesTo === "trading_packages" || couponAppliesTo === "both") && (
+                  <div className="space-y-2">
+                    <Label>Which Packages (optional)</Label>
+                    <div className="flex flex-wrap gap-3">
+                      {[
+                        { id: "entry_100", label: "Entry $100" },
+                        { id: "pro_200", label: "Pro $200" },
+                        { id: "elite_500", label: "Elite $500" },
+                      ].map((p) => (
+                        <label key={p.id} className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={couponPackageIds.includes(p.id)}
+                            onChange={() => togglePackageId(p.id)}
+                            className="rounded border-input"
+                          />
+                          <span className="text-sm">{p.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                    <p className="text-xs text-muted-foreground">Leave all unchecked for all packages</p>
+                  </div>
+                )}
+
+                <div className="space-y-2">
+                  <Label htmlFor="max-redemptions">Max Redemptions</Label>
                   <Input
                     id="max-redemptions"
                     type="number"
                     min="1"
                     value={maxRedemptions}
                     onChange={(e) => setMaxRedemptions(e.target.value)}
-                    placeholder="e.g., 100"
+                    placeholder="Unlimited if empty"
                     className="font-mono"
                   />
-                  <p className="text-xs text-muted-foreground">
-                    How many users can redeem this coupon
-                  </p>
+                  <p className="text-xs text-muted-foreground">How many users can redeem this coupon (empty = unlimited)</p>
                 </div>
               </div>
 
@@ -1092,23 +1228,19 @@ export function Admin() {
                     placeholder="e.g., 3"
                     className="font-mono"
                   />
-                  <p className="text-xs text-muted-foreground">
-                    How long the code can be redeemed (1–12 months)
-                  </p>
+                  <p className="text-xs text-muted-foreground">How long the purchased benefit lasts (1–12 months)</p>
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="coupon-expiry">Coupon Expiry Date (Optional)</Label>
+                  <Label htmlFor="coupon-expiry">Coupon Expiry Date</Label>
                   <Input
                     id="coupon-expiry"
                     type="date"
                     value={couponExpiry}
                     onChange={(e) => setCouponExpiry(e.target.value)}
-                    min={new Date().toISOString().split('T')[0]}
+                    min={new Date().toISOString().split("T")[0]}
                   />
-                  <p className="text-xs text-muted-foreground">
-                    When this code stops working (leave empty for no expiry)
-                  </p>
+                  <p className="text-xs text-muted-foreground">When this code stops working (empty = no expiry)</p>
                 </div>
 
                 <div className="space-y-2">
@@ -1117,47 +1249,36 @@ export function Admin() {
                     id="coupon-description"
                     value={couponDescription}
                     onChange={(e) => setCouponDescription(e.target.value)}
-                    placeholder="e.g., Launch promo – 50% off joining fee or first package"
+                    placeholder="e.g., Launch promo – 50% off onboarding & Entry package"
                     rows={3}
                   />
-                  <p className="text-xs text-muted-foreground">
-                    Internal notes about this coupon campaign
-                  </p>
+                  <p className="text-xs text-muted-foreground">Internal notes</p>
                 </div>
               </div>
             </div>
 
             <div className="flex items-center gap-3 pt-4 mt-4 border-t border-border">
-              <Button 
-                onClick={handleCreateCoupon}
-                className="bg-[#10B981] text-white hover:bg-[#10B981]/90"
-              >
+              <Button onClick={handleCreateCoupon} className="bg-[#10B981] text-white hover:bg-[#10B981]/90">
                 <Ticket className="size-4 mr-2" />
                 Create Coupon
               </Button>
-              <div className="text-xs text-muted-foreground">
-                Shareable link will auto-apply the coupon when users pay the joining fee or buy a package
-              </div>
+              <p className="text-xs text-muted-foreground">
+                Shareable link: klineo.xyz/packages?coupon=CODE — applies at checkout for joining fee or package.
+              </p>
             </div>
           </Card>
 
-          {/* Active Coupons */}
+          {/* Discount Coupons list */}
           <Card>
-            <div className="p-6 border-b border-border flex items-center justify-between">
+            <div className="p-6 border-b border-border flex items-center justify-between flex-wrap gap-2">
               <div>
                 <h3 className="text-lg font-semibold">Discount Coupons</h3>
-                <p className="text-sm text-muted-foreground mt-1">{coupons.filter(c => c.status === "Active").length} active · Apply to joining fee & package purchases</p>
+                <p className="text-sm text-muted-foreground mt-1">{coupons.filter(c => c.status === "Active").length} active · Onboarding and/or trading packages</p>
               </div>
-              <div className="flex gap-2">
-                <Button variant="outline" size="sm" onClick={loadCoupons}>
-                  <RefreshCw className="size-4 mr-2" />
-                  Refresh
-                </Button>
-                <Button variant="outline" size="sm">
-                  <Download className="size-4 mr-2" />
-                  Export CSV
-                </Button>
-              </div>
+              <Button variant="outline" size="sm" onClick={loadCoupons}>
+                <RefreshCw className="size-4 mr-2" />
+                Refresh
+              </Button>
             </div>
             {couponsLoading ? (
               <div className="p-8 text-center text-muted-foreground">Loading coupons...</div>
@@ -1167,6 +1288,8 @@ export function Admin() {
                   <TableRow>
                     <TableHead>Code</TableHead>
                     <TableHead>Discount</TableHead>
+                    <TableHead>Applies To</TableHead>
+                    <TableHead>Packages</TableHead>
                     <TableHead>Usage</TableHead>
                     <TableHead>Duration</TableHead>
                     <TableHead>Expires</TableHead>
@@ -1178,79 +1301,62 @@ export function Admin() {
                 <TableBody>
                   {coupons.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
+                      <TableCell colSpan={10} className="text-center text-muted-foreground py-8">
                         No coupons found.
                       </TableCell>
                     </TableRow>
                   ) : (
                     coupons.map((coupon) => (
-                  <TableRow key={coupon.id}>
-                    <TableCell className="font-mono font-semibold text-primary">
-                      {coupon.code}
-                    </TableCell>
-                    <TableCell className="font-mono text-[#10B981] font-semibold">
-                      {coupon.discount}%
-                    </TableCell>
-                    <TableCell>
-                      <div className="font-mono text-sm">
-                        <span className={coupon.currentRedemptions >= coupon.maxRedemptions ? "text-[#EF4444]" : "text-foreground"}>
-                          {coupon.currentRedemptions}
-                        </span>
-                        <span className="text-muted-foreground">/{coupon.maxRedemptions}</span>
-                      </div>
-                      <div className="text-xs text-muted-foreground mt-0.5">
-                        {Math.round((coupon.currentRedemptions / coupon.maxRedemptions) * 100)}% used
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-sm">
-                      {coupon.durationMonths} {coupon.durationMonths === 1 ? "month" : "months"} validity
-                    </TableCell>
-                    <TableCell className="text-muted-foreground text-sm">
-                      {coupon.expiresAt === "—" ? (
-                        <Badge variant="outline" className="border-primary/50 text-primary">
-                          No Expiry
-                        </Badge>
-                      ) : (
-                        coupon.expiresAt
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <Badge 
-                        variant={coupon.status === "Active" ? "default" : "secondary"}
-                        className={coupon.status === "Active" ? "bg-[#10B981]/10 text-[#10B981] border-[#10B981]/50" : ""}
-                      >
-                        {coupon.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground max-w-xs truncate">
-                      {coupon.description}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex gap-2 justify-end">
-                        <Button 
-                          variant="outline" 
-                          size="sm"
-                          onClick={() => copyCouponURL(coupon.code)}
-                          title="Copy coupon URL"
-                        >
-                          <Link2 className="size-4" />
-                        </Button>
-                        <Button 
-                          variant="outline" 
-                          size="sm" 
-                          className="text-[#EF4444] hover:text-[#EF4444]"
-                          onClick={() => {
-                            toast.success("Coupon disabled", {
-                              description: `${coupon.code} can no longer be redeemed`,
-                            });
-                          }}
-                          title="Disable coupon"
-                        >
-                          <Trash2 className="size-4" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
+                      <TableRow key={coupon.id}>
+                        <TableCell className="font-mono font-semibold text-primary">{coupon.code}</TableCell>
+                        <TableCell className="font-mono text-[#10B981] font-semibold">{coupon.discount}%</TableCell>
+                        <TableCell className="text-sm capitalize">{coupon.appliesTo?.replace("_", " ") ?? "both"}</TableCell>
+                        <TableCell className="text-sm">
+                          {coupon.packageIds?.length ? coupon.packageIds.join(", ") : "All"}
+                        </TableCell>
+                        <TableCell>
+                          {coupon.maxRedemptions != null ? (
+                            <>
+                              <span className={coupon.currentRedemptions >= coupon.maxRedemptions ? "text-[#EF4444]" : "text-foreground"}>
+                                {coupon.currentRedemptions}
+                              </span>
+                              <span className="text-muted-foreground">/{coupon.maxRedemptions}</span>
+                            </>
+                          ) : (
+                            <span className="text-muted-foreground">{coupon.currentRedemptions} (unlimited)</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-sm">{coupon.durationMonths} mo</TableCell>
+                        <TableCell className="text-muted-foreground text-sm">
+                          {coupon.expiresAt === "—" ? (
+                            <Badge variant="outline" className="border-primary/50 text-primary">No Expiry</Badge>
+                          ) : (
+                            coupon.expiresAt
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={coupon.status === "Active" ? "default" : "secondary"} className={coupon.status === "Active" ? "bg-[#10B981]/10 text-[#10B981] border-[#10B981]/50" : ""}>
+                            {coupon.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground max-w-[180px] truncate">{coupon.description}</TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex gap-2 justify-end">
+                            <Button variant="outline" size="sm" onClick={() => copyCouponURL(coupon.code)} title="Copy coupon URL">
+                              <Link2 className="size-4" />
+                            </Button>
+                            {coupon.statusRaw === "active" ? (
+                              <Button variant="outline" size="sm" className="text-amber-600 hover:text-amber-600" onClick={() => handleCouponStatus(coupon.id, "disabled")} title="Disable coupon">
+                                <Trash2 className="size-4" />
+                              </Button>
+                            ) : (
+                              <Button variant="outline" size="sm" className="text-[#10B981] hover:text-[#10B981]" onClick={() => handleCouponStatus(coupon.id, "active")} title="Re-enable coupon">
+                                <RefreshCw className="size-4" />
+                              </Button>
+                            )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
                     ))
                   )}
                 </TableBody>
@@ -1258,36 +1364,176 @@ export function Admin() {
             )}
           </Card>
 
-          {/* Coupon URL Preview */}
+          {/* Shareable Coupon Links */}
           <Card className="p-6">
             <div className="flex items-center gap-3 mb-4">
               <Link2 className="size-5 text-primary" />
               <div>
                 <h3 className="text-sm font-semibold">Shareable Coupon Links</h3>
-                <p className="text-xs text-muted-foreground">Share these links; coupon auto-applies when the user pays the joining fee or buys a package</p>
+                <p className="text-xs text-muted-foreground">Share these links; coupon auto-applies at checkout (joining fee or package)</p>
               </div>
             </div>
             <div className="space-y-2">
               {coupons.filter(c => c.status === "Active").slice(0, 3).map((coupon) => (
-                <div 
-                  key={coupon.id} 
-                  className="flex items-center gap-3 p-3 bg-secondary/30 rounded border border-border"
-                >
-                  <div className="flex-1 min-w-0">
-                    <div className="font-mono text-xs text-muted-foreground truncate">
-                      https://klineo.xyz/packages?coupon={coupon.code}
-                    </div>
+                <div key={coupon.id} className="flex items-center gap-3 p-3 bg-secondary/30 rounded border border-border">
+                  <div className="flex-1 min-w-0 font-mono text-xs text-muted-foreground truncate">
+                    https://klineo.xyz/packages?coupon={coupon.code}
                   </div>
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => copyCouponURL(coupon.code)}
-                  >
+                  <Button variant="outline" size="sm" onClick={() => copyCouponURL(coupon.code)}>
                     <Copy className="size-4 mr-2" />
                     Copy
                   </Button>
                 </div>
               ))}
+            </div>
+          </Card>
+
+          {/* User-specific discounts */}
+          <Card className="p-6">
+            <div className="flex items-center gap-3 mb-6">
+              <Settings2 className="size-6 text-primary" />
+              <div>
+                <h3 className="text-lg font-semibold">User-Specific Discounts</h3>
+                <p className="text-sm text-muted-foreground">Assign onboarding or trading package discounts to specific users. Change, pause, or revoke anytime.</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label>User *</Label>
+                  <Select value={userDiscountUserId} onValueChange={setUserDiscountUserId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select user by email" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {users.map((u) => (
+                        <SelectItem key={u.id} value={u.id}>
+                          {u.email ?? u.id}
+                        </SelectItem>
+                      ))}
+                      {users.length === 0 && <SelectItem value="_" disabled>Load Users tab first</SelectItem>}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">Select from Users list (load Users tab if empty)</p>
+                </div>
+                <div className="space-y-2">
+                  <Label>Discount Type *</Label>
+                  <Select value={userDiscountScope} onValueChange={(v: "onboarding" | "trading_packages") => setUserDiscountScope(v)}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="onboarding">Onboarding (joining fee)</SelectItem>
+                      <SelectItem value="trading_packages">Trading packages</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                {userDiscountScope === "onboarding" && (
+                  <>
+                    <div className="space-y-2">
+                      <Label>Onboarding discount %</Label>
+                      <Input type="number" min="0" max="100" step="5" value={userDiscountOnboardingPercent} onChange={(e) => setUserDiscountOnboardingPercent(e.target.value)} placeholder="e.g. 50" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Onboarding discount fixed $ (optional)</Label>
+                      <Input type="number" min="0" step="1" value={userDiscountOnboardingFixed} onChange={(e) => setUserDiscountOnboardingFixed(e.target.value)} placeholder="e.g. 25" />
+                    </div>
+                  </>
+                )}
+                {userDiscountScope === "trading_packages" && (
+                  <>
+                    <div className="space-y-2">
+                      <Label>Trading discount % *</Label>
+                      <Input type="number" min="0" max="100" step="5" value={userDiscountTradingPercent} onChange={(e) => setUserDiscountTradingPercent(e.target.value)} placeholder="e.g. 30" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Max packages at discount *</Label>
+                      <Input type="number" min="1" value={userDiscountTradingMax} onChange={(e) => setUserDiscountTradingMax(e.target.value)} placeholder="e.g. 2" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Which packages (optional)</Label>
+                      <div className="flex flex-wrap gap-3">
+                        {PACKAGE_OPTIONS.map((p) => (
+                          <label key={p.id} className="flex items-center gap-2 cursor-pointer">
+                            <input type="checkbox" checked={userDiscountTradingPackages.includes(p.id)} onChange={() => setUserDiscountTradingPackages((prev) => (prev.includes(p.id) ? prev.filter((x) => x !== p.id) : [...prev, p.id]))} className="rounded border-input" />
+                            <span className="text-sm">{p.label}</span>
+                          </label>
+                        ))}
+                      </div>
+                      <p className="text-xs text-muted-foreground">Leave empty for all packages</p>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+            <div className="flex gap-2 pb-6 border-b border-border">
+              <Button onClick={handleCreateUserDiscount} className="bg-[#10B981] text-white hover:bg-[#10B981]/90">
+                <Ticket className="size-4 mr-2" />
+                Assign User Discount
+              </Button>
+            </div>
+
+            <div className="pt-4">
+              <h4 className="text-sm font-semibold mb-3">Assigned User Discounts</h4>
+              {userDiscountsLoading ? (
+                <div className="py-6 text-center text-muted-foreground">Loading...</div>
+              ) : userDiscounts.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-4">No user-specific discounts. Assign above.</p>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>User</TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead>Discount</TableHead>
+                      <TableHead>Packages / Max</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {userDiscounts.map((d) => (
+                      <TableRow key={d.id}>
+                        <TableCell className="font-medium">{d.userEmail}</TableCell>
+                        <TableCell className="capitalize">{d.scope?.replace("_", " ")}</TableCell>
+                        <TableCell>
+                          {d.scope === "onboarding"
+                            ? (d.onboardingDiscountPercent != null ? `${d.onboardingDiscountPercent}%` : "") + (d.onboardingDiscountFixedUsd != null ? ` or $${d.onboardingDiscountFixedUsd}` : "")
+                            : d.tradingDiscountPercent != null ? `${d.tradingDiscountPercent}%` : "—"}
+                        </TableCell>
+                        <TableCell>
+                          {d.scope === "trading_packages"
+                            ? (d.tradingPackageIds?.length ? d.tradingPackageIds.join(", ") : "All") + " / max " + (d.tradingMaxPackages ?? "—") + " (used " + (d.tradingUsedCount ?? 0) + ")"
+                            : "—"}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={d.status === "active" ? "default" : "secondary"} className={d.status === "active" ? "bg-[#10B981]/10 text-[#10B981]" : ""}>
+                            {d.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex gap-2 justify-end">
+                            {d.status === "active" && (
+                              <Button variant="outline" size="sm" onClick={() => handleUserDiscountStatus(d.id, "paused")} title="Pause">
+                                Pause
+                              </Button>
+                            )}
+                            {d.status === "paused" && (
+                              <Button variant="outline" size="sm" className="text-[#10B981]" onClick={() => handleUserDiscountStatus(d.id, "active")} title="Re-enable">
+                                Re-enable
+                              </Button>
+                            )}
+                            <Button variant="outline" size="sm" className="text-[#EF4444] hover:text-[#EF4444]" onClick={() => handleRevokeUserDiscount(d.id)} title="Revoke">
+                              Revoke
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
             </div>
           </Card>
         </TabsContent>

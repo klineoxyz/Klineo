@@ -664,6 +664,8 @@ adminRouter.get('/coupons', async (req, res) => {
       id: c.id,
       code: c.code,
       discount: parseFloat(c.discount_percent?.toString() || '0'),
+      appliesTo: c.applies_to || 'both',
+      packageIds: c.package_ids || [],
       maxRedemptions: c.max_redemptions,
       currentRedemptions: c.current_redemptions || 0,
       durationMonths: c.duration_months,
@@ -674,7 +676,9 @@ adminRouter.get('/coupons', async (req, res) => {
             year: 'numeric',
           })
         : '—',
+      expiresAtRaw: c.expires_at,
       status: c.status === 'expired' ? 'Expired' : c.status === 'disabled' ? 'Disabled' : 'Active',
+      statusRaw: c.status,
       createdBy: c.created_by,
       createdAt: new Date(c.created_at).toLocaleDateString('en-US', {
         month: 'short',
@@ -699,6 +703,9 @@ adminRouter.post('/coupons',
   validate([
     body('code').isString().isLength({ min: 3, max: 20 }).matches(/^[A-Z0-9]+$/).withMessage('code must be 3-20 uppercase alphanumeric characters'),
     body('discount').isFloat({ min: 0, max: 100 }).withMessage('discount must be between 0 and 100'),
+    body('appliesTo').optional().isIn(['onboarding', 'trading_packages', 'both']).withMessage('appliesTo must be onboarding, trading_packages, or both'),
+    body('packageIds').optional().isArray().withMessage('packageIds must be an array'),
+    body('packageIds.*').optional().isString().isIn(['entry_100', 'pro_200', 'elite_500']).withMessage('packageIds must be entry_100, pro_200, or elite_500'),
     body('maxRedemptions').optional().isInt({ min: 1 }).withMessage('maxRedemptions must be a positive integer'),
     body('durationMonths').isInt({ min: 1, max: 12 }).withMessage('durationMonths must be between 1 and 12'),
     body('expiresAt').optional().isISO8601().withMessage('expiresAt must be a valid ISO date'),
@@ -711,13 +718,15 @@ adminRouter.post('/coupons',
     }
 
     try {
-      const { code, discount, maxRedemptions, durationMonths, expiresAt, description } = req.body;
+      const { code, discount, appliesTo, packageIds, maxRedemptions, durationMonths, expiresAt, description } = req.body;
 
     const { data, error } = await client
       .from('coupons')
       .insert({
         code: code.toUpperCase(),
         discount_percent: parseFloat(discount),
+        applies_to: appliesTo || 'both',
+        package_ids: Array.isArray(packageIds) && packageIds.length > 0 ? packageIds : null,
         max_redemptions: maxRedemptions ? parseInt(maxRedemptions) : null,
         duration_months: parseInt(durationMonths),
         expires_at: expiresAt || null,
@@ -739,6 +748,52 @@ adminRouter.post('/coupons',
     res.status(500).json({ error: 'Failed to create coupon' });
   }
 });
+
+/**
+ * PATCH /api/admin/coupons/:id
+ * Update coupon status (active, disabled, or pause/re-enable)
+ */
+adminRouter.patch('/coupons/:id',
+  validate([
+    uuidParam('id'),
+    body('status').isIn(['active', 'disabled']).withMessage('status must be active or disabled'),
+  ]),
+  async (req: AuthenticatedRequest, res) => {
+    const client = getSupabase();
+    if (!client) {
+      return res.status(503).json({ error: 'Database unavailable' });
+    }
+
+    try {
+      const { id } = req.params;
+      const { status } = req.body;
+
+      const { data, error } = await client
+        .from('coupons')
+        .update({
+          status: status === 'disabled' ? 'disabled' : 'active',
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Error updating coupon:', error);
+        return res.status(500).json({ error: 'Failed to update coupon' });
+      }
+
+      if (!data) {
+        return res.status(404).json({ error: 'Coupon not found' });
+      }
+
+      res.json({ coupon: data });
+    } catch (err) {
+      console.error('Admin update coupon error:', err);
+      res.status(500).json({ error: 'Failed to update coupon' });
+    }
+  }
+);
 
 /**
  * PUT /api/admin/users/:id
@@ -902,3 +957,212 @@ adminRouter.get('/audit-logs', async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch audit logs' });
   }
 });
+
+/**
+ * GET /api/admin/user-discounts
+ * List all user-specific discounts (onboarding / trading packages)
+ */
+adminRouter.get('/user-discounts', async (req, res) => {
+  const client = getSupabase();
+  if (!client) {
+    return res.status(503).json({ error: 'Database unavailable' });
+  }
+
+  try {
+    const { data: discounts, error } = await client
+      .from('user_discounts')
+      .select('id, user_id, scope, onboarding_discount_percent, onboarding_discount_fixed_usd, trading_discount_percent, trading_package_ids, trading_max_packages, trading_used_count, status, created_by, created_at, updated_at')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching user discounts:', error);
+      return res.status(500).json({ error: 'Failed to fetch user discounts' });
+    }
+
+    const userIds = [...new Set((discounts || []).map((d: any) => d.user_id).filter(Boolean))];
+    const emailMap: Record<string, string> = {};
+    if (userIds.length > 0) {
+      const { data: profiles } = await client
+        .from('user_profiles')
+        .select('id, email')
+        .in('id', userIds);
+      (profiles || []).forEach((p: any) => { emailMap[p.id] = p.email || '—'; });
+    }
+
+    const formatted = discounts?.map((d: any) => ({
+      id: d.id,
+      userId: d.user_id,
+      userEmail: emailMap[d.user_id] || '—',
+      scope: d.scope,
+      onboardingDiscountPercent: d.onboarding_discount_percent != null ? parseFloat(d.onboarding_discount_percent) : null,
+      onboardingDiscountFixedUsd: d.onboarding_discount_fixed_usd != null ? parseFloat(d.onboarding_discount_fixed_usd) : null,
+      tradingDiscountPercent: d.trading_discount_percent != null ? parseFloat(d.trading_discount_percent) : null,
+      tradingPackageIds: d.trading_package_ids || [],
+      tradingMaxPackages: d.trading_max_packages,
+      tradingUsedCount: d.trading_used_count || 0,
+      status: d.status,
+      createdAt: new Date(d.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+      updatedAt: d.updated_at ? new Date(d.updated_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : null,
+    }));
+
+    res.json({ userDiscounts: formatted || [] });
+  } catch (err) {
+    console.error('Admin user-discounts error:', err);
+    res.status(500).json({ error: 'Failed to fetch user discounts' });
+  }
+});
+
+/**
+ * POST /api/admin/user-discounts
+ * Create a user-specific discount (onboarding or trading packages)
+ */
+adminRouter.post('/user-discounts',
+  validate([
+    body('userId').isUUID().withMessage('userId must be a valid UUID'),
+    body('scope').isIn(['onboarding', 'trading_packages']).withMessage('scope must be onboarding or trading_packages'),
+    body('onboardingDiscountPercent').optional().isFloat({ min: 0, max: 100 }),
+    body('onboardingDiscountFixedUsd').optional().isFloat({ min: 0 }),
+    body('tradingDiscountPercent').optional().isFloat({ min: 0, max: 100 }),
+    body('tradingPackageIds').optional().isArray(),
+    body('tradingPackageIds.*').optional().isString().isIn(['entry_100', 'pro_200', 'elite_500']),
+    body('tradingMaxPackages').optional().isInt({ min: 1 }),
+  ]),
+  async (req: AuthenticatedRequest, res) => {
+    const client = getSupabase();
+    if (!client) {
+      return res.status(503).json({ error: 'Database unavailable' });
+    }
+
+    try {
+      const { userId, scope, onboardingDiscountPercent, onboardingDiscountFixedUsd, tradingDiscountPercent, tradingPackageIds, tradingMaxPackages } = req.body;
+
+      const insert: Record<string, unknown> = {
+        user_id: userId,
+        scope,
+        status: 'active',
+        created_by: req.user!.id,
+      };
+
+      if (scope === 'onboarding') {
+        if (onboardingDiscountPercent != null) insert.onboarding_discount_percent = parseFloat(onboardingDiscountPercent);
+        if (onboardingDiscountFixedUsd != null) insert.onboarding_discount_fixed_usd = parseFloat(onboardingDiscountFixedUsd);
+      } else {
+        if (tradingDiscountPercent != null) insert.trading_discount_percent = parseFloat(tradingDiscountPercent);
+        if (Array.isArray(tradingPackageIds) && tradingPackageIds.length > 0) insert.trading_package_ids = tradingPackageIds;
+        if (tradingMaxPackages != null) insert.trading_max_packages = parseInt(tradingMaxPackages);
+      }
+
+      const { data, error } = await client
+        .from('user_discounts')
+        .insert(insert)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Error creating user discount:', error);
+        return res.status(500).json({ error: 'Failed to create user discount', details: error.message });
+      }
+
+      res.json({ userDiscount: data });
+    } catch (err) {
+      console.error('Admin create user discount error:', err);
+      res.status(500).json({ error: 'Failed to create user discount' });
+    }
+  }
+);
+
+/**
+ * PATCH /api/admin/user-discounts/:id
+ * Update user discount (status: active / paused / revoked, or change values)
+ */
+adminRouter.patch('/user-discounts/:id',
+  validate([
+    uuidParam('id'),
+    body('status').optional().isIn(['active', 'paused', 'revoked']).withMessage('status must be active, paused, or revoked'),
+    body('onboardingDiscountPercent').optional().isFloat({ min: 0, max: 100 }),
+    body('onboardingDiscountFixedUsd').optional().isFloat({ min: 0 }),
+    body('tradingDiscountPercent').optional().isFloat({ min: 0, max: 100 }),
+    body('tradingPackageIds').optional().isArray(),
+    body('tradingPackageIds.*').optional().isString().isIn(['entry_100', 'pro_200', 'elite_500']),
+    body('tradingMaxPackages').optional().isInt({ min: 1 }),
+  ]),
+  async (req: AuthenticatedRequest, res) => {
+    const client = getSupabase();
+    if (!client) {
+      return res.status(503).json({ error: 'Database unavailable' });
+    }
+
+    try {
+      const { id } = req.params;
+      const { status, onboardingDiscountPercent, onboardingDiscountFixedUsd, tradingDiscountPercent, tradingPackageIds, tradingMaxPackages } = req.body;
+
+      const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
+      if (status != null) updates.status = status;
+      if (onboardingDiscountPercent != null) updates.onboarding_discount_percent = parseFloat(onboardingDiscountPercent);
+      if (onboardingDiscountFixedUsd != null) updates.onboarding_discount_fixed_usd = parseFloat(onboardingDiscountFixedUsd);
+      if (tradingDiscountPercent != null) updates.trading_discount_percent = parseFloat(tradingDiscountPercent);
+      if (Array.isArray(tradingPackageIds)) updates.trading_package_ids = tradingPackageIds.length > 0 ? tradingPackageIds : null;
+      if (tradingMaxPackages != null) updates.trading_max_packages = parseInt(tradingMaxPackages);
+
+      const { data, error } = await client
+        .from('user_discounts')
+        .update(updates)
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Error updating user discount:', error);
+        return res.status(500).json({ error: 'Failed to update user discount' });
+      }
+
+      if (!data) {
+        return res.status(404).json({ error: 'User discount not found' });
+      }
+
+      res.json({ userDiscount: data });
+    } catch (err) {
+      console.error('Admin update user discount error:', err);
+      res.status(500).json({ error: 'Failed to update user discount' });
+    }
+  }
+);
+
+/**
+ * DELETE /api/admin/user-discounts/:id
+ * Revoke a user-specific discount (soft: set status to revoked, or hard delete)
+ */
+adminRouter.delete('/user-discounts/:id',
+  validate([uuidParam('id')]),
+  async (req: AuthenticatedRequest, res) => {
+    const client = getSupabase();
+    if (!client) {
+      return res.status(503).json({ error: 'Database unavailable' });
+    }
+
+    try {
+      const { id } = req.params;
+
+      const { data, error } = await client
+        .from('user_discounts')
+        .update({ status: 'revoked', updated_at: new Date().toISOString() })
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Error revoking user discount:', error);
+        return res.status(500).json({ error: 'Failed to revoke user discount' });
+      }
+
+      if (!data) {
+        return res.status(404).json({ error: 'User discount not found' });
+      }
+
+      res.json({ userDiscount: data });
+    } catch (err) {
+      console.error('Admin revoke user discount error:', err);
+      res.status(500).json({ error: 'Failed to revoke user discount' });
+    }
+  }
+);
