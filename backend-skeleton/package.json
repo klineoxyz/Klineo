@@ -9,7 +9,8 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "type-check": "tsc --noEmit",
-    "test": "tsx src/lib/allocatePurchaseRevenue.test.ts"
+    "test": "tsx src/lib/allocatePurchaseRevenue.test.ts",
+    "runner:cron": "echo 'Use: curl -X POST http://localhost:3000/api/runner/cron -H \"Authorization: Bearer YOUR_ADMIN_JWT\" -H \"Content-Type: application/json\"'"
   },
   "keywords": ["klineo", "copy-trading", "api"],
   "author": "",

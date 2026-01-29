@@ -718,6 +718,85 @@ export const smokeTests: SmokeTestDefinition[] = [
       }
       return result;
     }
+  },
+
+  // Strategy runner (admin: 200, non-admin: 403)
+  {
+    name: 'POST /api/runner/cron',
+    category: 'admin',
+    run: async () => {
+      const user = await getCurrentUser();
+      if (!user) {
+        return { name: 'POST /api/runner/cron', status: 'SKIP', message: 'Login required' };
+      }
+      const baseURL = getBaseURL();
+      const headers = await getAuthHeaders();
+      const result = await runTest('POST /api/runner/cron', () =>
+        fetch(`${baseURL}/api/runner/cron`, { method: 'POST', headers })
+      );
+      if (result.httpCode === 401) return { ...result, status: 'FAIL', message: 'Unauthorized' };
+      if (user.role === 'admin') {
+        if (result.httpCode === 200 || result.httpCode === 503) return { ...result, status: 'PASS', message: result.httpCode === 503 ? 'Runner disabled (503)' : 'Success (admin)' };
+        if (result.httpCode === 403) return { ...result, status: 'FAIL', message: 'Expected 200/503 for admin, got 403' };
+      } else {
+        if (result.httpCode === 403) return { ...result, status: 'PASS', message: 'Correctly blocked (non-admin)' };
+        if (result.httpCode === 200) return { ...result, status: 'FAIL', message: 'Unexpected access (non-admin got 200)' };
+      }
+      return result;
+    }
+  },
+  {
+    name: 'GET /api/runner/status',
+    category: 'admin',
+    run: async () => {
+      const user = await getCurrentUser();
+      if (!user) {
+        return { name: 'GET /api/runner/status', status: 'SKIP', message: 'Login required' };
+      }
+      const baseURL = getBaseURL();
+      const headers = await getAuthHeaders();
+      const result = await runTest('GET /api/runner/status', () =>
+        fetch(`${baseURL}/api/runner/status`, { headers })
+      );
+      if (result.httpCode === 401) return { ...result, status: 'FAIL', message: 'Unauthorized' };
+      if (user.role === 'admin') {
+        if (result.httpCode === 200) return { ...result, status: 'PASS', message: 'Success (admin)' };
+        if (result.httpCode === 403) return { ...result, status: 'FAIL', message: 'Expected 200 for admin, got 403' };
+      } else {
+        if (result.httpCode === 403) return { ...result, status: 'PASS', message: 'Correctly blocked (non-admin)' };
+        if (result.httpCode === 200) return { ...result, status: 'FAIL', message: 'Unexpected access (non-admin got 200)' };
+      }
+      return result;
+    }
+  },
+  {
+    name: 'POST /api/runner/simulate-trade-result',
+    category: 'admin',
+    run: async () => {
+      const user = await getCurrentUser();
+      if (!user) {
+        return { name: 'POST /api/runner/simulate-trade-result', status: 'SKIP', message: 'Login required' };
+      }
+      if (user.role !== 'admin') {
+        return { name: 'POST /api/runner/simulate-trade-result', status: 'SKIP', message: 'Admin role required' };
+      }
+      if (!import.meta.env.VITE_ENABLE_RUNNER_SIM_TESTS) {
+        return { name: 'POST /api/runner/simulate-trade-result', status: 'SKIP', message: 'VITE_ENABLE_RUNNER_SIM_TESTS not set' };
+      }
+      const baseURL = getBaseURL();
+      const headers = await getAuthHeaders();
+      const result = await runTest('POST /api/runner/simulate-trade-result', () =>
+        fetch(`${baseURL}/api/runner/simulate-trade-result`, {
+          method: 'POST',
+          headers: { ...headers, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: user.id, pnlDeltaUsdt: -25 })
+        })
+      );
+      if (result.httpCode === 403 && (result.details?.response as any)?.code === 'ADMIN_SIMULATE_DISABLED') {
+        return { ...result, status: 'SKIP', message: 'Simulate endpoint disabled (ENABLE_RUNNER_ADMIN_ENDPOINTS)' };
+      }
+      return result;
+    }
   }
 ];
 

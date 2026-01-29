@@ -2,6 +2,8 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import { randomUUID } from 'crypto';
+import { createClient } from '@supabase/supabase-js';
+import { runDueStrategies } from './lib/strategyRunner.js';
 import { healthRouter } from './routes/health.js';
 import { authRouter } from './routes/auth-with-supabase.js';
 import { adminRouter } from './routes/admin.js';
@@ -16,6 +18,7 @@ import { notificationsRouter } from './routes/notifications.js';
 import { selfTestRouter } from './routes/self-test.js';
 import { exchangeConnectionsRouter } from './routes/exchange-connections.js';
 import { strategiesRouter } from './routes/strategies.js';
+import { strategiesRunnerRouter } from './routes/strategies-runner.js';
 import { purchasesRouter } from './routes/purchases.js';
 import { billingRouter } from './routes/billing.js';
 import { entitlementsRouter } from './routes/entitlements.js';
@@ -129,6 +132,7 @@ app.use('/api/notifications', notificationsRouter);
 app.use('/api/self-test', selfTestRouter);
 app.use('/api/exchange-connections', exchangeConnectionsRouter);
 app.use('/api/strategies', strategiesRouter);
+app.use('/api/runner', strategiesRunnerRouter);
 app.use('/api/purchases', purchasesRouter);
 app.use('/api/billing', billingRouter);
 app.use('/api/payments/coinpayments', coinpaymentsRouter);
@@ -158,7 +162,36 @@ app.use((err: Error, req: express.Request, res: express.Response, next: express.
 
 // Start server (bind 0.0.0.0 for Railway/Docker)
 const HOST = '0.0.0.0';
+const ENABLE_STRATEGY_RUNNER = process.env.ENABLE_STRATEGY_RUNNER === 'true';
+const RUNNER_TICK_INTERVAL_SEC = Math.max(5, Number(process.env.RUNNER_TICK_INTERVAL_SEC) || 10);
+let runnerScheduled = false;
+
 app.listen(Number(PORT), HOST, () => {
   console.log(`🚀 KLINEO Backend running on ${HOST}:${PORT}`);
   console.log(`📍 Health check: http://localhost:${PORT}/health`);
+  if (ENABLE_STRATEGY_RUNNER) {
+    const url = process.env.SUPABASE_URL;
+    const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (url && key) {
+      const runnerClient = createClient(url, key);
+      setInterval(async () => {
+        if (runnerScheduled) return;
+        runnerScheduled = true;
+        try {
+          const now = new Date();
+          const summary = await runDueStrategies(runnerClient, now, { requestId: 'scheduler' });
+          if (summary.ran > 0 || summary.blocked > 0 || summary.errors > 0) {
+            console.log(`[runner] due: ran=${summary.ran} skipped=${summary.skipped} blocked=${summary.blocked} errors=${summary.errors}`);
+          }
+        } catch (err) {
+          console.error('[runner] tick error:', err instanceof Error ? err.message : 'Unknown error');
+        } finally {
+          runnerScheduled = false;
+        }
+      }, RUNNER_TICK_INTERVAL_SEC * 1000);
+      console.log(`[runner] scheduler enabled (interval ${RUNNER_TICK_INTERVAL_SEC}s)`);
+    } else {
+      console.warn('[runner] ENABLE_STRATEGY_RUNNER=true but SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY missing');
+    }
+  }
 });
