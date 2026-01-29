@@ -1,7 +1,7 @@
 /**
  * KLINEO: Allocate purchase revenue (onboarding fee + package) to 7-level referral pool,
- * platform, and marketing. Idempotent per purchase.
- * Rounding: per-share to 2 decimals (cents); remainder → marketing.
+ * platform, and marketing. Fully atomic via PostgreSQL function; no partial credits.
+ * Idempotent per purchase. Rounding: per-share to 2 decimals; remainder → marketing.
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
 
@@ -17,6 +17,7 @@ export const LEVEL_PCT = LEVEL_WEIGHTS.map((w) => (w / WEIGHT_SUM) * POOL_PCT);
 /**
  * Compute rounded amounts for a purchase. Each share rounded to 2 decimals; remainder added to marketing.
  * Returns { levelAmounts, platformAmount, marketingAmount } where levelAmounts[0]=L1,…[6]=L7.
+ * Used for display/explanation; allocation itself runs in DB (allocate_purchase_revenue).
  */
 export function computeAllocationAmounts(purchaseAmount: number): {
   levelAmounts: number[];
@@ -40,6 +41,12 @@ export type AllocationResult =
   | { ok: true; allocated: false; reason: 'already_allocated' | 'purchase_not_completed' | 'purchase_not_found' }
   | { ok: false; error: string };
 
+/**
+ * Allocate purchase revenue atomically via PostgreSQL function.
+ * All inserts (referral earnings, marketing ledger, revenue splits, allocation run) run in one transaction.
+ * If any step fails, everything rolls back; no partial credits.
+ * Idempotent: duplicate calls for same purchase return already_allocated.
+ */
 export async function allocatePurchaseRevenue(
   client: SupabaseClient,
   purchaseId: string,
@@ -47,154 +54,38 @@ export async function allocatePurchaseRevenue(
 ): Promise<AllocationResult> {
   const reqId = logContext?.requestId ?? 'n/a';
 
-  const { data: purchase, error: purchaseError } = await client
-    .from('eligible_purchases')
-    .select('id, user_id, amount, currency, status')
-    .eq('id', purchaseId)
-    .single();
-
-  if (purchaseError || !purchase) {
-    if (logContext?.requestId) {
-      console.warn(`[${reqId}] allocatePurchaseRevenue: purchase not found or error`, purchaseError?.message);
-    }
-    return { ok: true, allocated: false, reason: 'purchase_not_found' };
-  }
-
-  if (purchase.status !== 'completed') {
-    return { ok: true, allocated: false, reason: 'purchase_not_completed' };
-  }
-
-  const { data: existing } = await client
-    .from('purchase_allocation_runs')
-    .select('purchase_id')
-    .eq('purchase_id', purchaseId)
-    .maybeSingle();
-
-  if (existing) {
-    return { ok: true, allocated: false, reason: 'already_allocated' };
-  }
-
-  const amount = Number(purchase.amount);
-  const currency = (purchase.currency as string) || 'USDT';
-
-  if (amount <= 0 || !Number.isFinite(amount)) {
-    return { ok: false, error: 'Invalid purchase amount' };
-  }
-
-  // Resolve 7-level upline: L1 = referrer of purchaser, L2 = referrer of L1, ...
-  const upline: (string | null)[] = [];
-  let currentId: string | null = purchase.user_id as string;
-  for (let level = 0; level < 7; level++) {
-    const res = await client
-      .from('referrals')
-      .select('referrer_id')
-      .eq('referred_id', currentId!)
-      .maybeSingle();
-    const row = res.data as { referrer_id?: string } | null;
-    const referrerId: string | null = row?.referrer_id ?? null;
-    upline.push(referrerId);
-    currentId = referrerId;
-  }
-
-  const { levelAmounts: roundedReferral, platformAmount, marketingAmount: marketingTotal } =
-    computeAllocationAmounts(amount);
-  const marketingBaseAmount = Math.round((amount * MARKETING_PCT) / 100 * 100) / 100;
-  const remainder = Math.round((marketingTotal - marketingBaseAmount) * 100) / 100;
-  const levelPct = LEVEL_PCT;
-
-  // Insert referral earnings for existing upline levels only; missing levels go to marketing
-  for (let level = 1; level <= 7; level++) {
-    const userId = upline[level - 1];
-    const amt = roundedReferral[level - 1];
-    const ratePct = levelPct[level - 1];
-    if (userId && amt > 0) {
-      const { error: insErr } = await client.from('purchase_referral_earnings').insert({
-        purchase_id: purchaseId,
-        level,
-        user_id: userId,
-        amount: amt,
-        currency,
-        rate_pct: ratePct,
-      });
-      if (insErr) {
-        console.error(`[${reqId}] purchase_referral_earnings insert failed (level ${level}):`, insErr);
-        return { ok: false, error: `Failed to record referral earning: ${insErr.message}` };
-      }
-    } else if (amt > 0) {
-      const { error: ledErr } = await client.from('marketing_pool_ledger').insert({
-        purchase_id: purchaseId,
-        amount: amt,
-        currency,
-        source_type: 'missing_upline_reallocation',
-        level_if_applicable: level,
-      });
-      if (ledErr) {
-        console.error(`[${reqId}] marketing_pool_ledger insert failed (missing level ${level}):`, ledErr);
-        return { ok: false, error: `Failed to record marketing reallocation: ${ledErr.message}` };
-      }
-    }
-  }
-
-  // Direct 10% to marketing_pool_ledger
-  if (marketingBaseAmount > 0) {
-    const { error: le } = await client.from('marketing_pool_ledger').insert({
-      purchase_id: purchaseId,
-      amount: marketingBaseAmount,
-      currency,
-      source_type: 'direct_10pct',
-      level_if_applicable: null,
+  try {
+    const { data: result, error } = await client.rpc('allocate_purchase_revenue', {
+      p_purchase_id: purchaseId,
     });
-    if (le) {
-      console.error(`[${reqId}] marketing_pool_ledger direct_10pct failed:`, le);
-      return { ok: false, error: `Failed to record marketing pool: ${le.message}` };
+
+    if (error) {
+      console.error(`[${reqId}] allocate_purchase_revenue RPC error:`, error.message);
+      return { ok: false, error: error.message };
     }
-  }
-  if (remainder !== 0) {
-    const { error: le2 } = await client.from('marketing_pool_ledger').insert({
-      purchase_id: purchaseId,
-      amount: remainder,
-      currency,
-      source_type: 'direct_10pct',
-      level_if_applicable: null,
-    });
-    if (le2) {
-      console.error(`[${reqId}] marketing_pool_ledger remainder failed:`, le2);
-      return { ok: false, error: `Failed to record remainder: ${le2.message}` };
+
+    const status = result as string | null;
+    if (status === 'allocated') {
+      return { ok: true, allocated: true, purchaseId };
     }
-  }
+    if (status === 'already_allocated') {
+      return { ok: true, allocated: false, reason: 'already_allocated' };
+    }
+    if (status === 'purchase_not_completed') {
+      return { ok: true, allocated: false, reason: 'purchase_not_completed' };
+    }
+    if (status === 'purchase_not_found') {
+      return { ok: true, allocated: false, reason: 'purchase_not_found' };
+    }
+    if (status === 'invalid_amount') {
+      return { ok: false, error: 'Invalid purchase amount' };
+    }
 
-  const marketingFromSplits = marketingTotal;
-  const { error: spPlatform } = await client.from('purchase_revenue_splits').insert({
-    purchase_id: purchaseId,
-    split_type: 'platform',
-    amount: platformAmount,
-    currency,
-    source_detail: 'platform_20pct',
-  });
-  if (spPlatform) {
-    console.error(`[${reqId}] purchase_revenue_splits platform failed:`, spPlatform);
-    return { ok: false, error: `Failed to record platform split: ${spPlatform.message}` };
+    console.warn(`[${reqId}] allocate_purchase_revenue unexpected result:`, status);
+    return { ok: false, error: status ?? 'Unknown result' };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(`[${reqId}] allocate_purchase_revenue exception:`, message);
+    return { ok: false, error: message };
   }
-
-  const { error: spMarketing } = await client.from('purchase_revenue_splits').insert({
-    purchase_id: purchaseId,
-    split_type: 'marketing',
-    amount: marketingFromSplits,
-    currency,
-    source_detail: 'direct_10pct_plus_reallocations_and_remainder',
-  });
-  if (spMarketing) {
-    console.error(`[${reqId}] purchase_revenue_splits marketing failed:`, spMarketing);
-    return { ok: false, error: `Failed to record marketing split: ${spMarketing.message}` };
-  }
-
-  const { error: runErr } = await client.from('purchase_allocation_runs').insert({
-    purchase_id: purchaseId,
-  });
-  if (runErr) {
-    console.error(`[${reqId}] purchase_allocation_runs insert failed:`, runErr);
-    return { ok: false, error: `Failed to record allocation run: ${runErr.message}` };
-  }
-
-  return { ok: true, allocated: true, purchaseId };
 }

@@ -177,6 +177,13 @@ coinpaymentsRouter.post('/ipn', async (req: Request, res: Response) => {
     return;
   }
 
+  const purchaseStatus = purchase.status as string;
+  if (purchaseStatus !== 'pending') {
+    console.warn(`[${requestId ?? 'n/a'}] INVARIANT: IPN attempted status change from non-pending purchase_id=${purchase.id} current_status=${purchaseStatus} txn_id=${txnId}`);
+    res.status(200).json({ received: true });
+    return;
+  }
+
   const purchaseAmount = Number(purchase.amount);
   const amountOk = Number.isFinite(purchaseAmount) && purchaseAmount > 0 && Math.abs(amount - purchaseAmount) < 0.01;
   const currencyOk = !currency || currency === 'USD' || currency === 'USDT';
@@ -190,7 +197,8 @@ coinpaymentsRouter.post('/ipn', async (req: Request, res: Response) => {
     const { error: updateErr } = await client
       .from('eligible_purchases')
       .update({ status: 'completed', updated_at: new Date().toISOString() })
-      .eq('id', purchase.id);
+      .eq('id', purchase.id)
+      .eq('status', 'pending');
 
     if (updateErr) {
       console.error(`[${requestId ?? 'n/a'}] IPN update purchase failed:`, updateErr);
@@ -205,7 +213,8 @@ coinpaymentsRouter.post('/ipn', async (req: Request, res: Response) => {
     await client
       .from('eligible_purchases')
       .update({ status: 'cancelled', updated_at: new Date().toISOString() })
-      .eq('id', purchase.id);
+      .eq('id', purchase.id)
+      .eq('status', 'pending');
   }
 
   res.status(200).json({ received: true });
