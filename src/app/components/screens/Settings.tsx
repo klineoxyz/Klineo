@@ -450,7 +450,7 @@ export function Settings() {
             <div className="space-y-2">
               <Label>USDT Wallet Address (BSC)</Label>
               <Input
-                placeholder="TXyz123..."
+                placeholder="0x... (BEP20)"
                 className="font-mono"
                 value={referralWallet}
                 onChange={(e) => setReferralWallet(e.target.value)}
