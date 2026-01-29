@@ -75,9 +75,19 @@ export interface ExchangeConnection {
   last_tested_at: string | null;
   last_test_status: 'ok' | 'fail' | null;
   last_error_message: string | null;
-  /** Auto-disabled after 5 consecutive failures */
   consecutive_failures?: number;
   disabled_at?: string | null;
+  supports_futures?: boolean;
+  futures_enabled?: boolean;
+  futures_tested_at?: string | null;
+  futures_test_status?: 'ok' | 'fail' | null;
+  futures_last_error?: string | null;
+  default_leverage?: number;
+  max_leverage_allowed?: number;
+  margin_mode?: 'isolated' | 'cross';
+  position_mode?: 'one_way' | 'hedge';
+  max_notional_usdt?: number;
+  kill_switch?: boolean;
 }
 
 export interface CreateConnectionRequest {
@@ -212,5 +222,79 @@ export const exchangeConnections = {
    */
   delete: async (id: string): Promise<{ message: string; requestId: string }> => {
     return api.delete(`/api/exchange-connections/${id}`);
+  },
+
+  /** Test Futures API (no order). Updates futures_test_status. */
+  futuresTest: async (id: string): Promise<{ ok: boolean; latencyMs: number; message: string; error?: string; requestId: string }> => {
+    return api.post(`/api/exchange-connections/${id}/futures/test`);
+  },
+
+  /** Enable Futures: set leverage, margin mode, position mode for BTCUSDT. Sets futures_enabled true. */
+  futuresEnable: async (
+    id: string,
+    data: { default_leverage?: number; margin_mode?: 'isolated' | 'cross'; position_mode?: 'one_way' | 'hedge' }
+  ): Promise<{ message: string; requestId: string }> => {
+    return api.post(`/api/exchange-connections/${id}/futures/enable`, data);
+  },
+
+  /** Set kill switch (stops all futures strategies from placing orders). */
+  setKillSwitch: async (id: string, enabled: boolean): Promise<{ kill_switch: boolean; message: string; requestId: string }> => {
+    return api.patch(`/api/exchange-connections/${id}/kill-switch`, { enabled });
+  },
+};
+
+// Strategies API (Futures auto trading)
+export interface StrategyRun {
+  id: string;
+  exchange_connection_id: string;
+  exchange: string;
+  symbol: string;
+  timeframe: string;
+  direction: 'long' | 'short' | 'both';
+  leverage: number;
+  status: 'draft' | 'active' | 'paused' | 'stopped';
+  last_signal_at?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface StrategyEvent {
+  id: string;
+  event_type: 'signal' | 'order_submit' | 'order_fill' | 'error' | 'risk_block';
+  payload: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface CreateStrategyRequest {
+  exchange_connection_id: string;
+  symbol: string;
+  timeframe: string;
+  direction: 'long' | 'short' | 'both';
+  leverage: number;
+  margin_mode?: 'isolated' | 'cross';
+  position_mode?: 'one_way' | 'hedge';
+  order_size_pct?: number;
+  initial_capital_usdt?: number;
+  take_profit_pct?: number;
+  stop_loss_pct?: number;
+  strategy_template?: string;
+  strategy_params?: Record<string, unknown>;
+}
+
+export const strategies = {
+  create: async (data: CreateStrategyRequest): Promise<{ strategy: StrategyRun; requestId: string }> => {
+    return api.post('/api/strategies', data);
+  },
+  list: async (): Promise<{ strategies: StrategyRun[]; requestId: string }> => {
+    return api.get('/api/strategies');
+  },
+  get: async (id: string): Promise<{ strategy: StrategyRun & Record<string, unknown>; events: StrategyEvent[]; requestId: string }> => {
+    return api.get(`/api/strategies/${id}`);
+  },
+  setStatus: async (id: string, status: 'active' | 'paused' | 'stopped'): Promise<{ status: string; requestId: string }> => {
+    return api.put(`/api/strategies/${id}/status`, { status });
+  },
+  executeTick: async (id: string): Promise<{ signal: string; rsi?: number; orderPlaced: boolean; orderId?: string; riskBlock?: string; error?: string; requestId: string }> => {
+    return api.post(`/api/strategies/${id}/execute-tick`);
   },
 };

@@ -54,6 +54,8 @@ export function Settings() {
   const [testBeforeSaveLoading, setTestBeforeSaveLoading] = useState(false);
   const [testingId, setTestingId] = useState<string | null>(null);
   const [reEnableId, setReEnableId] = useState<string | null>(null);
+  const [futuresTestId, setFuturesTestId] = useState<string | null>(null);
+  const [futuresEnableId, setFuturesEnableId] = useState<string | null>(null);
   const [permissionChecklistOpen, setPermissionChecklistOpen] = useState(false);
   const [entitlement, setEntitlement] = useState<{ remainingUsd: number; status: string } | null>(null);
   // Update credentials (re-save API key/secret to fix decrypt errors)
@@ -338,6 +340,35 @@ export function Settings() {
       toast.error('Failed to re-enable', { description: err?.message });
     } finally {
       setReEnableId(null);
+    }
+  };
+
+  const handleFuturesTest = async (id: string) => {
+    setFuturesTestId(id);
+    try {
+      const res = await exchangeConnections.futuresTest(id);
+      if (res.ok) toast.success(`Futures API OK (${res.latencyMs}ms)`);
+      else toast.error(res.error ?? 'Futures test failed');
+      const data = await exchangeConnections.list();
+      setExchangeConnectionsList(data.connections);
+    } catch (err: any) {
+      toast.error('Futures test failed', { description: err?.message });
+    } finally {
+      setFuturesTestId(null);
+    }
+  };
+
+  const handleFuturesEnable = async (id: string) => {
+    setFuturesEnableId(id);
+    try {
+      await exchangeConnections.futuresEnable(id, { default_leverage: 3, margin_mode: 'isolated', position_mode: 'one_way' });
+      toast.success('Futures enabled');
+      const data = await exchangeConnections.list();
+      setExchangeConnectionsList(data.connections);
+    } catch (err: any) {
+      toast.error('Futures enable failed', { description: err?.message });
+    } finally {
+      setFuturesEnableId(null);
     }
   };
 
@@ -829,6 +860,11 @@ export function Settings() {
                             Disabled (too many errors)
                           </Badge>
                         )}
+                        {conn.supports_futures && (
+                          <Badge variant="outline" className={conn.futures_enabled ? "bg-green-500/10 text-green-600 border-green-500/30" : "text-muted-foreground"}>
+                            Futures {conn.futures_enabled ? "ON" : "off"}
+                          </Badge>
+                        )}
                       </div>
                       <div className="text-sm text-muted-foreground space-y-1">
                         <div>Exchange: {conn.exchange}</div>
@@ -875,6 +911,30 @@ export function Settings() {
                           "Test"
                         )}
                       </Button>
+                      {conn.supports_futures && (
+                        <>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleFuturesTest(conn.id)}
+                            disabled={futuresTestId === conn.id}
+                          >
+                            {futuresTestId === conn.id ? <Loader2 className="size-4 animate-spin" /> : null}
+                            Test Futures
+                          </Button>
+                          {!conn.futures_enabled && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleFuturesEnable(conn.id)}
+                              disabled={futuresEnableId === conn.id}
+                            >
+                              {futuresEnableId === conn.id ? <Loader2 className="size-4 animate-spin" /> : null}
+                              Enable Futures
+                            </Button>
+                          )}
+                        </>
+                      )}
                       <Button
                         variant="outline"
                         size="sm"

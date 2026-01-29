@@ -8,6 +8,8 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { encrypt, decrypt, maskApiKey } from '../lib/crypto.js';
 import { testConnection as binanceTestConnection, getAccountInfo as binanceGetAccountInfo, type BinanceCredentials } from '../lib/binance.js';
 import { testConnection as bybitTestConnection, getWalletBalance as bybitGetWalletBalance, type BybitCredentials } from '../lib/bybit.js';
+import * as binanceFutures from '../lib/binance-futures.js';
+import * as bybitFutures from '../lib/bybit-futures.js';
 
 let supabase: SupabaseClient | null = null;
 
@@ -128,7 +130,7 @@ exchangeConnectionsRouter.get('/', async (req: AuthenticatedRequest, res) => {
   try {
     const { data: connections, error } = await client
       .from('user_exchange_connections')
-      .select('id, exchange, label, environment, created_at, updated_at, last_tested_at, last_test_status, last_error_message, consecutive_failures, disabled_at')
+      .select('id, exchange, label, environment, created_at, updated_at, last_tested_at, last_test_status, last_error_message, consecutive_failures, disabled_at, supports_futures, futures_enabled, futures_tested_at, futures_test_status, futures_last_error, default_leverage, max_leverage_allowed, margin_mode, position_mode, max_notional_usdt, kill_switch')
       .eq('user_id', req.user!.id)
       .order('created_at', { ascending: false });
 
@@ -334,6 +336,215 @@ exchangeConnectionsRouter.post(
       const errorMessage = err instanceof Error ? err.message : 'Unknown error';
       console.error(`[${requestId}] Error testing connection:`, errorMessage);
       res.status(500).json({ error: 'Failed to test connection', requestId });
+    }
+  }
+);
+
+/**
+ * POST /api/exchange-connections/:id/futures/test
+ * Test Futures API (no order placed). Updates futures_test_status, futures_last_error.
+ */
+exchangeConnectionsRouter.post(
+  '/:id/futures/test',
+  uuidParam('id'),
+  async (req: AuthenticatedRequest, res) => {
+    const client = getSupabase();
+    if (!client) {
+      return res.status(503).json({ error: 'Database unavailable' });
+    }
+    const requestId = (req as any).requestId || 'unknown';
+    const connectionId = req.params.id;
+
+    try {
+      const { data: connection, error: fetchError } = await client
+        .from('user_exchange_connections')
+        .select('id, exchange, environment, encrypted_config_b64, supports_futures')
+        .eq('id', connectionId)
+        .eq('user_id', req.user!.id)
+        .single();
+
+      if (fetchError || !connection) {
+        return res.status(404).json({ error: 'Connection not found', requestId });
+      }
+      if (!connection.supports_futures) {
+        return res.status(400).json({ error: 'Exchange does not support futures', requestId });
+      }
+
+      const hasB64 = typeof connection.encrypted_config_b64 === 'string' && connection.encrypted_config_b64.length > 0;
+      if (!hasB64) {
+        return res.status(400).json({ error: 'Credentials need to be re-saved', code: 'UPDATE_CREDENTIALS_REQUIRED', requestId });
+      }
+
+      const env = (connection.environment || 'production') as 'production' | 'testnet';
+      const decryptedJson = await decrypt(connection.encrypted_config_b64);
+      const parsed = JSON.parse(decryptedJson);
+
+      let ok = false;
+      let errorMsg: string | null = null;
+      const start = Date.now();
+      try {
+        if (connection.exchange === 'bybit') {
+          const creds: bybitFutures.BybitFuturesCredentials = { apiKey: parsed.apiKey, apiSecret: parsed.apiSecret, environment: env };
+          await bybitFutures.getAccountSummary(creds);
+          ok = true;
+        } else {
+          const creds: binanceFutures.BinanceFuturesCredentials = { apiKey: parsed.apiKey, apiSecret: parsed.apiSecret, environment: env };
+          await binanceFutures.getAccountSummary(creds);
+          ok = true;
+        }
+      } catch (e) {
+        errorMsg = e instanceof Error ? e.message : 'Unknown error';
+        errorMsg = errorMsg.replace(/api[_-]?key/gi, '[REDACTED]').replace(/secret/gi, '[REDACTED]');
+      }
+
+      await client
+        .from('user_exchange_connections')
+        .update({
+          futures_tested_at: new Date().toISOString(),
+          futures_test_status: ok ? 'ok' : 'fail',
+          futures_last_error: errorMsg,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', connectionId)
+        .eq('user_id', req.user!.id);
+
+      res.json({
+        ok,
+        latencyMs: Date.now() - start,
+        message: ok ? 'Futures API OK' : 'Futures test failed',
+        error: errorMsg ?? undefined,
+        requestId,
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Unknown error';
+      console.error(`[${requestId}] Futures test error:`, msg);
+      res.status(500).json({ error: 'Futures test failed', requestId });
+    }
+  }
+);
+
+/**
+ * POST /api/exchange-connections/:id/futures/enable
+ * Set leverage, margin mode, position mode for BTCUSDT (no order). Sets futures_enabled true.
+ * Body: { default_leverage?, margin_mode?, position_mode? }
+ */
+exchangeConnectionsRouter.post(
+  '/:id/futures/enable',
+  uuidParam('id'),
+  validate([
+    body('default_leverage').optional().isInt({ min: 1, max: 125 }).withMessage('Leverage 1-125'),
+    body('margin_mode').optional().isIn(['isolated', 'cross']).withMessage('isolated or cross'),
+    body('position_mode').optional().isIn(['one_way', 'hedge']).withMessage('one_way or hedge'),
+  ]),
+  async (req: AuthenticatedRequest, res) => {
+    const client = getSupabase();
+    if (!client) {
+      return res.status(503).json({ error: 'Database unavailable' });
+    }
+    const requestId = (req as any).requestId || 'unknown';
+    const connectionId = req.params.id;
+    const { default_leverage, margin_mode, position_mode } = req.body;
+
+    try {
+      const { data: connection, error: fetchError } = await client
+        .from('user_exchange_connections')
+        .select('id, exchange, environment, encrypted_config_b64, supports_futures, max_leverage_allowed, default_leverage, margin_mode, position_mode')
+        .eq('id', connectionId)
+        .eq('user_id', req.user!.id)
+        .single();
+
+      if (fetchError || !connection) {
+        return res.status(404).json({ error: 'Connection not found', requestId });
+      }
+      if (!connection.supports_futures) {
+        return res.status(400).json({ error: 'Exchange does not support futures', requestId });
+      }
+
+      const hasB64 = typeof connection.encrypted_config_b64 === 'string' && connection.encrypted_config_b64.length > 0;
+      if (!hasB64) {
+        return res.status(400).json({ error: 'Credentials need to be re-saved', requestId });
+      }
+
+      const conn = connection as { default_leverage?: number; margin_mode?: string; position_mode?: string };
+      const leverage = default_leverage ?? conn.default_leverage ?? 3;
+      const maxAllowed = Number(connection.max_leverage_allowed ?? 10);
+      if (leverage > maxAllowed) {
+        return res.status(400).json({ error: `Leverage must be <= ${maxAllowed}`, requestId });
+      }
+
+      const env = (connection.environment || 'production') as 'production' | 'testnet';
+      const decryptedJson = await decrypt(connection.encrypted_config_b64);
+      const parsed = JSON.parse(decryptedJson);
+      const symbol = 'BTCUSDT';
+      const marginMode = (margin_mode ?? conn.margin_mode ?? 'isolated') as 'isolated' | 'cross';
+      const posMode = (position_mode ?? conn.position_mode ?? 'one_way') as 'one_way' | 'hedge';
+
+      if (connection.exchange === 'bybit') {
+        const creds: bybitFutures.BybitFuturesCredentials = { apiKey: parsed.apiKey, apiSecret: parsed.apiSecret, environment: env };
+        await bybitFutures.setLeverage(creds, symbol, leverage);
+        await bybitFutures.setMarginMode(creds, symbol, marginMode);
+        await bybitFutures.setPositionMode(creds, posMode);
+      } else {
+        const creds: binanceFutures.BinanceFuturesCredentials = { apiKey: parsed.apiKey, apiSecret: parsed.apiSecret, environment: env };
+        await binanceFutures.setLeverage(creds, symbol, leverage);
+        await binanceFutures.setMarginMode(creds, symbol, marginMode);
+        await binanceFutures.setPositionMode(creds, posMode);
+      }
+
+      await client
+        .from('user_exchange_connections')
+        .update({
+          futures_enabled: true,
+          default_leverage: leverage,
+          margin_mode: marginMode,
+          position_mode: posMode,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', connectionId)
+        .eq('user_id', req.user!.id);
+
+      res.json({ message: 'Futures enabled', requestId });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Unknown error';
+      const sanitized = msg.replace(/api[_-]?key/gi, '[REDACTED]').replace(/secret/gi, '[REDACTED]');
+      console.error(`[${requestId}] Futures enable error:`, sanitized);
+      res.status(500).json({ error: 'Futures enable failed', message: sanitized, requestId });
+    }
+  }
+);
+
+/**
+ * PATCH /api/exchange-connections/:id/kill-switch
+ * Set kill_switch true (stops all futures strategies from placing orders).
+ */
+exchangeConnectionsRouter.patch(
+  '/:id/kill-switch',
+  uuidParam('id'),
+  validate([body('enabled').isBoolean().withMessage('enabled must be boolean')]),
+  async (req: AuthenticatedRequest, res) => {
+    const client = getSupabase();
+    if (!client) {
+      return res.status(503).json({ error: 'Database unavailable' });
+    }
+    const requestId = (req as any).requestId || 'unknown';
+    const connectionId = req.params.id;
+    const enabled = req.body.enabled === true;
+
+    try {
+      const { error } = await client
+        .from('user_exchange_connections')
+        .update({ kill_switch: enabled, updated_at: new Date().toISOString() })
+        .eq('id', connectionId)
+        .eq('user_id', req.user!.id);
+
+      if (error) {
+        console.error(`[${requestId}] Kill switch update error:`, error);
+        return res.status(500).json({ error: 'Failed to update kill switch', requestId });
+      }
+      res.json({ kill_switch: enabled, message: enabled ? 'Kill switch ON — no futures orders' : 'Kill switch OFF', requestId });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Unknown error';
+      res.status(500).json({ error: 'Internal server error', requestId });
     }
   }
 );

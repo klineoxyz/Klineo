@@ -18,17 +18,32 @@ import {
   SheetTrigger,
 } from "@/app/components/ui/sheet";
 import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/app/components/ui/table";
+import {
   TrendingUp,
   TrendingDown,
   BarChart3,
   Loader2,
   BookOpen,
+  Zap,
+  Pause,
+  Play,
+  Square,
+  AlertTriangle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Alert, AlertDescription } from "@/app/components/ui/alert";
+import { Badge } from "@/app/components/ui/badge";
+import { Switch } from "@/app/components/ui/switch";
 import { useDemo } from "@/app/contexts/DemoContext";
 import { useExchangeBalances } from "@/app/hooks/useExchangeBalances";
-import { api, type EntitlementResponse } from "@/lib/api";
+import { api, exchangeConnections, strategies, type EntitlementResponse, type StrategyRun, type StrategyEvent, type ExchangeConnection } from "@/lib/api";
 import { TradingViewChart } from "@/app/components/TradingViewChart";
 import { 
   TradingViewMarketOverview,
@@ -205,6 +220,15 @@ export function TradingTerminalNew({ onNavigate }: TradingTerminalProps) {
   const [showMACD, setShowMACD] = useState(false);
   const [showVolume, setShowVolume] = useState(true);
 
+  // Futures Strategy panel
+  const [strategyList, setStrategyList] = useState<StrategyRun[]>([]);
+  const [strategyEvents, setStrategyEvents] = useState<StrategyEvent[]>([]);
+  const [connections, setConnections] = useState<ExchangeConnection[]>([]);
+  const [selectedStrategyId, setSelectedStrategyId] = useState<string | null>(null);
+  const [strategyLoading, setStrategyLoading] = useState(false);
+  const [strategyStatusUpdating, setStrategyStatusUpdating] = useState(false);
+  const [killSwitchUpdating, setKillSwitchUpdating] = useState<Record<string, boolean>>({});
+
   // Get current pair data (fallback for order book, trades, 24h stats)
   const currentPairData = pairs.find((p) => p.symbol === selectedPair) || pairs[0];
   const basePrice = parseFloat(currentPairData.price.replace(/,/g, ""));
@@ -311,6 +335,70 @@ export function TradingTerminalNew({ onNavigate }: TradingTerminalProps) {
     const interval = setInterval(loadMarketStats, 30000);
     return () => clearInterval(interval);
   }, [loadMarketStats]);
+
+  const loadStrategies = useCallback(async () => {
+    if (isDemoMode) return;
+    setStrategyLoading(true);
+    try {
+      const [stratRes, connRes] = await Promise.all([strategies.list(), exchangeConnections.list()]);
+      setStrategyList(stratRes.strategies ?? []);
+      setConnections(connRes.connections ?? []);
+      setSelectedStrategyId((prev) => (prev ? prev : stratRes.strategies?.[0]?.id ?? null));
+    } catch {
+      setStrategyList([]);
+      setConnections([]);
+    } finally {
+      setStrategyLoading(false);
+    }
+  }, [isDemoMode]);
+
+  const loadStrategyEvents = useCallback(async (id: string) => {
+    try {
+      const res = await strategies.get(id);
+      setStrategyEvents(res.events ?? []);
+    } catch {
+      setStrategyEvents([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadStrategies();
+  }, [loadStrategies]);
+
+  useEffect(() => {
+    if (selectedStrategyId) loadStrategyEvents(selectedStrategyId);
+  }, [selectedStrategyId, loadStrategyEvents]);
+
+  const activeStrategy = strategyList.find((s) => s.status === "active");
+  const selectedStrategy = strategyList.find((s) => s.id === selectedStrategyId);
+
+  const handleStrategyStatus = async (id: string, status: "active" | "paused" | "stopped") => {
+    setStrategyStatusUpdating(true);
+    try {
+      await strategies.setStatus(id, status);
+      toast.success(`Strategy ${status}`);
+      await loadStrategies();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to update");
+    } finally {
+      setStrategyStatusUpdating(false);
+    }
+  };
+
+  const handleKillSwitch = async (connectionId: string, enabled: boolean) => {
+    setKillSwitchUpdating((prev) => ({ ...prev, [connectionId]: true }));
+    try {
+      await exchangeConnections.setKillSwitch(connectionId, enabled);
+      toast.success(enabled ? "Kill switch ON — no futures orders" : "Kill switch OFF");
+      await loadStrategies();
+      const connRes = await exchangeConnections.list();
+      setConnections(connRes.connections ?? []);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to update kill switch");
+    } finally {
+      setKillSwitchUpdating((prev) => ({ ...prev, [connectionId]: false }));
+    }
+  };
 
   const orderBookData = orderBook ?? generateOrderBook(basePrice);
   const recentTrades = generateRecentTrades(basePrice);
@@ -749,6 +837,9 @@ export function TradingTerminalNew({ onNavigate }: TradingTerminalProps) {
               <TabsList className="mx-2 sm:mx-4 mt-2 w-auto flex-wrap">
                 <TabsTrigger value="trades" className="text-xs sm:text-sm">Market Trades</TabsTrigger>
                 <TabsTrigger value="myorders" className="text-xs sm:text-sm">My Orders</TabsTrigger>
+                <TabsTrigger value="strategy" className="text-xs sm:text-sm flex items-center gap-1">
+                  <Zap className="h-3 w-3" /> Strategy
+                </TabsTrigger>
               </TabsList>
 
               <TabsContent value="trades" className="flex-1 px-2 sm:px-4 pb-2 overflow-hidden min-h-0">
@@ -777,6 +868,125 @@ export function TradingTerminalNew({ onNavigate }: TradingTerminalProps) {
                 <div className="flex items-center justify-center h-full text-xs sm:text-sm text-muted-foreground">
                   No open orders
                 </div>
+              </TabsContent>
+
+              <TabsContent value="strategy" className="flex-1 px-2 sm:px-4 pb-2 overflow-y-auto min-h-0">
+                {isDemoMode ? (
+                  <div className="text-xs text-muted-foreground py-2">Connect an exchange and enable Futures in Settings to run auto strategies.</div>
+                ) : strategyLoading ? (
+                  <div className="flex items-center gap-2 py-2 text-xs text-muted-foreground">
+                    <Loader2 className="h-3 w-3 animate-spin" /> Loading…
+                  </div>
+                ) : (
+                  <div className="space-y-3 py-2">
+                    {/* Active Strategy panel */}
+                    {activeStrategy && (
+                      <div className="rounded border border-border bg-card/50 p-2 space-y-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-xs font-semibold">Active Strategy</span>
+                          <Badge variant="outline" className="text-[10px] bg-green-500/10 text-green-600 border-green-500/30">{activeStrategy.status}</Badge>
+                        </div>
+                        <div className="text-[10px] sm:text-xs text-muted-foreground">
+                          {activeStrategy.symbol} • {activeStrategy.timeframe} • {activeStrategy.direction} • {activeStrategy.leverage}x
+                        </div>
+                        <div className="text-[10px] text-muted-foreground">
+                          Last signal: {activeStrategy.last_signal_at ? new Date(activeStrategy.last_signal_at).toLocaleString() : "—"}
+                        </div>
+                        <div className="flex flex-wrap gap-1">
+                          <Button size="sm" variant="outline" className="h-6 text-[10px] px-2" onClick={() => handleStrategyStatus(activeStrategy.id, "paused")} disabled={strategyStatusUpdating}>
+                            <Pause className="h-3 w-3 mr-1" /> Pause
+                          </Button>
+                          <Button size="sm" variant="outline" className="h-6 text-[10px] px-2" onClick={() => handleStrategyStatus(activeStrategy.id, "stopped")} disabled={strategyStatusUpdating}>
+                            <Square className="h-3 w-3 mr-1" /> Stop
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                    {selectedStrategy && selectedStrategy.status !== "active" && (
+                      <div className="rounded border border-border bg-card/50 p-2 space-y-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-xs font-semibold">Strategy</span>
+                          <Badge variant="outline" className="text-[10px]">{selectedStrategy.status}</Badge>
+                        </div>
+                        <div className="text-[10px] sm:text-xs text-muted-foreground">
+                          {selectedStrategy.symbol} • {selectedStrategy.timeframe} • {selectedStrategy.direction}
+                        </div>
+                        {selectedStrategy.status === "paused" && (
+                          <Button size="sm" className="h-6 text-[10px] px-2" onClick={() => handleStrategyStatus(selectedStrategy.id, "active")} disabled={strategyStatusUpdating}>
+                            <Play className="h-3 w-3 mr-1" /> Resume
+                          </Button>
+                        )}
+                      </div>
+                    )}
+                    {strategyList.length > 1 && (
+                      <div className="flex items-center gap-2">
+                        <Label className="text-[10px]">Strategy</Label>
+                        <Select value={selectedStrategyId ?? ""} onValueChange={setSelectedStrategyId}>
+                          <SelectTrigger className="h-7 text-xs w-[140px]">
+                            <SelectValue placeholder="Select" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {strategyList.map((s) => (
+                              <SelectItem key={s.id} value={s.id}>
+                                {s.symbol} ({s.status})
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+                    {/* Execution log */}
+                    <div className="rounded border border-border bg-card/30 overflow-hidden">
+                      <div className="px-2 py-1 border-b border-border text-[10px] font-semibold">Execution log</div>
+                      <div className="max-h-[120px] overflow-y-auto">
+                        {strategyEvents.length === 0 ? (
+                          <div className="px-2 py-3 text-[10px] text-muted-foreground">No events yet</div>
+                        ) : (
+                          <Table>
+                            <TableHeader>
+                              <TableRow className="border-0">
+                                <TableHead className="h-6 text-[10px]">Time</TableHead>
+                                <TableHead className="h-6 text-[10px]">Type</TableHead>
+                                <TableHead className="h-6 text-[10px]">Payload</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {strategyEvents.slice(0, 20).map((ev) => (
+                                <TableRow key={ev.id} className="border-0">
+                                  <TableCell className="py-0.5 text-[10px] font-mono">{new Date(ev.created_at).toLocaleTimeString()}</TableCell>
+                                  <TableCell className="py-0.5 text-[10px]">{ev.event_type}</TableCell>
+                                  <TableCell className="py-0.5 text-[10px] font-mono truncate max-w-[120px]">{JSON.stringify(ev.payload)}</TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        )}
+                      </div>
+                    </div>
+                    {/* Kill switch */}
+                    {connections.filter((c) => c.supports_futures && c.futures_enabled).length > 0 && (
+                      <div className="rounded border border-border bg-card/30 p-2 space-y-2">
+                        <div className="flex items-center gap-2 text-[10px] font-semibold text-destructive">
+                          <AlertTriangle className="h-3 w-3" /> Kill switch
+                        </div>
+                        <p className="text-[10px] text-muted-foreground">When ON, no futures orders are placed for this connection.</p>
+                        {connections.filter((c) => c.supports_futures && c.futures_enabled).map((c) => (
+                          <div key={c.id} className="flex items-center justify-between gap-2">
+                            <span className="text-[10px] truncate">{c.exchange} {c.label ? `(${c.label})` : ""}</span>
+                            <Switch
+                              checked={!!c.kill_switch}
+                              onCheckedChange={(checked) => handleKillSwitch(c.id, !!checked)}
+                              disabled={killSwitchUpdating[c.id]}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {!activeStrategy && strategyList.length === 0 && !strategyLoading && (
+                      <div className="text-[10px] text-muted-foreground">No strategies. Run a backtest and click &quot;Go Live&quot; in Strategy Backtest.</div>
+                    )}
+                  </div>
+                )}
               </TabsContent>
             </Tabs>
           </div>

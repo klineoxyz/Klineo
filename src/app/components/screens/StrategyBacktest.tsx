@@ -73,6 +73,15 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useDemo } from "@/app/contexts/DemoContext";
+import { exchangeConnections, strategies, type ExchangeConnection } from "@/lib/api";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/app/components/ui/dialog";
 
 // Helper: Calculate SMA
 const calculateSMA = (data: any[], period: number, key: string) => {
@@ -286,6 +295,17 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
   const [launchCapital, setLaunchCapital] = useState("10000");
   const [exchange, setExchange] = useState("binance");
 
+  // Go Live (Futures) modal
+  const [goLiveFuturesOpen, setGoLiveFuturesOpen] = useState(false);
+  const [connections, setConnections] = useState<ExchangeConnection[]>([]);
+  const [goLiveConnectionId, setGoLiveConnectionId] = useState("");
+  const [goLiveLeverage, setGoLiveLeverage] = useState("3");
+  const [goLiveMarginMode, setGoLiveMarginMode] = useState<"isolated" | "cross">("isolated");
+  const [goLivePositionMode, setGoLivePositionMode] = useState<"one_way" | "hedge">("one_way");
+  const [goLiveOrderSizePct, setGoLiveOrderSizePct] = useState("100");
+  const [goLiveRiskAccepted, setGoLiveRiskAccepted] = useState(false);
+  const [isGoLiveSubmitting, setIsGoLiveSubmitting] = useState(false);
+
   // Calculate KPIs from generated trades
   const tradeStats = calculateTradeStats();
   const kpis = {
@@ -324,6 +344,75 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
     setTimeout(() => {
       onNavigate("copy-trading");
     }, 1500);
+  };
+
+  const futuresEnabledConnections = connections.filter(
+    (c) => c.supports_futures && c.futures_enabled && !c.disabled_at
+  );
+  const selectedConnection = connections.find((c) => c.id === goLiveConnectionId);
+  const maxLeverage = selectedConnection?.max_leverage_allowed ?? 10;
+
+  const openGoLiveFutures = async () => {
+    setGoLiveFuturesOpen(true);
+    setGoLiveRiskAccepted(false);
+    try {
+      const { connections: list } = await exchangeConnections.list();
+      setConnections(list);
+      const first = list.find((c) => c.supports_futures && c.futures_enabled && !c.disabled_at);
+      if (first) {
+        setGoLiveConnectionId(first.id);
+        setGoLiveLeverage(String(first.default_leverage ?? 3));
+        setGoLiveMarginMode((first.margin_mode as "isolated" | "cross") ?? "isolated");
+        setGoLivePositionMode((first.position_mode as "one_way" | "hedge") ?? "one_way");
+      } else {
+        setGoLiveConnectionId("");
+      }
+    } catch (e) {
+      toast.error("Failed to load connections");
+    }
+  };
+
+  const handleGoLiveFutures = async () => {
+    if (!goLiveRiskAccepted) {
+      toast.error("Please accept the risk disclaimer");
+      return;
+    }
+    if (!goLiveConnectionId) {
+      toast.error("Select a futures-enabled connection");
+      return;
+    }
+    const lev = parseInt(goLiveLeverage, 10);
+    if (isNaN(lev) || lev < 1 || (selectedConnection && lev > (selectedConnection.max_leverage_allowed ?? 10))) {
+      toast.error("Invalid leverage");
+      return;
+    }
+    setIsGoLiveSubmitting(true);
+    try {
+      const symbolClean = symbol.replace("/", "");
+      const { strategy: created } = await strategies.create({
+        exchange_connection_id: goLiveConnectionId,
+        symbol: symbolClean,
+        timeframe,
+        direction: direction as "long" | "short" | "both",
+        leverage: lev,
+        margin_mode: goLiveMarginMode,
+        position_mode: goLivePositionMode,
+        order_size_pct: parseFloat(goLiveOrderSizePct) || 100,
+        initial_capital_usdt: parseFloat(launchCapital) || 10000,
+        take_profit_pct: parseFloat(takeProfit) || 3,
+        stop_loss_pct: parseFloat(stopLoss) || 1.5,
+        strategy_template: "rsi_oversold_overbought",
+      });
+      await strategies.setStatus(created.id, "active");
+      setGoLiveFuturesOpen(false);
+      toast.success("Futures strategy is live. Monitor it in Terminal.");
+      onNavigate("trading-terminal");
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Go Live failed";
+      toast.error(msg);
+    } finally {
+      setIsGoLiveSubmitting(false);
+    }
   };
 
   const marginRequired = (parseFloat(launchCapital) / parseFloat(leverage)).toFixed(2);
@@ -1218,6 +1307,15 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
 
           {/* CTAs */}
           <div className="space-y-2">
+            {hasResults && (
+              <Button
+                className="w-full bg-primary"
+                onClick={openGoLiveFutures}
+              >
+                <Zap className="h-4 w-4 mr-2" />
+                Go Live (Futures)
+              </Button>
+            )}
             <Button
               className="w-full"
               onClick={() => setLaunchDialogOpen(true)}
@@ -1260,6 +1358,115 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
           </Card>
         </div>
       </div>
+
+      {/* Go Live (Futures) Modal */}
+      <Dialog open={goLiveFuturesOpen} onOpenChange={setGoLiveFuturesOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Go Live — Futures Auto Trading</DialogTitle>
+            <DialogDescription>
+              Create a live futures strategy from this backtest. Choose a futures-enabled connection and confirm risk.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Exchange connection (Futures enabled)</Label>
+              <Select value={goLiveConnectionId} onValueChange={setGoLiveConnectionId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select connection" />
+                </SelectTrigger>
+                <SelectContent>
+                  {futuresEnabledConnections.length === 0 ? (
+                    <SelectItem value="_none" disabled>No futures-enabled connection</SelectItem>
+                  ) : (
+                    futuresEnabledConnections.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {c.exchange} {c.label ? `(${c.label})` : ""}
+                      </SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Leverage (1–{maxLeverage})</Label>
+              <Input
+                type="number"
+                min={1}
+                max={maxLeverage}
+                value={goLiveLeverage}
+                onChange={(e) => setGoLiveLeverage(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Margin mode</Label>
+              <Select value={goLiveMarginMode} onValueChange={(v: "isolated" | "cross") => setGoLiveMarginMode(v)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="isolated">Isolated</SelectItem>
+                  <SelectItem value="cross">Cross</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Position mode</Label>
+              <Select value={goLivePositionMode} onValueChange={(v: "one_way" | "hedge") => setGoLivePositionMode(v)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="one_way">One-way</SelectItem>
+                  <SelectItem value="hedge">Hedge</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Order size (% of capital)</Label>
+              <Input
+                type="number"
+                min={1}
+                max={100}
+                value={goLiveOrderSizePct}
+                onChange={(e) => setGoLiveOrderSizePct(e.target.value)}
+              />
+            </div>
+            <Alert className="border-destructive/50 bg-destructive/10">
+              <AlertTriangle className="h-4 w-4 text-destructive" />
+              <AlertDescription className="text-xs text-destructive">
+                Futures trading uses real funds. Losses and liquidation are possible. The strategy will run automatically based on RSI signals.
+              </AlertDescription>
+            </Alert>
+            <div className="flex items-start space-x-2">
+              <Checkbox
+                id="go-live-risk"
+                checked={goLiveRiskAccepted}
+                onCheckedChange={(checked) => setGoLiveRiskAccepted(checked as boolean)}
+              />
+              <label htmlFor="go-live-risk" className="text-xs text-muted-foreground cursor-pointer leading-tight">
+                I understand the risks and accept that automated futures trading may result in loss of capital.
+              </label>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setGoLiveFuturesOpen(false)}>Cancel</Button>
+            <Button
+              onClick={handleGoLiveFutures}
+              disabled={!goLiveConnectionId || !goLiveRiskAccepted || isGoLiveSubmitting}
+            >
+              {isGoLiveSubmitting ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Starting…
+                </>
+              ) : (
+                "Go Live"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Launch Confirmation Dialog */}
       <AlertDialog open={launchDialogOpen} onOpenChange={setLaunchDialogOpen}>
