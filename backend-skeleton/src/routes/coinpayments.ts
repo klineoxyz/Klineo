@@ -8,7 +8,7 @@ import { body } from 'express-validator';
 import { verifySupabaseJWT, AuthenticatedRequest } from '../middleware/auth.js';
 import { validate } from '../middleware/validation.js';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import { createCoinPaymentsCharge, verifyIpnHmac, IPN_HMAC_HEADER } from '../lib/coinpayments.js';
+import { createCoinPaymentsCharge, verifyIpnHmac, getIpnHmacHeader, IPN_HMAC_HEADER } from '../lib/coinpayments.js';
 import { allocatePurchaseRevenue } from '../lib/allocatePurchaseRevenue.js';
 
 let supabase: SupabaseClient | null = null;
@@ -53,16 +53,7 @@ coinpaymentsRouter.post(
       const amount = Number(usdAmount);
       const typeForDb = purchaseType === 'ONBOARDING' ? 'onboarding_fee' : 'package';
 
-      const ipnUrl = `${BASE_URL.replace(/\/$/, '')}/api/payments/coinpayments/ipn`;
-      const { paymentUrl, txnId } = await createCoinPaymentsCharge({
-        amount,
-        currency: 'USD',
-        ipnUrl,
-        orderId: undefined,
-        buyerEmail: email || undefined,
-      });
-
-      const { data: purchase, error } = await client
+      const { data: purchase, error: insertErr } = await client
         .from('eligible_purchases')
         .insert({
           user_id: userId,
@@ -70,15 +61,34 @@ coinpaymentsRouter.post(
           amount,
           currency: 'USDT',
           status: 'pending',
-          coinpayments_txn_id: txnId,
           metadata: packageId ? { packageId } : {},
         })
-        .select('id, coinpayments_txn_id, status, created_at')
+        .select('id, status, created_at')
         .single();
 
-      if (error) {
-        console.error(`[${requestId ?? 'n/a'}] eligible_purchases insert failed:`, error);
+      if (insertErr || !purchase) {
+        console.error(`[${requestId ?? 'n/a'}] eligible_purchases insert failed:`, insertErr);
         return res.status(500).json({ error: 'Failed to create purchase record' });
+      }
+
+      const backendUrl = process.env.BACKEND_URL || BASE_URL;
+      const ipnUrl = `${backendUrl.replace(/\/$/, '')}/api/payments/coinpayments/ipn`;
+      const { paymentUrl, txnId } = await createCoinPaymentsCharge({
+        amount,
+        currency: 'USD',
+        ipnUrl,
+        orderId: purchase.id,
+        buyerEmail: email || undefined,
+      });
+
+      const { error: updateErr } = await client
+        .from('eligible_purchases')
+        .update({ coinpayments_txn_id: txnId, updated_at: new Date().toISOString() })
+        .eq('id', purchase.id);
+
+      if (updateErr) {
+        console.error(`[${requestId ?? 'n/a'}] eligible_purchases update txn_id failed:`, updateErr);
+        return res.status(500).json({ error: 'Failed to link payment' });
       }
 
       res.status(201).json({
@@ -107,7 +117,7 @@ coinpaymentsRouter.post('/ipn', async (req: Request, res: Response) => {
   if (!rawBody) {
     return res.status(400).json({ error: 'Missing body' });
   }
-  const signature = req.headers[IPN_HMAC_HEADER] as string | undefined;
+  const signature = getIpnHmacHeader(req);
   if (!verifyIpnHmac(rawBody, signature)) {
     console.warn(`[${requestId ?? 'n/a'}] CoinPayments IPN: invalid HMAC`);
     return res.status(401).json({ error: 'Invalid signature' });
@@ -133,6 +143,12 @@ coinpaymentsRouter.post('/ipn', async (req: Request, res: Response) => {
     return res.status(400).json({ error: 'Missing txn_id' });
   }
 
+  const merchantId = process.env.COINPAYMENTS_MERCHANT_ID;
+  if (merchantId && payload.merchant !== undefined && String(payload.merchant).trim() !== merchantId.trim()) {
+    console.warn(`[${requestId ?? 'n/a'}] CoinPayments IPN: merchant mismatch`);
+    return res.status(401).json({ error: 'Invalid merchant' });
+  }
+
   const client = getSupabase();
   if (!client) return res.status(503).json({ error: 'Database unavailable' });
 
@@ -154,10 +170,15 @@ coinpaymentsRouter.post('/ipn', async (req: Request, res: Response) => {
   }
 
   const purchaseAmount = Number(purchase.amount);
-  const amountOk = Math.abs(amount - purchaseAmount) < 0.01;
+  const amountOk = Number.isFinite(purchaseAmount) && purchaseAmount > 0 && Math.abs(amount - purchaseAmount) < 0.01;
   const currencyOk = !currency || currency === 'USD' || currency === 'USDT';
 
   if (status >= 100 || status === 2) {
+    if (!amountOk || !currencyOk) {
+      console.warn(`[${requestId ?? 'n/a'}] CoinPayments IPN: amount/currency mismatch txn_id=${txnId} expected=${purchaseAmount} got=${amount} currency=${currency}`);
+      res.status(200).json({ received: true });
+      return;
+    }
     const { error: updateErr } = await client
       .from('eligible_purchases')
       .update({ status: 'completed', updated_at: new Date().toISOString() })
@@ -208,8 +229,7 @@ coinpaymentsRouter.post('/mock-ipn', (req: Request, res: Response) => {
     currency: req.body?.currency ?? 'USD',
   }).toString();
 
-  const rawBody = (req as any).rawBody;
-  const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
+  const baseUrl = process.env.BACKEND_URL || 'http://localhost:3000';
   fetch(`${baseUrl}/api/payments/coinpayments/ipn`, {
     method: 'POST',
     headers: {

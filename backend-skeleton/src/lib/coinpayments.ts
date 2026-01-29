@@ -7,22 +7,39 @@ import crypto from 'crypto';
 
 const COINPAYMENTS_API_BASE = process.env.COINPAYMENTS_API_BASE || 'https://a-api.coinpayments.net/api';
 
+/** Header names CoinPayments may use for IPN HMAC (check both). */
+const IPN_HMAC_HEADERS = ['hmac', 'x-coins-signature'] as const;
+
 /**
  * Verify IPN request authenticity using HMAC-SHA256.
- * CoinPayments sends X-Coins-Signature (or similar) = HMAC(IPN_SECRET, raw_body).
- * Use raw body as received (no parsing before verify).
+ * CoinPayments signs the exact raw POST body (application/x-www-form-urlencoded).
+ * Uses raw body as received; header may be "Hmac" or "X-Coins-Signature".
  */
 export function verifyIpnHmac(rawBody: string | Buffer, signatureHeader: string | undefined): boolean {
   const secret = process.env.COINPAYMENTS_IPN_SECRET;
-  if (!secret || !signatureHeader) return false;
+  if (!secret || !signatureHeader || typeof signatureHeader !== 'string') return false;
+  const trimmed = String(signatureHeader).trim();
+  if (!trimmed || !/^[a-fA-F0-9]+$/.test(trimmed)) return false;
   const body = typeof rawBody === 'string' ? rawBody : rawBody.toString('utf8');
   const expected = crypto.createHmac('sha256', secret).update(body).digest('hex');
-  return crypto.timingSafeEqual(Buffer.from(signatureHeader, 'hex'), Buffer.from(expected, 'hex'));
+  const sigBuf = Buffer.from(trimmed, 'hex');
+  const expectedBuf = Buffer.from(expected, 'hex');
+  if (sigBuf.length !== expectedBuf.length) return false;
+  return crypto.timingSafeEqual(sigBuf, expectedBuf);
 }
 
 /**
- * Common IPN header names used by CoinPayments for HMAC (adjust if docs differ).
+ * Resolve HMAC signature from request (check Hmac and X-Coins-Signature).
  */
+export function getIpnHmacHeader(req: { headers: Record<string, string | string[] | undefined> }): string | undefined {
+  for (const name of IPN_HMAC_HEADERS) {
+    const v = req.headers[name];
+    if (typeof v === 'string' && v.trim()) return v.trim();
+    if (Array.isArray(v) && v[0]) return String(v[0]).trim();
+  }
+  return undefined;
+}
+
 export const IPN_HMAC_HEADER = 'x-coins-signature';
 
 /**

@@ -19,6 +19,7 @@ import { purchasesRouter } from './routes/purchases.js';
 import { billingRouter } from './routes/billing.js';
 import { entitlementsRouter } from './routes/entitlements.js';
 import { entitlementsMeRouter } from './routes/entitlements-me.js';
+import { coinpaymentsRouter } from './routes/coinpayments.js';
 import { apiLimiter, authLimiter, adminLimiter } from './middleware/rateLimit.js';
 
 dotenv.config();
@@ -83,6 +84,17 @@ app.use(cors({
   credentials: true,
   optionsSuccessStatus: 200
 }));
+
+// IPN webhook must verify HMAC using exact raw body; capture before global parsers consume it
+app.use(
+  '/api/payments/coinpayments/ipn',
+  express.raw({ type: 'application/x-www-form-urlencoded', limit: '64kb' }),
+  (req, res, next) => {
+    (req as any).rawBody = req.body;
+    next();
+  }
+);
+
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
@@ -115,6 +127,7 @@ app.use('/api/self-test', selfTestRouter);
 app.use('/api/exchange-connections', exchangeConnectionsRouter);
 app.use('/api/purchases', purchasesRouter);
 app.use('/api/billing', billingRouter);
+app.use('/api/payments/coinpayments', coinpaymentsRouter);
 app.use('/api/entitlement', entitlementsRouter);
 app.use('/api/entitlements', entitlementsMeRouter);
 
