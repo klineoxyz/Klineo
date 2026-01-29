@@ -105,6 +105,14 @@ coinpaymentsRouter.post(
 );
 
 /**
+ * GET /api/payments/coinpayments/ipn
+ * So the URL is reachable when opened in a browser; IPN expects POST.
+ */
+coinpaymentsRouter.get('/ipn', (_req: Request, res: Response) => {
+  res.status(405).json({ error: 'Method Not Allowed', message: 'IPN endpoint; CoinPayments sends POST here.' });
+});
+
+/**
  * POST /api/payments/coinpayments/ipn
  * IPN webhook: verify HMAC, then update purchase status and run allocation on confirmed.
  * No auth; authenticity via COINPAYMENTS_IPN_SECRET HMAC.
