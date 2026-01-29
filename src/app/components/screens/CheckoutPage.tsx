@@ -8,6 +8,9 @@ import { ArrowLeft, Check, Shield, Clock, Zap, ExternalLink, Copy } from "lucide
 import { useState } from "react";
 import { toast } from "@/app/lib/toast";
 import { copyToClipboard } from "@/app/lib/clipboard";
+import { useAuth } from "@/app/contexts/AuthContext";
+
+const showCoinPayments = import.meta.env.VITE_ENABLE_COINPAYMENTS === "true";
 
 interface CheckoutPageProps {
   onNavigate: (view: string) => void;
@@ -31,11 +34,13 @@ const cryptoCurrencies = [
 ];
 
 export function CheckoutPage({ onNavigate, selectedPlan = "pro", selectedDuration = "monthly" }: CheckoutPageProps) {
+  const { isAdmin } = useAuth();
   const [plan, setPlan] = useState(selectedPlan);
   const [duration, setDuration] = useState(selectedDuration);
   const [couponCode, setCouponCode] = useState("");
   const [selectedCrypto, setSelectedCrypto] = useState("USDT");
   const [paymentStatus, setPaymentStatus] = useState<"idle" | "processing" | "awaiting" | "completed">("idle");
+  const coinPaymentsVisible = showCoinPayments || isAdmin;
   
   const planDetails = plans[plan as keyof typeof plans];
   const basePrice = duration === "monthly" ? planDetails.monthly : planDetails.sixMonth;
@@ -85,6 +90,14 @@ export function CheckoutPage({ onNavigate, selectedPlan = "pro", selectedDuratio
         </Badge>
       </div>
 
+      {!coinPaymentsVisible && (
+        <Card className="p-6 border-primary/20 bg-primary/5">
+          <p className="text-muted-foreground mb-3">Crypto checkout (CoinPayments) is not available. Pay manually with USDT (BEP20) to Safe from the Payments screen.</p>
+          <Button onClick={() => onNavigate("payments")}>Go to Payments</Button>
+        </Card>
+      )}
+
+      {coinPaymentsVisible && (
       <div className="grid grid-cols-3 gap-6">
         {/* Left: Order Summary */}
         <div className="col-span-2 space-y-6">
@@ -350,6 +363,7 @@ export function CheckoutPage({ onNavigate, selectedPlan = "pro", selectedDuratio
           </Card>
         </div>
       </div>
+      )}
     </div>
   );
 }

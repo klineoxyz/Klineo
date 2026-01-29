@@ -38,6 +38,11 @@ export function Admin() {
   const [referralStats, setReferralStats] = useState({ totalEarnings: 0, activeReferrers: 0 });
   const [coupons, setCoupons] = useState<any[]>([]);
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
+  const [paymentIntents, setPaymentIntents] = useState<any[]>([]);
+  const [paymentIntentsLoading, setPaymentIntentsLoading] = useState(false);
+  const [paymentIntentsStatus, setPaymentIntentsStatus] = useState<string>("");
+  const [paymentIntentActionNote, setPaymentIntentActionNote] = useState("");
+  const [paymentIntentActionLoading, setPaymentIntentActionLoading] = useState(false);
 
   // Loading states
   const [loading, setLoading] = useState(true);
@@ -220,6 +225,52 @@ export function Admin() {
       toast.error('Failed to load audit logs');
     } finally {
       setAuditLogsLoading(false);
+    }
+  };
+
+  const loadPaymentIntents = async () => {
+    setPaymentIntentsLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (paymentIntentsStatus) params.set('status', paymentIntentsStatus);
+      const data = await api.get(`/api/admin/payments/intents?${params.toString()}`);
+      setPaymentIntents((data as any).intents || []);
+    } catch (e: any) {
+      if (e?.message?.includes('404') || e?.message === 'Not found') {
+        setPaymentIntents([]);
+      } else {
+        toast.error('Failed to load payment intents');
+      }
+    } finally {
+      setPaymentIntentsLoading(false);
+    }
+  };
+
+  const handleApproveIntent = async (id: string) => {
+    setPaymentIntentActionLoading(true);
+    try {
+      await api.post(`/api/admin/payments/intents/${id}/approve`, { note: paymentIntentActionNote || undefined });
+      toast.success('Intent approved');
+      setPaymentIntentActionNote('');
+      loadPaymentIntents();
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to approve');
+    } finally {
+      setPaymentIntentActionLoading(false);
+    }
+  };
+
+  const handleRejectIntent = async (id: string) => {
+    setPaymentIntentActionLoading(true);
+    try {
+      await api.post(`/api/admin/payments/intents/${id}/reject`, { note: paymentIntentActionNote || undefined });
+      toast.success('Intent rejected');
+      setPaymentIntentActionNote('');
+      loadPaymentIntents();
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to reject');
+    } finally {
+      setPaymentIntentActionLoading(false);
     }
   };
 
@@ -460,6 +511,7 @@ export function Admin() {
           <TabsTrigger value="fees">Revenue & Payments</TabsTrigger>
           <TabsTrigger value="referrals">Referrals</TabsTrigger>
           <TabsTrigger value="platform-settings">Platform Settings</TabsTrigger>
+          <TabsTrigger value="payments">Payments</TabsTrigger>
           <TabsTrigger value="discounts">Discount Coupons</TabsTrigger>
           <TabsTrigger value="audit">Audit Logs</TabsTrigger>
         </TabsList>
@@ -1534,6 +1586,102 @@ export function Admin() {
                   </TableBody>
                 </Table>
               )}
+            </div>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="payments" className="space-y-4" onFocus={loadPaymentIntents}>
+          <Card>
+            <div className="p-6 border-b border-border flex flex-wrap items-center justify-between gap-4">
+              <h3 className="text-lg font-semibold">Payment Intents (Manual Safe)</h3>
+              <div className="flex items-center gap-2">
+                <Select value={paymentIntentsStatus} onValueChange={(v) => { setPaymentIntentsStatus(v); }}>
+                  <SelectTrigger className="w-[180px]">
+                    <SelectValue placeholder="All statuses" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">All statuses</SelectItem>
+                    <SelectItem value="draft">Draft</SelectItem>
+                    <SelectItem value="pending_review">Pending review</SelectItem>
+                    <SelectItem value="flagged">Flagged</SelectItem>
+                    <SelectItem value="approved">Approved</SelectItem>
+                    <SelectItem value="rejected">Rejected</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Button variant="outline" size="sm" onClick={loadPaymentIntents} disabled={paymentIntentsLoading}>
+                  <RefreshCw className="size-4 mr-2" />
+                  Refresh
+                </Button>
+              </div>
+            </div>
+            {paymentIntentsLoading ? (
+              <div className="p-8 text-center text-muted-foreground">Loading payment intents...</div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Created</TableHead>
+                    <TableHead>User ID</TableHead>
+                    <TableHead>Kind</TableHead>
+                    <TableHead>Amount</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Tx hash</TableHead>
+                    <TableHead>From wallet</TableHead>
+                    <TableHead>Mismatch</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {paymentIntents.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={9} className="text-center text-muted-foreground py-8">No payment intents found.</TableCell>
+                    </TableRow>
+                  ) : (
+                    paymentIntents.map((pi: any) => (
+                      <TableRow key={pi.id}>
+                        <TableCell className="text-sm text-muted-foreground">{pi.created_at ? new Date(pi.created_at).toLocaleString() : ''}</TableCell>
+                        <TableCell className="font-mono text-xs">{pi.user_id?.slice(0, 8)}...</TableCell>
+                        <TableCell>{pi.kind === 'joining_fee' ? 'Joining fee' : pi.package_code || 'Package'}</TableCell>
+                        <TableCell className="font-mono">{pi.amount_usdt} USDT</TableCell>
+                        <TableCell>
+                          <Badge variant="outline">{pi.status}</Badge>
+                        </TableCell>
+                        <TableCell className="font-mono text-xs">
+                          {pi.tx_hash ? (
+                            <a href={`https://bscscan.com/tx/${pi.tx_hash}`} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+                              {pi.tx_hash.slice(0, 10)}...
+                            </a>
+                          ) : '—'}
+                        </TableCell>
+                        <TableCell className="font-mono text-xs max-w-[120px] truncate" title={pi.declared_from_wallet || ''}>{pi.declared_from_wallet || '—'}</TableCell>
+                        <TableCell className="text-xs text-orange-600">{pi.mismatch_reason || '—'}</TableCell>
+                        <TableCell className="text-right">
+                          {(pi.status === 'pending_review' || pi.status === 'flagged') && (
+                            <div className="flex gap-1 justify-end">
+                              <Button size="sm" variant="default" onClick={() => handleApproveIntent(pi.id)} disabled={paymentIntentActionLoading}>
+                                Approve
+                              </Button>
+                              <Button size="sm" variant="outline" onClick={() => handleRejectIntent(pi.id)} disabled={paymentIntentActionLoading}>
+                                Reject
+                              </Button>
+                            </div>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            )}
+            <div className="p-4 border-t border-border flex flex-wrap items-center gap-4 text-sm">
+              <span className="text-muted-foreground">Safe:</span>
+              <a href="https://app.safe.global/home?safe=bnb:0x0E60e94252F58aBb56604A8260492d96cf879007" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline inline-flex items-center gap-1">
+                Open Safe <Link2 className="size-3" />
+              </a>
+              <div className="flex items-center gap-2">
+                <Label className="text-muted-foreground text-xs">Note (for Approve/Reject):</Label>
+                <Input placeholder="Optional note" className="max-w-xs h-8" value={paymentIntentActionNote} onChange={(e) => setPaymentIntentActionNote(e.target.value)} />
+              </div>
             </div>
           </Card>
         </TabsContent>

@@ -1166,3 +1166,172 @@ adminRouter.delete('/user-discounts/:id',
     }
   }
 );
+
+function manualPaymentsEnabled(): boolean {
+  return process.env.ENABLE_MANUAL_PAYMENTS === 'true';
+}
+
+/**
+ * GET /api/admin/payments/intents
+ * List payment intents (manual Safe payments). Query: status=...
+ */
+adminRouter.get('/payments/intents', async (req: AuthenticatedRequest, res) => {
+  if (!manualPaymentsEnabled()) return res.status(404).json({ error: 'Not found' });
+  const client = getSupabase();
+  if (!client) return res.status(503).json({ error: 'Database unavailable' });
+
+  try {
+    const status = req.query.status as string | undefined;
+    let q = client
+      .from('payment_intents')
+      .select('id, user_id, kind, package_code, amount_usdt, status, tx_hash, declared_from_wallet, mismatch_reason, reviewed_by, reviewed_at, review_note, created_at, updated_at')
+      .order('created_at', { ascending: false });
+    if (status && status.trim()) {
+      q = q.eq('status', status.trim());
+    }
+    const { data, error } = await q;
+    if (error) {
+      return res.status(500).json({ error: 'Failed to list payment intents' });
+    }
+    res.json({ intents: data || [] });
+  } catch (err) {
+    console.error('Admin payment intents list error:', err);
+    res.status(500).json({ error: 'Failed to list payment intents' });
+  }
+});
+
+/**
+ * POST /api/admin/payments/intents/:id/approve
+ * Approve a payment intent. Body: { note? }. Updates user_profiles (member_active / active_package_code, package_started_at). Logs payment_events + audit_logs.
+ */
+adminRouter.post('/payments/intents/:id/approve',
+  validate([uuidParam('id'), body('note').optional().trim().isString()]),
+  async (req: AuthenticatedRequest, res) => {
+    if (!manualPaymentsEnabled()) return res.status(404).json({ error: 'Not found' });
+    const client = getSupabase();
+    if (!client) return res.status(503).json({ error: 'Database unavailable' });
+
+    const intentId = req.params.id;
+    const adminId = req.user!.id;
+    const note = (req.body?.note as string)?.trim() || null;
+
+    const { data: intent, error: findErr } = await client
+      .from('payment_intents')
+      .select('id, user_id, kind, package_code, status')
+      .eq('id', intentId)
+      .single();
+
+    if (findErr || !intent) return res.status(404).json({ error: 'Intent not found' });
+    if ((intent.status as string) !== 'pending_review' && (intent.status as string) !== 'flagged') {
+      return res.status(400).json({ error: 'Intent not in pending_review or flagged' });
+    }
+
+    const { error: updateErr } = await client
+      .from('payment_intents')
+      .update({
+        status: 'approved',
+        reviewed_by: adminId,
+        reviewed_at: new Date().toISOString(),
+        review_note: note,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', intentId);
+
+    if (updateErr) return res.status(500).json({ error: 'Failed to approve intent' });
+
+    const userId = intent.user_id as string;
+    const kind = intent.kind as string;
+    const packageCode = intent.package_code as string | null;
+
+    const profileUpdates: Record<string, unknown> = { updated_at: new Date().toISOString() };
+    if (kind === 'joining_fee') {
+      profileUpdates.member_active = true;
+    } else if (kind === 'package' && packageCode) {
+      profileUpdates.active_package_code = packageCode;
+      profileUpdates.package_started_at = new Date().toISOString();
+    }
+
+    const { error: profileErr } = await client
+      .from('user_profiles')
+      .update(profileUpdates)
+      .eq('id', userId);
+    if (profileErr) {
+      // log but don't fail the approve
+    }
+
+    await client.from('payment_events').insert({
+      intent_id: intentId,
+      event_type: 'approved',
+      details: { reviewed_by: adminId, note },
+    });
+    await client.from('audit_logs').insert({
+      admin_id: adminId,
+      action_type: 'payment_intent_approved',
+      entity_type: 'payment_intent',
+      entity_id: intentId,
+      details: { user_id: userId, kind, package_code: packageCode },
+      reason: note,
+    });
+
+    const { data: updated } = await client.from('payment_intents').select('id, status, reviewed_at, review_note').eq('id', intentId).single();
+    res.json(updated);
+  }
+);
+
+/**
+ * POST /api/admin/payments/intents/:id/reject
+ * Reject a payment intent. Body: { note? }. Logs payment_events + audit_logs.
+ */
+adminRouter.post('/payments/intents/:id/reject',
+  validate([uuidParam('id'), body('note').optional().trim().isString()]),
+  async (req: AuthenticatedRequest, res) => {
+    if (!manualPaymentsEnabled()) return res.status(404).json({ error: 'Not found' });
+    const client = getSupabase();
+    if (!client) return res.status(503).json({ error: 'Database unavailable' });
+
+    const intentId = req.params.id;
+    const adminId = req.user!.id;
+    const note = (req.body?.note as string)?.trim() || null;
+
+    const { data: intent, error: findErr } = await client
+      .from('payment_intents')
+      .select('id, user_id, kind, package_code, status')
+      .eq('id', intentId)
+      .single();
+
+    if (findErr || !intent) return res.status(404).json({ error: 'Intent not found' });
+    if ((intent.status as string) !== 'pending_review' && (intent.status as string) !== 'flagged') {
+      return res.status(400).json({ error: 'Intent not in pending_review or flagged' });
+    }
+
+    const { error: updateErr } = await client
+      .from('payment_intents')
+      .update({
+        status: 'rejected',
+        reviewed_by: adminId,
+        reviewed_at: new Date().toISOString(),
+        review_note: note,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', intentId);
+
+    if (updateErr) return res.status(500).json({ error: 'Failed to reject intent' });
+
+    await client.from('payment_events').insert({
+      intent_id: intentId,
+      event_type: 'rejected',
+      details: { reviewed_by: adminId, note },
+    });
+    await client.from('audit_logs').insert({
+      admin_id: adminId,
+      action_type: 'payment_intent_rejected',
+      entity_type: 'payment_intent',
+      entity_id: intentId,
+      details: { user_id: intent.user_id, kind: intent.kind, package_code: intent.package_code },
+      reason: note,
+    });
+
+    const { data: updated } = await client.from('payment_intents').select('id, status, reviewed_at, review_note').eq('id', intentId).single();
+    res.json(updated);
+  }
+);

@@ -79,7 +79,7 @@ profileRouter.get('/profile', async (req: AuthenticatedRequest, res) => {
   try {
     const { data: profile, error } = await client
       .from('user_profiles')
-      .select('id, email, role, full_name, username, timezone, referral_wallet, status, created_at, updated_at')
+      .select('id, email, role, full_name, username, timezone, referral_wallet, payout_wallet_address, payment_wallet_bsc, status, created_at, updated_at')
       .eq('id', req.user!.id)
       .single();
 
@@ -100,6 +100,8 @@ profileRouter.get('/profile', async (req: AuthenticatedRequest, res) => {
       username: profile.username,
       timezone: profile.timezone || 'UTC',
       referralWallet: profile.referral_wallet,
+      payoutWalletAddress: profile.payout_wallet_address,
+      paymentWalletBsc: profile.payment_wallet_bsc,
       status: profile.status || 'active',
       createdAt: profile.created_at,
       updatedAt: profile.updated_at,
@@ -120,6 +122,7 @@ profileRouter.put('/profile',
     optionalString('username', 50),
     optionalString('timezone', 50),
     optionalString('referralWallet', 200),
+    optionalString('paymentWalletBsc', 200),
   ]),
   async (req: AuthenticatedRequest, res) => {
     const client = getSupabase();
@@ -128,7 +131,7 @@ profileRouter.put('/profile',
     }
 
     try {
-      const { fullName, username, timezone, referralWallet } = req.body;
+      const { fullName, username, timezone, referralWallet, paymentWalletBsc } = req.body;
 
       // Build update object (only include provided fields)
       const updates: Record<string, any> = {
@@ -139,12 +142,13 @@ profileRouter.put('/profile',
       if (username !== undefined) updates.username = username || null;
       if (timezone !== undefined) updates.timezone = timezone || 'UTC';
       if (referralWallet !== undefined) updates.referral_wallet = referralWallet || null;
+      if (paymentWalletBsc !== undefined) updates.payment_wallet_bsc = paymentWalletBsc || null;
 
       const { data: profile, error } = await client
         .from('user_profiles')
         .update(updates)
         .eq('id', req.user!.id)
-        .select('id, email, role, full_name, username, timezone, referral_wallet, status, created_at, updated_at')
+        .select('id, email, role, full_name, username, timezone, referral_wallet, payout_wallet_address, payment_wallet_bsc, status, created_at, updated_at')
         .single();
 
       if (error) {
@@ -160,6 +164,8 @@ profileRouter.put('/profile',
         username: profile.username,
         timezone: profile.timezone || 'UTC',
         referralWallet: profile.referral_wallet,
+        payoutWalletAddress: profile.payout_wallet_address,
+        paymentWalletBsc: profile.payment_wallet_bsc,
         status: profile.status || 'active',
         createdAt: profile.created_at,
         updatedAt: profile.updated_at,

@@ -21,6 +21,7 @@ import { entitlementsRouter } from './routes/entitlements.js';
 import { entitlementsMeRouter } from './routes/entitlements-me.js';
 import { coinpaymentsRouter } from './routes/coinpayments.js';
 import { referralsRouter } from './routes/referrals.js';
+import { paymentIntentsRouter } from './routes/payment-intents.js';
 import { apiLimiter, authLimiter, adminLimiter } from './middleware/rateLimit.js';
 
 dotenv.config();
@@ -130,6 +131,7 @@ app.use('/api/purchases', purchasesRouter);
 app.use('/api/billing', billingRouter);
 app.use('/api/payments/coinpayments', coinpaymentsRouter);
 app.use('/api/referrals', referralsRouter);
+app.use('/api/payments/intents', paymentIntentsRouter);
 app.use('/api/entitlement', entitlementsRouter);
 app.use('/api/entitlements', entitlementsMeRouter);
 

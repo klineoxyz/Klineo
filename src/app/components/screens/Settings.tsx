@@ -31,6 +31,7 @@ export function Settings() {
   const [username, setUsername] = useState("");
   const [timezone, setTimezone] = useState("UTC");
   const [referralWallet, setReferralWallet] = useState("");
+  const [paymentWalletBsc, setPaymentWalletBsc] = useState("");
   const [profileLoading, setProfileLoading] = useState(true);
   const [profileError, setProfileError] = useState("");
   const [saveLoading, setSaveLoading] = useState(false);
@@ -75,6 +76,7 @@ export function Settings() {
       username?: string;
       timezone: string;
       referralWallet?: string;
+      paymentWalletBsc?: string;
       status: string;
       createdAt: string;
       updatedAt: string;
@@ -84,6 +86,7 @@ export function Settings() {
         setUsername(data.username ?? "");
         setTimezone(data.timezone ?? "UTC");
         setReferralWallet(data.referralWallet ?? "");
+        setPaymentWalletBsc(data.paymentWalletBsc ?? "");
         setProfileLoading(false);
       })
       .catch((err: any) => {
@@ -102,6 +105,7 @@ export function Settings() {
         username: username || null,
         timezone: timezone || "UTC",
         referralWallet: referralWallet || null,
+        paymentWalletBsc: paymentWalletBsc || null,
       });
       toast.success("Profile saved");
     } catch (err: any) {
@@ -457,6 +461,28 @@ export function Settings() {
                 disabled={profileLoading}
               />
               <p className="text-xs text-muted-foreground">BSC (Binance Smart Chain) USDT address for referral payouts</p>
+            </div>
+            <Button
+              variant="outline"
+              onClick={handleSaveProfile}
+              disabled={profileLoading || saveLoading}
+            >
+              Update Wallet
+            </Button>
+          </Card>
+
+          <Card className="p-6 space-y-4">
+            <h3 className="text-lg font-semibold">Payment Wallet (BSC)</h3>
+            <div className="space-y-2">
+              <Label>USDT Wallet Address (BEP20)</Label>
+              <Input
+                placeholder="0x... (BEP20)"
+                className="font-mono"
+                value={paymentWalletBsc}
+                onChange={(e) => setPaymentWalletBsc(e.target.value)}
+                disabled={profileLoading}
+              />
+              <p className="text-xs text-muted-foreground">BSC wallet used when you send manual USDT payments to Safe (joining fee or packages)</p>
             </div>
             <Button
               variant="outline"
