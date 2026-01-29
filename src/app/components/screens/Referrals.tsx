@@ -266,7 +266,7 @@ export function Referrals({ onNavigate }: ReferralsProps) {
           <div className="space-y-4">
             <div>
               <label className="text-sm font-medium mb-2 block">Payout Wallet Address</label>
-              <Input placeholder="Enter USDT (TRC-20) wallet address" className="font-mono text-sm" />
+              <Input placeholder="Enter USDT (BSC) wallet address" className="font-mono text-sm" />
               <p className="text-xs text-muted-foreground mt-1">Configure in Settings → Referral Payout Wallet</p>
             </div>
             <div className="p-4 bg-secondary/30 rounded">

@@ -448,7 +448,7 @@ export function Settings() {
           <Card className="p-6 space-y-4">
             <h3 className="text-lg font-semibold">Referral Payout Wallet</h3>
             <div className="space-y-2">
-              <Label>USDT Wallet Address (TRC-20)</Label>
+              <Label>USDT Wallet Address (BSC)</Label>
               <Input
                 placeholder="TXyz123..."
                 className="font-mono"
@@ -456,7 +456,7 @@ export function Settings() {
                 onChange={(e) => setReferralWallet(e.target.value)}
                 disabled={profileLoading}
               />
-              <p className="text-xs text-muted-foreground">Used for referral commission payouts</p>
+              <p className="text-xs text-muted-foreground">BSC (Binance Smart Chain) USDT address for referral payouts</p>
             </div>
             <Button
               variant="outline"
