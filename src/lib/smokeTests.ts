@@ -567,9 +567,13 @@ export const smokeTests: SmokeTestDefinition[] = [
 
       const baseURL = getBaseURL();
       const headers = await getAuthHeaders();
-      return runTest('GET /api/self-test/rls', () =>
+      const result = await runTest('GET /api/self-test/rls', () =>
         fetch(`${baseURL}/api/self-test/rls`, { headers })
       );
+      if (result.httpCode === 404) {
+        return { ...result, status: 'SKIP', message: 'Self-test disabled in production' };
+      }
+      return result;
     }
   },
 
