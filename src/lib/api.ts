@@ -257,6 +257,21 @@ export const exchangeConnections = {
   },
 };
 
+// Manual Futures Order (MVP: market only; qty in base asset)
+export interface PlaceFuturesOrderRequest {
+  connectionId: string;
+  symbol: string;
+  side: 'BUY' | 'SELL';
+  qty: string;
+  type: 'MARKET';
+}
+
+export const futures = {
+  placeOrder: async (data: PlaceFuturesOrderRequest): Promise<{ orderId: string; status: string; requestId: string }> => {
+    return api.post('/api/futures/order', data);
+  },
+};
+
 // Strategies API (Futures auto trading)
 export interface StrategyRun {
   id: string;

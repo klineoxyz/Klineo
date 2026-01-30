@@ -123,6 +123,7 @@ export default function App() {
     switch (activeView) {
       case "dashboard":
         return <Dashboard onNavigate={handleNavigate} />;
+      // Terminal: must render TradingTerminalNew (Futures-enabled). Do not switch to TradingTerminal.tsx.
       case "trading-terminal":
         return <TradingTerminalNew onNavigate={handleNavigate} />;
       case "strategy-backtest":

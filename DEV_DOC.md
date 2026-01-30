@@ -79,6 +79,7 @@ Migrations:
   - `GET /api/strategies`, `GET /api/strategies/:id` — list / details + events.
   - `PUT /api/strategies/:id/status` — body `{ "status": "active" | "paused" | "stopped" }`.
   - `POST /api/strategies/:id/execute-tick` — one tick (fetch candles, RSI, place order if signal). Called by scheduler or manually.
+  - `POST /api/futures/order` — manual futures market order (MVP). Body: `{ connectionId, symbol, side: "BUY"|"SELL", qty, type: "MARKET" }`. Symbol whitelist: BTCUSDT, ETHUSDT, SOLUSDT. Qty is in base asset (e.g. 0.001 for BTC). Requires connection `futures_enabled`, kill_switch OFF. Never returns secrets.
 
 Request ID is set by existing middleware (`X-Request-ID`).
 

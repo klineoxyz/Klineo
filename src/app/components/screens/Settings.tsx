@@ -24,6 +24,7 @@ import {
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/app/components/ui/collapsible";
 import { ChevronDown, ChevronRight, CheckSquare } from "lucide-react";
 import { ConnectExchangeWizard } from "@/app/components/screens/ConnectExchangeWizard";
+import { FuturesEnableModal } from "@/app/components/screens/FuturesEnableModal";
 
 interface SettingsProps {
   onNavigate?: (view: string) => void;
@@ -68,6 +69,7 @@ export function Settings({ onNavigate }: SettingsProps) {
   const [updateCredsConn, setUpdateCredsConn] = useState<ExchangeConnection | null>(null);
   const [updateCredsForm, setUpdateCredsForm] = useState({ apiKey: "", apiSecret: "", environment: "production" as "production" | "testnet" });
   const [updateCredsLoading, setUpdateCredsLoading] = useState(false);
+  const [manageFuturesConn, setManageFuturesConn] = useState<ExchangeConnection | null>(null);
 
   useEffect(() => {
     if (!user?.id) {
@@ -739,6 +741,13 @@ export function Settings({ onNavigate }: SettingsProps) {
             onNavigate={onNavigate}
           />
 
+          <FuturesEnableModal
+            open={!!manageFuturesConn}
+            onOpenChange={(open) => !open && setManageFuturesConn(null)}
+            connection={manageFuturesConn}
+            onSuccess={() => refreshConnections()}
+          />
+
           {showAddForm && !isDemoMode && (
             <Card className="p-6 space-y-4">
               <h4 className="font-semibold">Add connection</h4>
@@ -887,9 +896,9 @@ export function Settings({ onNavigate }: SettingsProps) {
                             Disabled (too many errors)
                           </Badge>
                         )}
-                        {conn.supports_futures && (
+                        {(conn.exchange === "binance" || conn.exchange === "bybit") && (
                           <Badge variant="outline" className={conn.futures_enabled ? "bg-green-500/10 text-green-600 border-green-500/30" : "text-muted-foreground"}>
-                            Futures {conn.futures_enabled ? "ON" : "off"}
+                            Futures {conn.futures_enabled ? "ON" : "OFF"}
                           </Badge>
                         )}
                       </div>
@@ -938,7 +947,7 @@ export function Settings({ onNavigate }: SettingsProps) {
                           "Test"
                         )}
                       </Button>
-                      {conn.supports_futures && (
+                      {(conn.exchange === "binance" || conn.exchange === "bybit") && (
                         <>
                           <Button
                             variant="outline"
@@ -948,6 +957,13 @@ export function Settings({ onNavigate }: SettingsProps) {
                           >
                             {futuresTestId === conn.id ? <Loader2 className="size-4 animate-spin" /> : null}
                             Test Futures
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setManageFuturesConn(conn)}
+                          >
+                            Manage Futures
                           </Button>
                           {!conn.futures_enabled && (
                             <Button

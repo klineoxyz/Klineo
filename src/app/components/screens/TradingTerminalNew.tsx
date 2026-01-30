@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
@@ -37,6 +37,7 @@ import {
   Square,
   AlertTriangle,
   RefreshCw,
+  Key,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Alert, AlertDescription } from "@/app/components/ui/alert";
@@ -45,7 +46,7 @@ import { Switch } from "@/app/components/ui/switch";
 import { useDemo } from "@/app/contexts/DemoContext";
 import { useAuth } from "@/app/contexts/AuthContext";
 import { useExchangeBalances } from "@/app/hooks/useExchangeBalances";
-import { api, exchangeConnections, strategies, type EntitlementResponse, type StrategyRun, type StrategyEvent, type ExchangeConnection } from "@/lib/api";
+import { api, exchangeConnections, strategies, futures, sanitizeExchangeError, type EntitlementResponse, type StrategyRun, type StrategyEvent, type ExchangeConnection } from "@/lib/api";
 import { TradingViewChart } from "@/app/components/TradingViewChart";
 import { 
   TradingViewMarketOverview,
@@ -54,6 +55,8 @@ import {
 import { fetchKlines, fetchOrderBook, fetchUsdtPairs, fetchTicker24h } from "@/lib/binance";
 import type { OrderBookLevel, UsdtPairInfo, Ticker24h } from "@/lib/binance";
 import type { OhlcvItem } from "@/app/components/charts/LightweightChartsWidget";
+import { Card } from "@/app/components/ui/card";
+import { FuturesEnableModal } from "@/app/components/screens/FuturesEnableModal";
 
 type Timeframe = '1m' | '5m' | '15m' | '30m' | '1h' | '2h' | '4h' | '12h' | '1D' | '5D' | '1W' | '1M';
 
@@ -241,6 +244,14 @@ export function TradingTerminalNew({ onNavigate }: TradingTerminalProps) {
   const [runnerStatusLoading, setRunnerStatusLoading] = useState(false);
   const [tickRuns, setTickRuns] = useState<Array<{ id: string; strategy_run_id: string; started_at: string; status: string; reason: string | null; latency_ms: number | null }>>([]);
   const [killSwitchUpdating, setKillSwitchUpdating] = useState<Record<string, boolean>>({});
+  const [futuresTestId, setFuturesTestId] = useState<string | null>(null);
+  const [enableFuturesConnection, setEnableFuturesConnection] = useState<ExchangeConnection | null>(null);
+  const futuresQuickActionsRef = useRef<HTMLDivElement>(null);
+  const [manualOrderConnectionId, setManualOrderConnectionId] = useState("");
+  const [manualOrderSymbol, setManualOrderSymbol] = useState("BTCUSDT");
+  const [manualOrderSide, setManualOrderSide] = useState<"BUY" | "SELL">("BUY");
+  const [manualOrderQty, setManualOrderQty] = useState("");
+  const [manualOrderLoading, setManualOrderLoading] = useState(false);
 
   // Get current pair data (fallback for order book, trades, 24h stats)
   const currentPairData = pairs.find((p) => p.symbol === selectedPair) || pairs[0];
@@ -385,10 +396,67 @@ export function TradingTerminalNew({ onNavigate }: TradingTerminalProps) {
   const activeStrategy = strategyList.find((s) => s.status === "active");
   const selectedStrategy = strategyList.find((s) => s.id === selectedStrategyId);
 
-  // Connections that have futures enabled for display (futures_enabled true; treat binance/bybit as supporting futures if missing)
+  // Connections that support futures (Binance/Bybit) for Quick Actions and Strategy tab
+  const supportsFutures = (c: ExchangeConnection) => c.exchange === "binance" || c.exchange === "bybit";
+  const supportFuturesConnections = connections.filter(supportsFutures);
+  // Connections that have futures enabled (for Strategy tab display)
   const hasFuturesEnabled = (c: ExchangeConnection) =>
     !!c.futures_enabled && (!!c.supports_futures || c.exchange === "binance" || c.exchange === "bybit");
   const futuresConnections = connections.filter(hasFuturesEnabled);
+
+  useEffect(() => {
+    if (futuresConnections.length > 0 && !manualOrderConnectionId) {
+      setManualOrderConnectionId(futuresConnections[0].id);
+    }
+  }, [futuresConnections, manualOrderConnectionId]);
+
+  const handleManualFuturesOrder = async () => {
+    const connId = manualOrderConnectionId || futuresConnections[0]?.id;
+    if (!connId || !manualOrderQty.trim()) {
+      toast.error("Select connection and enter qty (base asset)");
+      return;
+    }
+    const qtyNum = parseFloat(manualOrderQty);
+    if (Number.isNaN(qtyNum) || qtyNum <= 0) {
+      toast.error("Qty must be a positive number (base asset, e.g. 0.001 BTC)");
+      return;
+    }
+    setManualOrderLoading(true);
+    try {
+      const res = await futures.placeOrder({
+        connectionId: connId,
+        symbol: manualOrderSymbol,
+        side: manualOrderSide,
+        qty: manualOrderQty.trim(),
+        type: "MARKET",
+      });
+      toast.success(`Order placed: ${res.orderId} (${res.status})`);
+      setManualOrderQty("");
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      toast.error("Order failed", { description: sanitizeExchangeError(msg) });
+    } finally {
+      setManualOrderLoading(false);
+    }
+  };
+
+  const handleFuturesTest = async (id: string) => {
+    setFuturesTestId(id);
+    try {
+      const res = await exchangeConnections.futuresTest(id);
+      if (res.ok) toast.success(`Futures API OK (${res.latencyMs}ms)`);
+      else toast.error(sanitizeExchangeError(res.error ?? "Futures test failed"));
+      const connRes = await exchangeConnections.list();
+      setConnections(connRes.connections ?? []);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      toast.error("Futures test failed", { description: sanitizeExchangeError(msg) });
+      const connRes = await exchangeConnections.list();
+      setConnections(connRes.connections ?? []);
+    } finally {
+      setFuturesTestId(null);
+    }
+  };
 
   const handleStrategyStatus = async (id: string, status: "active" | "paused" | "stopped") => {
     setStrategyStatusUpdating(true);
@@ -448,7 +516,8 @@ export function TradingTerminalNew({ onNavigate }: TradingTerminalProps) {
       const connRes = await exchangeConnections.list();
       setConnections(connRes.connections ?? []);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Failed to update kill switch");
+      const msg = e instanceof Error ? e.message : "Failed to update kill switch";
+      toast.error(sanitizeExchangeError(msg));
     } finally {
       setKillSwitchUpdating((prev) => ({ ...prev, [connectionId]: false }));
     }
@@ -515,6 +584,68 @@ export function TradingTerminalNew({ onNavigate }: TradingTerminalProps) {
 
   return (
     <div className="h-screen flex flex-col bg-background overflow-hidden min-h-0">
+      {/* Futures Quick Actions: visible at top so users can connect, test, enable Futures without opening Settings. */}
+      <Card ref={futuresQuickActionsRef} className="shrink-0 mx-3 mt-2 mb-1 p-3 border-primary/20 bg-card/50">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h3 className="text-sm font-semibold flex items-center gap-2">
+            <Zap className="size-4 text-primary" />
+            Futures Trading
+          </h3>
+          {supportFuturesConnections.length === 0 ? (
+            <Button size="sm" className="gap-2" onClick={() => onNavigate("settings")}>
+              <Key className="size-4" />
+              Connect Exchange
+            </Button>
+          ) : (
+            <div className="flex flex-wrap items-center gap-2">
+              {supportFuturesConnections.map((c) => (
+                <div key={c.id} className="flex flex-wrap items-center gap-2 rounded border border-border/50 px-2 py-1.5 bg-background/50">
+                  <span className="text-xs font-medium truncate max-w-[100px]">
+                    {c.exchange} {c.label ? `(${c.label})` : ""}
+                  </span>
+                  <Badge variant="outline" className="text-[10px]">
+                    {c.last_test_status === "ok" ? "Connected OK" : "Needs Test"}
+                  </Badge>
+                  {c.futures_enabled ? (
+                    <Badge variant="outline" className="text-[10px] bg-green-500/10 text-green-600 border-green-500/30">Futures ON</Badge>
+                  ) : (
+                    <Badge variant="outline" className="text-[10px] text-muted-foreground">Futures OFF</Badge>
+                  )}
+                  {c.disabled_at ? (
+                    <Badge variant="secondary" className="text-[10px]">Disabled</Badge>
+                  ) : null}
+                  <Button size="sm" variant="ghost" className="h-6 text-[10px] px-1.5" onClick={() => handleFuturesTest(c.id)} disabled={futuresTestId === c.id}>
+                    {futuresTestId === c.id ? <Loader2 className="size-3 animate-spin" /> : null}
+                    Test Futures
+                  </Button>
+                  {!c.futures_enabled && (
+                    <Button size="sm" variant="outline" className="h-6 text-[10px] px-1.5" onClick={() => setEnableFuturesConnection(c)}>
+                      Enable Futures
+                    </Button>
+                  )}
+                  <span className="text-[10px] text-muted-foreground">Kill</span>
+                  <Switch
+                    checked={!!c.kill_switch}
+                    onCheckedChange={(checked) => handleKillSwitch(c.id, !!checked)}
+                    disabled={killSwitchUpdating[c.id]}
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </Card>
+
+      <FuturesEnableModal
+        open={!!enableFuturesConnection}
+        onOpenChange={(open) => !open && setEnableFuturesConnection(null)}
+        connection={enableFuturesConnection}
+        onSuccess={() => {
+          loadStrategies();
+          exchangeConnections.list().then((r) => setConnections(r.connections ?? []));
+        }}
+      />
+
       {isDemoMode && (
         <div className="shrink-0 px-3 py-1.5 bg-primary/10 border-b border-primary/20 text-center text-xs text-muted-foreground">
           Demo mode — charts and order book use sample data. Switch to <strong className="text-foreground">Live</strong> (user menu) and connect Binance/Bybit in Settings to trade with real funds.
@@ -893,6 +1024,7 @@ export function TradingTerminalNew({ onNavigate }: TradingTerminalProps) {
                 <TabsTrigger value="myorders" className="text-xs sm:text-sm">My Orders</TabsTrigger>
                 <TabsTrigger value="strategy" className="text-xs sm:text-sm flex items-center gap-1">
                   <Zap className="h-3 w-3" /> Strategy
+                  <Badge variant="secondary" className="text-[10px] ml-0.5">Auto</Badge>
                 </TabsTrigger>
               </TabsList>
 
@@ -925,6 +1057,71 @@ export function TradingTerminalNew({ onNavigate }: TradingTerminalProps) {
               </TabsContent>
 
               <TabsContent value="strategy" className="flex-1 px-2 sm:px-4 pb-2 overflow-y-auto min-h-0">
+                {futuresConnections.length > 0 && (
+                  <div className="rounded border border-border bg-card/30 p-2 mb-3 space-y-2">
+                    <div className="text-[10px] font-semibold text-muted-foreground">Manual Futures Order (MVP)</div>
+                    <div className="grid grid-cols-2 gap-2 text-[10px]">
+                      <div>
+                        <Label className="text-[10px]">Connection</Label>
+                        <Select value={manualOrderConnectionId} onValueChange={setManualOrderConnectionId}>
+                          <SelectTrigger className="h-7 text-xs">
+                            <SelectValue placeholder="Select" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {futuresConnections.map((c) => (
+                              <SelectItem key={c.id} value={c.id}>
+                                {c.exchange} {c.label ? `(${c.label})` : ""}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label className="text-[10px]">Symbol</Label>
+                        <Select value={manualOrderSymbol} onValueChange={setManualOrderSymbol}>
+                          <SelectTrigger className="h-7 text-xs">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="BTCUSDT">BTCUSDT</SelectItem>
+                            <SelectItem value="ETHUSDT">ETHUSDT</SelectItem>
+                            <SelectItem value="SOLUSDT">SOLUSDT</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label className="text-[10px]">Side</Label>
+                        <Select value={manualOrderSide} onValueChange={(v: "BUY" | "SELL") => setManualOrderSide(v)}>
+                          <SelectTrigger className="h-7 text-xs">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="BUY">Long</SelectItem>
+                            <SelectItem value="SELL">Short</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label className="text-[10px]">Qty (base, e.g. 0.001)</Label>
+                        <Input
+                          className="h-7 text-xs font-mono"
+                          placeholder="0.001"
+                          value={manualOrderQty}
+                          onChange={(e) => setManualOrderQty(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                    {futuresConnections.find((c) => c.id === (manualOrderConnectionId || futuresConnections[0]?.id)) && (
+                      <div className="text-[10px] text-muted-foreground">
+                        Leverage: {futuresConnections.find((c) => c.id === (manualOrderConnectionId || futuresConnections[0]?.id))?.default_leverage ?? "—"}x
+                      </div>
+                    )}
+                    <Button size="sm" className="h-7 text-[10px] w-full" onClick={handleManualFuturesOrder} disabled={manualOrderLoading}>
+                      {manualOrderLoading ? <Loader2 className="size-3 animate-spin" /> : null}
+                      Place Futures Order
+                    </Button>
+                  </div>
+                )}
                 {isDemoMode ? (
                   <div className="text-xs text-muted-foreground py-2">Connect an exchange and enable Futures in Settings to run auto strategies.</div>
                 ) : strategyLoading ? (
@@ -935,9 +1132,14 @@ export function TradingTerminalNew({ onNavigate }: TradingTerminalProps) {
                   <div className="py-4 space-y-3">
                     <p className="text-sm font-medium text-muted-foreground">No active strategies yet</p>
                     <p className="text-xs text-muted-foreground">Run a backtest, then click &quot;Go Live (Futures)&quot; to create a live strategy.</p>
-                    <Button size="sm" variant="outline" className="w-full gap-2 border-primary text-primary" onClick={() => onNavigate("strategy-backtest")}>
-                      <Zap className="h-3 w-3" /> Create from Backtest
-                    </Button>
+                    <div className="flex flex-wrap gap-2">
+                      <Button size="sm" variant="outline" className="gap-2 border-primary text-primary" onClick={() => onNavigate("strategy-backtest")}>
+                        <Zap className="h-3 w-3" /> Go to Backtest
+                      </Button>
+                      <Button size="sm" variant="outline" className="gap-2" onClick={() => futuresQuickActionsRef.current?.scrollIntoView({ behavior: "smooth" })}>
+                        Enable Futures
+                      </Button>
+                    </div>
                     {futuresConnections.length > 0 && (
                       <div className="rounded border border-border bg-card/30 p-2 space-y-2 mt-2">
                         <div className="text-[10px] font-semibold text-muted-foreground">Futures connections</div>
