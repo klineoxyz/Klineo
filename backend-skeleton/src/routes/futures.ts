@@ -41,7 +41,7 @@ function encryptedConfigToBase64(raw: unknown): string {
   throw new Error('Invalid encrypted_config format');
 }
 
-export const futuresRouter = Router();
+export const futuresRouter: Router = Router();
 
 futuresRouter.use(verifySupabaseJWT);
 
