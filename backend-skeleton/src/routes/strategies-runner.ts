@@ -72,19 +72,14 @@ function sanitizeMessage(msg: string): string {
   return msg.replace(/api[_-]?key/gi, '[REDACTED]').replace(/secret/gi, '[REDACTED]').replace(/\s+/g, ' ').trim();
 }
 
-export const strategiesRunnerRouter: Router = Router();
-
-/**
- * POST /api/runner/cron — run all due strategy_runs. Auth: x-cron-secret (RUNNER_CRON_SECRET) OR admin JWT.
- * Returns: { ok, requestId, startedAt, finishedAt, summary: { processed, ran, skipped, blocked, errored }, notes }.
- */
-strategiesRunnerRouter.post('/cron', cronOrAdminAuth, requireRunnerEnabled, async (req: Request, res: Response) => {
+/** Shared cron handler: run due strategies and return structured JSON. */
+async function handleCronRun(req: Request, res: Response): Promise<void> {
   const client = getSupabase();
   const requestId = (req as any).requestId || 'runner';
   const startedAt = new Date();
 
   if (!client) {
-    return res.status(503).json({
+    res.status(503).json({
       ok: false,
       requestId,
       startedAt: startedAt.toISOString(),
@@ -92,13 +87,14 @@ strategiesRunnerRouter.post('/cron', cronOrAdminAuth, requireRunnerEnabled, asyn
       summary: { processed: 0, ran: 0, skipped: 0, blocked: 0, errored: 0 },
       notes: ['Database unavailable'],
     });
+    return;
   }
 
   try {
     const summary = await runDueStrategies(client, startedAt, { requestId });
     const finishedAt = new Date();
     const processed = summary.ran + summary.skipped + summary.blocked + summary.errors;
-    return res.json({
+    res.json({
       ok: true,
       requestId,
       startedAt: startedAt.toISOString(),
@@ -117,7 +113,7 @@ strategiesRunnerRouter.post('/cron', cronOrAdminAuth, requireRunnerEnabled, asyn
     const msg = err instanceof Error ? err.message : 'Unknown error';
     const safe = sanitizeMessage(msg);
     console.error(`[${requestId}] cron error:`, safe);
-    return res.status(500).json({
+    res.status(500).json({
       ok: false,
       requestId,
       startedAt: startedAt.toISOString(),
@@ -126,7 +122,39 @@ strategiesRunnerRouter.post('/cron', cronOrAdminAuth, requireRunnerEnabled, asyn
       notes: [safe],
     });
   }
-});
+}
+
+/**
+ * Auth for cron-internal: secret in query param (fallback when cron provider cannot send headers).
+ * Do not log req.query. Returns 503 if secret not configured or mismatch.
+ */
+function cronInternalAuth(req: Request, res: Response, next: NextFunction): void {
+  const cronSecretConfigured = RUNNER_CONFIG.cronSecretConfigured;
+  if (!cronSecretConfigured) {
+    res.status(503).json({ ok: false, requestId: (req as any).requestId || 'runner', error: 'Cron secret not configured', code: 'CRON_SECRET_NOT_CONFIGURED' });
+    return;
+  }
+  const secret = req.query.x_cron_secret;
+  if (typeof secret !== 'string' || secret !== process.env.RUNNER_CRON_SECRET) {
+    res.status(401).json({ ok: false, requestId: (req as any).requestId || 'runner', error: 'Unauthorized', code: 'CRON_INTERNAL_UNAUTHORIZED' });
+    return;
+  }
+  next();
+}
+
+export const strategiesRunnerRouter: Router = Router();
+
+/**
+ * POST /api/runner/cron — run all due strategy_runs. Auth: x-cron-secret (RUNNER_CRON_SECRET) OR admin JWT.
+ * Returns: { ok, requestId, startedAt, finishedAt, summary: { processed, ran, skipped, blocked, errored }, notes }.
+ */
+strategiesRunnerRouter.post('/cron', cronOrAdminAuth, requireRunnerEnabled, (req, res) => void handleCronRun(req, res));
+
+/**
+ * POST /api/runner/cron-internal — fallback when cron provider cannot send custom headers.
+ * Auth: query param x_cron_secret = RUNNER_CRON_SECRET. Less secure (URL can be logged); use only if necessary.
+ */
+strategiesRunnerRouter.post('/cron-internal', cronInternalAuth, requireRunnerEnabled, (req, res) => void handleCronRun(req, res));
 
 // All routes below require JWT + admin
 strategiesRunnerRouter.use(verifySupabaseJWT);
