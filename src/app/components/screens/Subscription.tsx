@@ -4,7 +4,7 @@ import { Button } from "@/app/components/ui/button";
 import { Badge } from "@/app/components/ui/badge";
 import { Info, Loader2, Zap, ChevronDown, ChevronUp, Copy, Bot, Sparkles, Store, Check } from "lucide-react";
 import { api } from "@/lib/api";
-import type { BillingPlansResponse } from "@/lib/api";
+import type { BillingPlansResponse, EntitlementResponse } from "@/lib/api";
 import { toast } from "@/app/lib/toast";
 import {
   Collapsible,
@@ -18,11 +18,21 @@ interface SubscriptionProps {
 
 export function Subscription({ onNavigate }: SubscriptionProps) {
   const [plans, setPlans] = useState<BillingPlansResponse | null>(null);
+  const [entitlement, setEntitlement] = useState<EntitlementResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [joiningFeeLoading, setJoiningFeeLoading] = useState(false);
   const [packageLoading, setPackageLoading] = useState<string | null>(null);
   const [revenueOpen, setRevenueOpen] = useState(false);
+
+  const loadEntitlement = async () => {
+    try {
+      const data = await api.get<EntitlementResponse>("/api/me/entitlement");
+      setEntitlement(data);
+    } catch {
+      setEntitlement(null);
+    }
+  };
 
   const loadPlans = async () => {
     setLoading(true);
@@ -56,6 +66,10 @@ export function Subscription({ onNavigate }: SubscriptionProps) {
     loadPlans();
   }, []);
 
+  useEffect(() => {
+    loadEntitlement();
+  }, []);
+
   const handleJoiningFeeCheckout = async () => {
     setJoiningFeeLoading(true);
     try {
@@ -63,6 +77,7 @@ export function Subscription({ onNavigate }: SubscriptionProps) {
       toast.success("Checkout started", {
         description: "Complete your joining fee payment to enable API connection.",
       });
+      await loadEntitlement();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Checkout failed";
       toast.error("Could not start checkout", { description: msg });
@@ -72,6 +87,12 @@ export function Subscription({ onNavigate }: SubscriptionProps) {
   };
 
   const handlePackageCheckout = async (packageId: string) => {
+    if (!entitlement?.joiningFeePaid) {
+      toast.error("Pay joining fee first", {
+        description: "You must pay the joining fee before you can buy packages.",
+      });
+      return;
+    }
     setPackageLoading(packageId);
     try {
       await api.post("/api/billing/packages/checkout", {
@@ -126,6 +147,7 @@ export function Subscription({ onNavigate }: SubscriptionProps) {
           packageLoading={packageLoading}
           revenueOpen={revenueOpen}
           onRevenueOpenChange={setRevenueOpen}
+          joiningFeePaid={entitlement?.joiningFeePaid ?? false}
         />
       </div>
     );
@@ -150,6 +172,7 @@ export function Subscription({ onNavigate }: SubscriptionProps) {
         packageLoading={packageLoading}
         revenueOpen={revenueOpen}
         onRevenueOpenChange={setRevenueOpen}
+        joiningFeePaid={entitlement?.joiningFeePaid ?? false}
       />
 
       {/* Payment History */}
@@ -176,6 +199,7 @@ function SubscriptionContent({
   packageLoading,
   revenueOpen,
   onRevenueOpenChange,
+  joiningFeePaid,
 }: {
   plans: BillingPlansResponse;
   onJoiningFeeCheckout: () => void;
@@ -184,6 +208,7 @@ function SubscriptionContent({
   packageLoading: string | null;
   revenueOpen: boolean;
   onRevenueOpenChange: (open: boolean) => void;
+  joiningFeePaid: boolean;
 }) {
   const { joiningFee, packages, revenueSplit } = plans;
 
@@ -244,6 +269,11 @@ function SubscriptionContent({
         <p className="text-sm text-muted-foreground mb-2">
           Buy a package and trade until you make the profit shown below (e.g. $100 package → trade until you make $300 profit). Then top up or upgrade to continue.
         </p>
+        {!joiningFeePaid && (
+          <div className="mb-4 p-3 rounded-lg border border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-400 text-sm">
+            Pay the joining fee above before you can buy packages.
+          </div>
+        )}
         <div className="flex flex-wrap gap-x-4 gap-y-1 mb-4 text-sm font-medium">
           <span className="text-foreground">Starter — <span className="text-primary font-semibold">$100</span></span>
           <span className="text-muted-foreground">·</span>
@@ -317,10 +347,12 @@ function SubscriptionContent({
                       className="mt-4 w-full"
                       variant={popular ? "default" : "outline"}
                       onClick={() => onPackageCheckout(pkg.id)}
-                      disabled={!!packageLoading}
+                      disabled={!!packageLoading || !joiningFeePaid}
                     >
                       {packageLoading === pkg.id ? (
                         <Loader2 className="size-4 animate-spin" />
+                      ) : !joiningFeePaid ? (
+                        "Pay joining fee first"
                       ) : (
                         "Start now"
                       )}
