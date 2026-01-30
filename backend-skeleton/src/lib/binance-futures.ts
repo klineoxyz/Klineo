@@ -70,6 +70,20 @@ async function signedRequest<T>(
   return data as T;
 }
 
+/** Public endpoint: get mark price for symbol (no auth). */
+export async function getMarkPrice(env: BinanceFuturesEnvironment, symbol: string): Promise<number> {
+  const base = getBaseUrl(env);
+  const sym = symbol.replace('/', '').toUpperCase();
+  const res = await fetch(`${base}/fapi/v1/premiumIndex?symbol=${encodeURIComponent(sym)}`, { signal: AbortSignal.timeout(10000) });
+  const data = (await res.json()) as { markPrice?: string; msg?: string };
+  if (!res.ok) throw new Error(`Binance mark price: ${data.msg || res.statusText}`);
+  const mark = data.markPrice;
+  if (mark == null || mark === '') throw new Error('Mark price not found');
+  const num = parseFloat(mark);
+  if (Number.isNaN(num) || num <= 0) throw new Error('Invalid mark price');
+  return num;
+}
+
 export async function setLeverage(
   creds: BinanceFuturesCredentials,
   symbol: string,

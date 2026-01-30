@@ -257,13 +257,14 @@ export const exchangeConnections = {
   },
 };
 
-// Manual Futures Order (MVP: market only; qty in base asset)
+// Manual Futures Order (MVP: market only). Send qty (base) or quoteSizeUsdt (USDT; backend converts via mark price).
 export interface PlaceFuturesOrderRequest {
   connectionId: string;
   symbol: string;
   side: 'BUY' | 'SELL';
-  qty: string;
   type: 'MARKET';
+  qty?: string;
+  quoteSizeUsdt?: number;
 }
 
 export const futures = {

@@ -74,6 +74,22 @@ async function signedRequest<T>(
 
 const CATEGORY = 'linear';
 
+/** Public endpoint: get mark price for symbol (no auth). */
+export async function getMarkPrice(env: BybitFuturesEnvironment, symbol: string): Promise<number> {
+  const base = getBaseUrl(env);
+  const sym = symbol.replace('/', '').toUpperCase();
+  const res = await fetch(`${base}/v5/market/tickers?category=linear&symbol=${encodeURIComponent(sym)}`, { signal: AbortSignal.timeout(10000) });
+  const data = (await res.json()) as { retCode?: number; retMsg?: string; result?: { list?: Array<{ markPrice?: string }> } };
+  if (data.retCode != null && data.retCode !== 0) throw new Error(`Bybit tickers: ${data.retMsg || res.statusText}`);
+  const list = data.result?.list ?? [];
+  const item = list.find((x: { symbol?: string }) => (x as any).symbol === sym) ?? list[0];
+  const mark = item?.markPrice;
+  if (mark == null || mark === '') throw new Error('Mark price not found');
+  const num = parseFloat(mark);
+  if (Number.isNaN(num) || num <= 0) throw new Error('Invalid mark price');
+  return num;
+}
+
 export async function setLeverage(
   creds: BybitFuturesCredentials,
   symbol: string,

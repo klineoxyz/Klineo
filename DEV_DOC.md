@@ -79,7 +79,7 @@ Migrations:
   - `GET /api/strategies`, `GET /api/strategies/:id` — list / details + events.
   - `PUT /api/strategies/:id/status` — body `{ "status": "active" | "paused" | "stopped" }`.
   - `POST /api/strategies/:id/execute-tick` — one tick (fetch candles, RSI, place order if signal). Called by scheduler or manually.
-  - `POST /api/futures/order` — manual futures market order (MVP). Body: `{ connectionId, symbol, side: "BUY"|"SELL", qty, type: "MARKET" }`. Symbol whitelist: BTCUSDT, ETHUSDT, SOLUSDT. Qty is in base asset (e.g. 0.001 for BTC). Requires connection `futures_enabled`, kill_switch OFF. Never returns secrets.
+  - `POST /api/futures/order` — manual futures market order (MVP). Body: `{ connectionId, symbol, side: "BUY"|"SELL", type: "MARKET", qty? (base), quoteSizeUsdt? }`. Provide either `qty` (base asset) or `quoteSizeUsdt` (USDT size; backend converts via mark price, precision: 5 BTC / 4 ETH / 3 SOL). Symbol whitelist: BTCUSDT, ETHUSDT, SOLUSDT. Enforces `max_notional_usdt` when using `quoteSizeUsdt`. Returns 409 if futures OFF ("Futures is OFF. Enable futures first."), 423 if kill switch ON ("Kill switch enabled."). Never returns secrets.
 
 Request ID is set by existing middleware (`X-Request-ID`).
 

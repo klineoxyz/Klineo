@@ -250,7 +250,7 @@ export function TradingTerminalNew({ onNavigate }: TradingTerminalProps) {
   const [manualOrderConnectionId, setManualOrderConnectionId] = useState("");
   const [manualOrderSymbol, setManualOrderSymbol] = useState("BTCUSDT");
   const [manualOrderSide, setManualOrderSide] = useState<"BUY" | "SELL">("BUY");
-  const [manualOrderQty, setManualOrderQty] = useState("");
+  const [manualOrderUsdt, setManualOrderUsdt] = useState("");
   const [manualOrderLoading, setManualOrderLoading] = useState(false);
 
   // Get current pair data (fallback for order book, trades, 24h stats)
@@ -412,13 +412,13 @@ export function TradingTerminalNew({ onNavigate }: TradingTerminalProps) {
 
   const handleManualFuturesOrder = async () => {
     const connId = manualOrderConnectionId || futuresConnections[0]?.id;
-    if (!connId || !manualOrderQty.trim()) {
-      toast.error("Select connection and enter qty (base asset)");
+    if (!connId || !manualOrderUsdt.trim()) {
+      toast.error("Select connection and enter size (USDT)");
       return;
     }
-    const qtyNum = parseFloat(manualOrderQty);
-    if (Number.isNaN(qtyNum) || qtyNum <= 0) {
-      toast.error("Qty must be a positive number (base asset, e.g. 0.001 BTC)");
+    const usdtNum = parseFloat(manualOrderUsdt);
+    if (Number.isNaN(usdtNum) || usdtNum <= 0) {
+      toast.error("Size (USDT) must be a positive number");
       return;
     }
     setManualOrderLoading(true);
@@ -427,11 +427,11 @@ export function TradingTerminalNew({ onNavigate }: TradingTerminalProps) {
         connectionId: connId,
         symbol: manualOrderSymbol,
         side: manualOrderSide,
-        qty: manualOrderQty.trim(),
+        quoteSizeUsdt: usdtNum,
         type: "MARKET",
       });
       toast.success(`Order placed: ${res.orderId} (${res.status})`);
-      setManualOrderQty("");
+      setManualOrderUsdt("");
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
       toast.error("Order failed", { description: sanitizeExchangeError(msg) });
@@ -1102,13 +1102,14 @@ export function TradingTerminalNew({ onNavigate }: TradingTerminalProps) {
                         </Select>
                       </div>
                       <div>
-                        <Label className="text-[10px]">Qty (base, e.g. 0.001)</Label>
+                        <Label className="text-[10px]">Size (USDT)</Label>
                         <Input
                           className="h-7 text-xs font-mono"
-                          placeholder="0.001"
-                          value={manualOrderQty}
-                          onChange={(e) => setManualOrderQty(e.target.value)}
+                          placeholder="10"
+                          value={manualOrderUsdt}
+                          onChange={(e) => setManualOrderUsdt(e.target.value)}
                         />
+                        <p className="text-[9px] text-muted-foreground mt-0.5">We convert to quantity using mark price.</p>
                       </div>
                     </div>
                     {futuresConnections.find((c) => c.id === (manualOrderConnectionId || futuresConnections[0]?.id)) && (

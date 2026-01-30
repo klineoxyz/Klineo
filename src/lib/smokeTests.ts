@@ -850,6 +850,55 @@ export const smokeTests: SmokeTestDefinition[] = [
       return result;
     }
   },
+  {
+    name: 'POST /api/futures/order',
+    category: 'authenticated',
+    run: async () => {
+      const user = await getCurrentUser();
+      if (!user) {
+        return { name: 'POST /api/futures/order', status: 'SKIP', message: 'Login required' };
+      }
+      if (!import.meta.env.VITE_ENABLE_EXCHANGE_SMOKE_TESTS) {
+        return { name: 'POST /api/futures/order', status: 'SKIP', message: 'VITE_ENABLE_EXCHANGE_SMOKE_TESTS not set' };
+      }
+      const baseURL = getBaseURL();
+      const headers = await getAuthHeaders();
+      const listRes = await fetch(`${baseURL}/api/exchange-connections`, { headers });
+      if (!listRes.ok) {
+        return { name: 'POST /api/futures/order', status: 'SKIP', message: 'Could not list connections' };
+      }
+      const listData = (await listRes.json()) as { connections?: { id: string; environment?: string; futures_enabled?: boolean }[] };
+      const connections = Array.isArray(listData?.connections) ? listData.connections : [];
+      const futuresTestnet = connections.find((c: { environment?: string; futures_enabled?: boolean }) => c.environment === 'testnet' && c.futures_enabled);
+      const connId = futuresTestnet?.id ?? connections.find((c: { futures_enabled?: boolean }) => c.futures_enabled)?.id;
+      if (!connId) {
+        return { name: 'POST /api/futures/order', status: 'SKIP', message: 'No futures-enabled (testnet) connection' };
+      }
+      const result = await runTest('POST /api/futures/order', () =>
+        fetch(`${baseURL}/api/futures/order`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            connectionId: connId,
+            symbol: 'BTCUSDT',
+            side: 'BUY',
+            quoteSizeUsdt: 5,
+            type: 'MARKET',
+          }),
+        })
+      );
+      if (result.httpCode === 200) {
+        return { ...result, status: 'PASS', message: 'Futures order OK (quoteSizeUsdt)' };
+      }
+      if (result.httpCode === 409) {
+        return { ...result, status: 'FAIL', message: 'Futures OFF (409)' };
+      }
+      if (result.httpCode === 423) {
+        return { ...result, status: 'FAIL', message: 'Kill switch enabled (423)' };
+      }
+      return result;
+    }
+  },
 
   // Strategy runner (admin: 200, non-admin: 403)
   {
