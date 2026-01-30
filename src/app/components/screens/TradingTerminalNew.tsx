@@ -375,6 +375,11 @@ export function TradingTerminalNew({ onNavigate }: TradingTerminalProps) {
   const activeStrategy = strategyList.find((s) => s.status === "active");
   const selectedStrategy = strategyList.find((s) => s.id === selectedStrategyId);
 
+  // Connections that have futures enabled for display (futures_enabled true; treat binance/bybit as supporting futures if missing)
+  const hasFuturesEnabled = (c: ExchangeConnection) =>
+    !!c.futures_enabled && (!!c.supports_futures || c.exchange === "binance" || c.exchange === "bybit");
+  const futuresConnections = connections.filter(hasFuturesEnabled);
+
   const handleStrategyStatus = async (id: string, status: "active" | "paused" | "stopped") => {
     setStrategyStatusUpdating(true);
     try {
@@ -967,13 +972,13 @@ export function TradingTerminalNew({ onNavigate }: TradingTerminalProps) {
                       </div>
                     </div>
                     {/* Kill switch */}
-                    {connections.filter((c) => c.supports_futures && c.futures_enabled).length > 0 && (
+                    {futuresConnections.length > 0 && (
                       <div className="rounded border border-border bg-card/30 p-2 space-y-2">
                         <div className="flex items-center gap-2 text-[10px] font-semibold text-destructive">
                           <AlertTriangle className="h-3 w-3" /> Kill switch
                         </div>
                         <p className="text-[10px] text-muted-foreground">When ON, no futures orders are placed for this connection.</p>
-                        {connections.filter((c) => c.supports_futures && c.futures_enabled).map((c) => (
+                        {futuresConnections.map((c) => (
                           <div key={c.id} className="flex items-center justify-between gap-2">
                             <span className="text-[10px] truncate">{c.exchange} {c.label ? `(${c.label})` : ""}</span>
                             <Switch

@@ -201,6 +201,7 @@ exchangeConnectionsRouter.post(
         label: label || null,
         encrypted_config_b64: encryptedConfig,
         updated_at: new Date().toISOString(),
+        supports_futures: exchange === 'binance' || exchange === 'bybit',
       };
 
       let result;
@@ -366,7 +367,8 @@ exchangeConnectionsRouter.post(
       if (fetchError || !connection) {
         return res.status(404).json({ error: 'Connection not found', requestId });
       }
-      if (!connection.supports_futures) {
+      const supportsFuturesTest = connection.supports_futures || connection.exchange === 'binance' || connection.exchange === 'bybit';
+      if (!supportsFuturesTest) {
         return res.status(400).json({ error: 'Exchange does not support futures', requestId });
       }
 
@@ -456,7 +458,8 @@ exchangeConnectionsRouter.post(
       if (fetchError || !connection) {
         return res.status(404).json({ error: 'Connection not found', requestId });
       }
-      if (!connection.supports_futures) {
+      const supportsFuturesEnable = connection.supports_futures || connection.exchange === 'binance' || connection.exchange === 'bybit';
+      if (!supportsFuturesEnable) {
         return res.status(400).json({ error: 'Exchange does not support futures', requestId });
       }
 
@@ -495,6 +498,7 @@ exchangeConnectionsRouter.post(
         .from('user_exchange_connections')
         .update({
           futures_enabled: true,
+          supports_futures: true,
           default_leverage: leverage,
           margin_mode: marginMode,
           position_mode: posMode,
