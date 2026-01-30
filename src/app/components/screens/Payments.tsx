@@ -431,9 +431,14 @@ export function Payments({ onNavigate, viewData }: PaymentsProps) {
       )}
 
       <Card>
-        <div className="p-6 border-b border-border flex items-center justify-between">
-          <h3 className="text-lg font-semibold">Your payment intents</h3>
-          <Button variant="outline" size="sm" onClick={loadIntents} disabled={intentsLoading}>
+        <div className="p-6 border-b border-border flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+          <div>
+            <h3 className="text-lg font-semibold">Your payment intents</h3>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              Each row is a payment you started. <strong>Draft</strong> = created but not yet paid (send USDT to the Safe, then submit your tx hash above). After you submit, status becomes Pending review → Approved or Rejected.
+            </p>
+          </div>
+          <Button variant="outline" size="sm" onClick={loadIntents} disabled={intentsLoading} className="shrink-0">
             {intentsLoading ? <Loader2 className="size-4 animate-spin" /> : "Refresh"}
           </Button>
         </div>
