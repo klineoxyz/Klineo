@@ -57,8 +57,9 @@ export function Admin() {
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
   const [paymentIntents, setPaymentIntents] = useState<any[]>([]);
   const [paymentIntentsLoading, setPaymentIntentsLoading] = useState(false);
-  const [paymentIntentsStatus, setPaymentIntentsStatus] = useState<string>("");
+  const [paymentIntentsStatus, setPaymentIntentsStatus] = useState<string>("all");
   const [paymentIntentsFeatureDisabled, setPaymentIntentsFeatureDisabled] = useState(false);
+  const [adminTab, setAdminTab] = useState<string>("users");
   const [paymentIntentActionNote, setPaymentIntentActionNote] = useState("");
   const [paymentIntentActionLoading, setPaymentIntentActionLoading] = useState(false);
 
@@ -284,15 +285,15 @@ export function Admin() {
     setPaymentIntentsFeatureDisabled(false);
     try {
       const params = new URLSearchParams();
-      if (paymentIntentsStatus) params.set('status', paymentIntentsStatus);
+      if (paymentIntentsStatus && paymentIntentsStatus !== "all") params.set("status", paymentIntentsStatus);
       const data = await api.get(`/api/admin/payments/intents?${params.toString()}`);
       setPaymentIntents((data as any).intents || []);
     } catch (e: any) {
-      if (e?.message?.includes('404') || e?.message === 'Not found') {
+      if (e?.message?.includes("404") || e?.message === "Not found") {
         setPaymentIntents([]);
         setPaymentIntentsFeatureDisabled(true);
       } else {
-        toast.error('Failed to load payment intents');
+        toast.error("Failed to load payment intents");
       }
     } finally {
       setPaymentIntentsLoading(false);
@@ -575,8 +576,15 @@ export function Admin() {
         </Card>
       </div>
 
-      {/* Main Tabs */}
-      <Tabs defaultValue="users" className="space-y-6">
+      {/* Main Tabs — controlled so Payments panel shows when selected */}
+      <Tabs
+        value={adminTab}
+        onValueChange={(v) => {
+          setAdminTab(v);
+          if (v === "payments") loadPaymentIntents();
+        }}
+        className="space-y-6"
+      >
         <TabsList>
           <TabsTrigger value="users">Users</TabsTrigger>
           <TabsTrigger value="traders">Traders</TabsTrigger>
@@ -1719,17 +1727,20 @@ export function Admin() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="payments" className="space-y-4" onFocus={loadPaymentIntents}>
+        <TabsContent value="payments" className="space-y-4">
           <Card>
             <div className="p-6 border-b border-border flex flex-wrap items-center justify-between gap-4">
               <h3 className="text-lg font-semibold">Payment Intents (Manual Safe)</h3>
               <div className="flex items-center gap-2">
-                <Select value={paymentIntentsStatus} onValueChange={(v) => { setPaymentIntentsStatus(v); }}>
+                <Select
+                  value={paymentIntentsStatus === "" ? "all" : paymentIntentsStatus}
+                  onValueChange={(v) => setPaymentIntentsStatus(v)}
+                >
                   <SelectTrigger className="w-[180px]">
                     <SelectValue placeholder="All statuses" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">All statuses</SelectItem>
+                    <SelectItem value="all">All statuses</SelectItem>
                     <SelectItem value="draft">Draft</SelectItem>
                     <SelectItem value="pending_review">Pending review</SelectItem>
                     <SelectItem value="flagged">Flagged</SelectItem>
