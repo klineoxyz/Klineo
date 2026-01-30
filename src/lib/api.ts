@@ -7,6 +7,20 @@ import { triggerLogout } from './authEvents';
 
 const baseURL = import.meta.env.VITE_API_BASE_URL ?? '';
 
+/**
+ * Sanitize error messages so we never show secrets, apiKey, apiSecret, or other sensitive data.
+ * Use when displaying exchange/connection errors in UI or toasts.
+ */
+export function sanitizeExchangeError(message: string | undefined | null): string {
+  if (message == null || typeof message !== 'string') return 'Something went wrong';
+  let out = message;
+  const sensitive = /\b(api[_-]?key|api[_-]?secret|secret|apisecret|private[_-]?key|password|credential)\b/gi;
+  if (sensitive.test(out)) {
+    out = out.replace(sensitive, '[REDACTED]');
+  }
+  return out.slice(0, 500);
+}
+
 export async function apiRequest<T = unknown>(
   path: string,
   options: RequestInit = {}

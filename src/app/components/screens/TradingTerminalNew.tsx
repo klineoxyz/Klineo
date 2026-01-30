@@ -931,8 +931,54 @@ export function TradingTerminalNew({ onNavigate }: TradingTerminalProps) {
                   <div className="flex items-center gap-2 py-2 text-xs text-muted-foreground">
                     <Loader2 className="h-3 w-3 animate-spin" /> Loading…
                   </div>
+                ) : strategyList.length === 0 ? (
+                  <div className="py-4 space-y-3">
+                    <p className="text-sm font-medium text-muted-foreground">No active strategies yet</p>
+                    <p className="text-xs text-muted-foreground">Run a backtest, then click &quot;Go Live (Futures)&quot; to create a live strategy.</p>
+                    <Button size="sm" variant="outline" className="w-full gap-2 border-primary text-primary" onClick={() => onNavigate("strategy-backtest")}>
+                      <Zap className="h-3 w-3" /> Create from Backtest
+                    </Button>
+                    {futuresConnections.length > 0 && (
+                      <div className="rounded border border-border bg-card/30 p-2 space-y-2 mt-2">
+                        <div className="text-[10px] font-semibold text-muted-foreground">Futures connections</div>
+                        {futuresConnections.map((c) => (
+                          <div key={c.id} className="flex items-center justify-between gap-2 text-[10px]">
+                            <span className="truncate">{c.exchange} {c.label ? `(${c.label})` : ""}</span>
+                            <Badge variant="outline" className="text-[10px] bg-green-500/10 text-green-600 border-green-500/30">Futures ON</Badge>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {isAdmin && (
+                      <div className="pt-2 border-t border-border">
+                        <Button size="sm" variant="ghost" className="h-7 text-[10px] w-full" onClick={() => onNavigate("admin")}>
+                          Run a test tick (admin)
+                        </Button>
+                      </div>
+                    )}
+                  </div>
                 ) : (
                   <div className="space-y-3 py-2">
+                    {/* Connection Futures ON/OFF + Kill switch at top */}
+                    {futuresConnections.length > 0 && (
+                      <div className="rounded border border-border bg-card/30 p-2 space-y-2">
+                        <div className="text-[10px] font-semibold text-muted-foreground">Futures</div>
+                        {futuresConnections.map((c) => (
+                          <div key={c.id} className="flex items-center justify-between gap-2 text-[10px]">
+                            <span className="truncate">{c.exchange} {c.label ? `(${c.label})` : ""}</span>
+                            <div className="flex items-center gap-2 shrink-0">
+                              <Badge variant="outline" className="text-[10px] bg-green-500/10 text-green-600 border-green-500/30">ON</Badge>
+                              <span className="text-muted-foreground">Kill</span>
+                              <Switch
+                                checked={!!c.kill_switch}
+                                onCheckedChange={(checked) => handleKillSwitch(c.id, !!checked)}
+                                disabled={killSwitchUpdating[c.id]}
+                              />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                     {/* Active Strategy panel */}
                     {activeStrategy && (
                       <div className="rounded border border-border bg-card/50 p-2 space-y-2">
@@ -1035,9 +1081,6 @@ export function TradingTerminalNew({ onNavigate }: TradingTerminalProps) {
                           </div>
                         ))}
                       </div>
-                    )}
-                    {!activeStrategy && strategyList.length === 0 && !strategyLoading && (
-                      <div className="text-[10px] text-muted-foreground">No strategies. Run a backtest and click &quot;Go Live&quot; in Strategy Backtest.</div>
                     )}
                     {/* Admin: Runner — Run Cron Now, status, recent tick runs */}
                     {isAdmin && (

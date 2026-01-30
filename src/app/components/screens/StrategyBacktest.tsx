@@ -295,9 +295,10 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
   const [launchCapital, setLaunchCapital] = useState("10000");
   const [exchange, setExchange] = useState("binance");
 
-  // Go Live (Futures) modal
+  // Go Live (Futures) modal + gating (load connections on mount)
   const [goLiveFuturesOpen, setGoLiveFuturesOpen] = useState(false);
   const [connections, setConnections] = useState<ExchangeConnection[]>([]);
+  const [connectionsLoaded, setConnectionsLoaded] = useState(false);
   const [goLiveConnectionId, setGoLiveConnectionId] = useState("");
   const [goLiveLeverage, setGoLiveLeverage] = useState("3");
   const [goLiveMarginMode, setGoLiveMarginMode] = useState<"isolated" | "cross">("isolated");
@@ -349,8 +350,19 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
   const futuresEnabledConnections = connections.filter(
     (c) => c.supports_futures && c.futures_enabled && !c.disabled_at
   );
+  const hasAnyConnection = connections.length > 0;
+  const hasFuturesEnabled = futuresEnabledConnections.length > 0;
   const selectedConnection = connections.find((c) => c.id === goLiveConnectionId);
   const maxLeverage = selectedConnection?.max_leverage_allowed ?? 10;
+
+  useEffect(() => {
+    exchangeConnections.list()
+      .then(({ connections: list }) => {
+        setConnections(list);
+        setConnectionsLoaded(true);
+      })
+      .catch(() => setConnectionsLoaded(true));
+  }, []);
 
   const openGoLiveFutures = async () => {
     setGoLiveFuturesOpen(true);
@@ -1305,16 +1317,40 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
 
           <Separator />
 
-          {/* CTAs */}
+          {/* Go Live (Futures) — gated by connection + Futures enabled */}
           <div className="space-y-2">
             {hasResults && (
-              <Button
-                className="w-full bg-primary"
-                onClick={openGoLiveFutures}
-              >
-                <Zap className="h-4 w-4 mr-2" />
-                Go Live (Futures)
-              </Button>
+              <>
+                {!connectionsLoaded ? (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
+                    <Loader2 className="h-4 w-4 animate-spin" /> Checking connection…
+                  </div>
+                ) : !hasAnyConnection ? (
+                  <Card className="p-4 border-primary/20 bg-primary/5">
+                    <p className="text-sm mb-2">Connect Binance or Bybit to go live.</p>
+                    <Button variant="outline" size="sm" className="w-full border-primary text-primary" onClick={() => onNavigate("settings")}>
+                      <Settings className="h-4 w-4 mr-2" />
+                      Open Settings
+                    </Button>
+                  </Card>
+                ) : !hasFuturesEnabled ? (
+                  <Card className="p-4 border-amber-500/20 bg-amber-500/5">
+                    <p className="text-sm mb-2">Enable Futures in Settings to launch a live strategy.</p>
+                    <Button variant="outline" size="sm" className="w-full border-amber-500/50 text-amber-700 dark:text-amber-400" onClick={() => onNavigate("settings")}>
+                      <Settings className="h-4 w-4 mr-2" />
+                      Open Settings
+                    </Button>
+                  </Card>
+                ) : (
+                  <Button
+                    className="w-full bg-primary"
+                    onClick={openGoLiveFutures}
+                  >
+                    <Zap className="h-4 w-4 mr-2" />
+                    Go Live (Futures)
+                  </Button>
+                )}
+              </>
             )}
             <Button
               className="w-full"

@@ -720,6 +720,137 @@ export const smokeTests: SmokeTestDefinition[] = [
     }
   },
 
+  // Exchange connections (authenticated; create/futures gated by VITE_ENABLE_EXCHANGE_SMOKE_TESTS)
+  {
+    name: 'GET /api/exchange-connections',
+    category: 'authenticated',
+    run: async () => {
+      const user = await getCurrentUser();
+      if (!user) {
+        return { name: 'GET /api/exchange-connections', status: 'SKIP', message: 'Login required' };
+      }
+      const baseURL = getBaseURL();
+      const headers = await getAuthHeaders();
+      return runTest('GET /api/exchange-connections', () =>
+        fetch(`${baseURL}/api/exchange-connections`, { headers })
+      );
+    }
+  },
+  {
+    name: 'POST /api/exchange-connections (validation)',
+    category: 'authenticated',
+    run: async () => {
+      const user = await getCurrentUser();
+      if (!user) {
+        return { name: 'POST /api/exchange-connections (validation)', status: 'SKIP', message: 'Login required' };
+      }
+      const baseURL = getBaseURL();
+      const headers = await getAuthHeaders();
+      const result = await runTest('POST /api/exchange-connections (validation)', () =>
+        fetch(`${baseURL}/api/exchange-connections`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ exchange: 'binance', environment: 'testnet' })
+        })
+      );
+      if (result.httpCode === 400 || result.httpCode === 422) {
+        return { ...result, status: 'PASS', message: 'Validation OK (missing keys rejected)' };
+      }
+      return result;
+    }
+  },
+  {
+    name: 'POST /api/exchange-connections/:id/test',
+    category: 'authenticated',
+    run: async () => {
+      const user = await getCurrentUser();
+      if (!user) {
+        return { name: 'POST /api/exchange-connections/:id/test', status: 'SKIP', message: 'Login required' };
+      }
+      const baseURL = getBaseURL();
+      const headers = await getAuthHeaders();
+      const listRes = await fetch(`${baseURL}/api/exchange-connections`, { headers });
+      if (!listRes.ok) {
+        return { name: 'POST /api/exchange-connections/:id/test', status: 'SKIP', message: 'Could not list connections' };
+      }
+      const listData = (await listRes.json()) as { connections?: { id: string }[] };
+      const connections = Array.isArray(listData?.connections) ? listData.connections : [];
+      const firstId = connections[0]?.id;
+      if (!firstId) {
+        return { name: 'POST /api/exchange-connections/:id/test', status: 'SKIP', message: 'No exchange connection to test' };
+      }
+      return runTest('POST /api/exchange-connections/:id/test', () =>
+        fetch(`${baseURL}/api/exchange-connections/${firstId}/test`, { method: 'POST', headers })
+      );
+    }
+  },
+  {
+    name: 'POST /api/exchange-connections/:id/futures/test',
+    category: 'authenticated',
+    run: async () => {
+      const user = await getCurrentUser();
+      if (!user) {
+        return { name: 'POST /api/exchange-connections/:id/futures/test', status: 'SKIP', message: 'Login required' };
+      }
+      if (!import.meta.env.VITE_ENABLE_EXCHANGE_SMOKE_TESTS) {
+        return { name: 'POST /api/exchange-connections/:id/futures/test', status: 'SKIP', message: 'VITE_ENABLE_EXCHANGE_SMOKE_TESTS not set' };
+      }
+      const baseURL = getBaseURL();
+      const headers = await getAuthHeaders();
+      const listRes = await fetch(`${baseURL}/api/exchange-connections`, { headers });
+      if (!listRes.ok) {
+        return { name: 'POST /api/exchange-connections/:id/futures/test', status: 'SKIP', message: 'Could not list connections' };
+      }
+      const listData = (await listRes.json()) as { connections?: { id: string }[] };
+      const connections = Array.isArray(listData?.connections) ? listData.connections : [];
+      const firstId = connections[0]?.id;
+      if (!firstId) {
+        return { name: 'POST /api/exchange-connections/:id/futures/test', status: 'SKIP', message: 'No exchange connection' };
+      }
+      return runTest('POST /api/exchange-connections/:id/futures/test', () =>
+        fetch(`${baseURL}/api/exchange-connections/${firstId}/futures/test`, { method: 'POST', headers })
+      );
+    }
+  },
+  {
+    name: 'POST /api/exchange-connections/:id/futures/enable',
+    category: 'authenticated',
+    run: async () => {
+      const user = await getCurrentUser();
+      if (!user) {
+        return { name: 'POST /api/exchange-connections/:id/futures/enable', status: 'SKIP', message: 'Login required' };
+      }
+      if (!import.meta.env.VITE_ENABLE_EXCHANGE_SMOKE_TESTS) {
+        return { name: 'POST /api/exchange-connections/:id/futures/enable', status: 'SKIP', message: 'Optional; only with VITE_ENABLE_EXCHANGE_SMOKE_TESTS (e.g. testnet)' };
+      }
+      const baseURL = getBaseURL();
+      const headers = await getAuthHeaders();
+      const listRes = await fetch(`${baseURL}/api/exchange-connections`, { headers });
+      if (!listRes.ok) {
+        return { name: 'POST /api/exchange-connections/:id/futures/enable', status: 'SKIP', message: 'Could not list connections' };
+      }
+      const listData = (await listRes.json()) as { connections?: { id: string; environment?: string }[] };
+      const connections = Array.isArray(listData?.connections) ? listData.connections : [];
+      const testnetConn = connections.find((c: { environment?: string }) => c.environment === 'testnet');
+      const conn = testnetConn ?? connections[0];
+      const connId = conn?.id;
+      if (!connId) {
+        return { name: 'POST /api/exchange-connections/:id/futures/enable', status: 'SKIP', message: 'No connection (use testnet for this test)' };
+      }
+      const result = await runTest('POST /api/exchange-connections/:id/futures/enable', () =>
+        fetch(`${baseURL}/api/exchange-connections/${connId}/futures/enable`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ default_leverage: 1, margin_mode: 'isolated', position_mode: 'one_way' })
+        })
+      );
+      if (result.httpCode === 200) {
+        return { ...result, status: 'PASS', message: 'Futures enable OK (testnet)' };
+      }
+      return result;
+    }
+  },
+
   // Strategy runner (admin: 200, non-admin: 403)
   {
     name: 'POST /api/runner/cron',

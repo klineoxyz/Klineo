@@ -2,6 +2,54 @@
 
 This document explains how to test **Futures auto trading** (Binance + Bybit) with **testnets** and required API permissions. Spot trading is unchanged.
 
+---
+
+## How to connect API keys safely (Binance and Bybit)
+
+Use the in-app **Settings → Connect Exchange** wizard. Never enable withdrawals for API keys. Use testnet first if you are unsure.
+
+### Permission checklist (same for both exchanges)
+
+- **Enable: Read-only access** (account info)
+- **Enable: Spot trading**
+- **Enable: Futures trading (USDT perpetual)**
+- **Disable: Withdrawals (must be OFF)**
+- If you use IP restrictions, add the backend IP (optional)
+
+### Binance
+
+1. **Where to create keys**
+   - Production: [Binance API Management](https://www.binance.com/en/my/settings/api-management)
+   - Testnet: [Binance Futures Testnet](https://testnet.binancefuture.com) (log in with GitHub; no real funds)
+
+2. **In Binance API form**
+   - Enable "Enable Reading" (read-only account info)
+   - Enable "Enable Spot & Margin Trading"
+   - Enable "Enable Futures" (USD-M)
+   - Leave **"Enable Withdrawals"** OFF
+
+3. **Optional**
+   - Restrict access to trusted IPs only (then add your backend IP in Binance)
+
+### Bybit
+
+1. **Where to create keys**
+   - Production: [Bybit API Management](https://www.bybit.com/app/user/api-management)
+   - Testnet: [Bybit Testnet](https://testnet.bybit.com) (USDT Perpetual / linear)
+
+2. **In Bybit API form**
+   - Enable "Read" and "Contract" (derivatives) with "Read & Write" for USDT Perpetual
+   - Do **not** enable "Withdraw"
+
+3. **Optional**
+   - Use IP restriction and add your backend IP in Bybit
+
+### Warnings
+
+- Never enable withdrawals for API keys used with KLINEO.
+- Use testnet first if you are unsure.
+- Keys are stored encrypted on the backend; the frontend never stores or displays your secret after input.
+
 ## Overview
 
 - **Futures** is a new mode, enabled per exchange connection. Users connect Binance or Bybit API keys, optionally enable Futures, then run a strategy from Strategy Backtest via "Go Live".

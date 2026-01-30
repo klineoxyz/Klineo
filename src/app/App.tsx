@@ -152,7 +152,7 @@ export default function App() {
       case "payments":
         return <Payments onNavigate={handleNavigate} />;
       case "settings":
-        return <Settings />;
+        return <Settings onNavigate={handleNavigate} />;
       case "support":
         return <Support />;
       case "admin":

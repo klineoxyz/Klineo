@@ -9,7 +9,7 @@ import { Alert, AlertDescription } from "@/app/components/ui/alert";
 import { AlertTriangle, Key, Shield, Wifi, Trash2, CheckCircle2, XCircle, Loader2, Plus, KeyRound } from "lucide-react";
 import { useAuth } from "@/app/contexts/AuthContext";
 import { useDemo } from "@/app/contexts/DemoContext";
-import { api, exchangeConnections, type ExchangeConnection } from "@/lib/api";
+import { api, exchangeConnections, sanitizeExchangeError, type ExchangeConnection } from "@/lib/api";
 import { toast } from "@/app/lib/toast";
 import { Badge } from "@/app/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/app/components/ui/select";
@@ -23,10 +23,16 @@ import {
 } from "@/app/components/ui/dialog";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/app/components/ui/collapsible";
 import { ChevronDown, ChevronRight, CheckSquare } from "lucide-react";
+import { ConnectExchangeWizard } from "@/app/components/screens/ConnectExchangeWizard";
 
-export function Settings() {
+interface SettingsProps {
+  onNavigate?: (view: string) => void;
+}
+
+export function Settings({ onNavigate }: SettingsProps) {
   const { user } = useAuth();
   const { isDemoMode } = useDemo();
+  const [connectWizardOpen, setConnectWizardOpen] = useState(false);
   const [fullName, setFullName] = useState("");
   const [username, setUsername] = useState("");
   const [timezone, setTimezone] = useState("UTC");
@@ -188,6 +194,13 @@ export function Settings() {
   }, []);
 
   // Load exchange connections
+  const refreshConnections = () => {
+    if (!user?.id) return;
+    exchangeConnections.list()
+      .then((data) => setExchangeConnectionsList(data.connections))
+      .catch((err: any) => toast.error('Failed to load connections', { description: err?.message }));
+  };
+
   useEffect(() => {
     if (!user?.id) {
       setExchangeConnectionsLoading(false);
@@ -231,8 +244,7 @@ export function Settings() {
         toast.error('Connection test failed', { description: result.error || result.message || 'Invalid credentials' });
       }
     } catch (err: any) {
-      const msg = err?.message || 'Test failed';
-      toast.error('Connection test failed', { description: msg.replace(/api[_-]?key|secret/gi, '[REDACTED]') });
+      toast.error('Connection test failed', { description: sanitizeExchangeError(err?.message || 'Test failed') });
     } finally {
       setTestBeforeSaveLoading(false);
     }
@@ -252,7 +264,7 @@ export function Settings() {
       const data = await exchangeConnections.list();
       setExchangeConnectionsList(data.connections);
     } catch (err: any) {
-      toast.error('Failed to save connection', { description: err?.message });
+      toast.error('Failed to save connection', { description: sanitizeExchangeError(err?.message) });
     } finally {
       setFormLoading(false);
     }
@@ -279,7 +291,7 @@ export function Settings() {
       } catch {
         /* use raw message */
       }
-      toast.error('Test failed', { description });
+      toast.error('Test failed', { description: sanitizeExchangeError(description) });
     } finally {
       setTestingId(null);
     }
@@ -311,7 +323,7 @@ export function Settings() {
       const data = await exchangeConnections.list();
       setExchangeConnectionsList(data.connections);
     } catch (err: any) {
-      toast.error("Failed to update credentials", { description: err?.message });
+      toast.error("Failed to update credentials", { description: sanitizeExchangeError(err?.message) });
     } finally {
       setUpdateCredsLoading(false);
     }
@@ -325,7 +337,7 @@ export function Settings() {
       const data = await exchangeConnections.list();
       setExchangeConnectionsList(data.connections);
     } catch (err: any) {
-      toast.error('Failed to delete connection', { description: err?.message });
+      toast.error('Failed to delete connection', { description: sanitizeExchangeError(err?.message) });
     }
   };
 
@@ -352,7 +364,7 @@ export function Settings() {
       const data = await exchangeConnections.list();
       setExchangeConnectionsList(data.connections);
     } catch (err: any) {
-      toast.error('Futures test failed', { description: err?.message });
+      toast.error('Futures test failed', { description: sanitizeExchangeError(err?.message) });
     } finally {
       setFuturesTestId(null);
     }
@@ -366,7 +378,7 @@ export function Settings() {
       const data = await exchangeConnections.list();
       setExchangeConnectionsList(data.connections);
     } catch (err: any) {
-      toast.error('Futures enable failed', { description: err?.message });
+      toast.error('Futures enable failed', { description: sanitizeExchangeError(err?.message) });
     } finally {
       setFuturesEnableId(null);
     }
@@ -704,13 +716,28 @@ export function Settings() {
                 </p>
               )}
             </div>
-            {!showAddForm && !isDemoMode && (
-              <Button onClick={() => setShowAddForm(true)} className="gap-2">
-                <Plus className="size-4" />
-                Add Connection
-              </Button>
+            {!isDemoMode && (
+              <div className="flex gap-2">
+                <Button onClick={() => setConnectWizardOpen(true)} className="gap-2 bg-primary text-primary-foreground">
+                  <Key className="size-4" />
+                  Connect Exchange
+                </Button>
+                {!showAddForm && (
+                  <Button variant="outline" onClick={() => setShowAddForm(true)} className="gap-2">
+                    <Plus className="size-4" />
+                    Add Connection
+                  </Button>
+                )}
+              </div>
             )}
           </div>
+
+          <ConnectExchangeWizard
+            open={connectWizardOpen}
+            onOpenChange={setConnectWizardOpen}
+            onComplete={() => refreshConnections()}
+            onNavigate={onNavigate}
+          />
 
           {showAddForm && !isDemoMode && (
             <Card className="p-6 space-y-4">
