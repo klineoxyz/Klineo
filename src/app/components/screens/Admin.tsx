@@ -44,6 +44,12 @@ export function Admin() {
   const [paymentIntentActionNote, setPaymentIntentActionNote] = useState("");
   const [paymentIntentActionLoading, setPaymentIntentActionLoading] = useState(false);
 
+  // Runner (admin)
+  const [runnerStatus, setRunnerStatus] = useState<{ activeStrategies: number; lastRunAt: string | null; lastRunStatus: string | null; blockedUsersCount: number; lastBlockedReasons?: string[] } | null>(null);
+  const [runnerStatusLoading, setRunnerStatusLoading] = useState(false);
+  const [runnerCronLoading, setRunnerCronLoading] = useState(false);
+  const [tickRuns, setTickRuns] = useState<Array<{ id: string; strategy_run_id: string; started_at: string; status: string; reason: string | null; latency_ms: number | null }>>([]);
+
   // Loading states
   const [loading, setLoading] = useState(true);
   const [usersLoading, setUsersLoading] = useState(false);
@@ -199,6 +205,33 @@ export function Admin() {
       toast.error('Failed to load coupons');
     } finally {
       setCouponsLoading(false);
+    }
+  };
+
+  const loadRunnerStatus = async () => {
+    setRunnerStatusLoading(true);
+    try {
+      const res = await api.get<{ activeStrategies?: number; lastRunAt?: string | null; lastRunStatus?: string | null; blockedUsersCount?: number; lastBlockedReasons?: string[] }>('/api/runner/status');
+      setRunnerStatus({
+        activeStrategies: res?.activeStrategies ?? 0,
+        lastRunAt: res?.lastRunAt ?? null,
+        lastRunStatus: res?.lastRunStatus ?? null,
+        blockedUsersCount: res?.blockedUsersCount ?? 0,
+        lastBlockedReasons: res?.lastBlockedReasons,
+      });
+    } catch {
+      setRunnerStatus(null);
+    } finally {
+      setRunnerStatusLoading(false);
+    }
+  };
+
+  const loadTickRuns = async () => {
+    try {
+      const res = await api.get<{ tickRuns?: Array<{ id: string; strategy_run_id: string; started_at: string; status: string; reason: string | null; latency_ms: number | null }> }>('/api/runner/tick-runs?limit=20');
+      setTickRuns(res?.tickRuns ?? []);
+    } catch {
+      setTickRuns([]);
     }
   };
 
@@ -513,6 +546,7 @@ export function Admin() {
           <TabsTrigger value="platform-settings">Platform Settings</TabsTrigger>
           <TabsTrigger value="payments">Payments</TabsTrigger>
           <TabsTrigger value="discounts">Discount Coupons</TabsTrigger>
+          <TabsTrigger value="runner">Runner</TabsTrigger>
           <TabsTrigger value="audit">Audit Logs</TabsTrigger>
         </TabsList>
 
@@ -1681,6 +1715,87 @@ export function Admin() {
               <div className="flex items-center gap-2">
                 <Label className="text-muted-foreground text-xs">Note (for Approve/Reject):</Label>
                 <Input placeholder="Optional note" className="max-w-xs h-8" value={paymentIntentActionNote} onChange={(e) => setPaymentIntentActionNote(e.target.value)} />
+              </div>
+            </div>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="runner" className="space-y-4" onFocus={() => { loadRunnerStatus(); loadTickRuns(); }}>
+          <Card>
+            <div className="p-6 border-b border-border flex items-center justify-between flex-wrap gap-2">
+              <h3 className="text-lg font-semibold">Strategy Runner</h3>
+              <div className="flex items-center gap-2">
+                <Button variant="outline" size="sm" onClick={() => { loadRunnerStatus(); loadTickRuns(); }} disabled={runnerStatusLoading}>
+                  <RefreshCw className="size-4 mr-2" />
+                  Refresh
+                </Button>
+                <Button
+                  size="sm"
+                  disabled={runnerCronLoading}
+                  onClick={async () => {
+                    setRunnerCronLoading(true);
+                    try {
+                      const res = await api.post<{ ok?: boolean; requestId?: string; summary?: { processed: number; ran: number; skipped: number; blocked: number; errored: number }; notes?: string[] }>('/api/runner/cron');
+                      const s = res?.summary;
+                      const id = res?.requestId ?? '';
+                      if (res?.ok && s) {
+                        toast.success(`Cron: ran=${s.ran} skipped=${s.skipped} blocked=${s.blocked} errored=${s.errored}`, { description: id ? `Request: ${id}` : undefined });
+                      } else if (res?.notes?.length) {
+                        toast.error(res.notes[0] ?? 'Cron failed', { description: id ? `Request: ${id}` : undefined });
+                      } else {
+                        toast.success('Cron run completed', { description: id ? `Request: ${id}` : undefined });
+                      }
+                      loadRunnerStatus();
+                      loadTickRuns();
+                    } catch (e: unknown) {
+                      toast.error(e instanceof Error ? e.message : 'Request failed');
+                    } finally {
+                      setRunnerCronLoading(false);
+                    }
+                  }}
+                >
+                  {runnerCronLoading ? 'Running…' : 'Run Cron Now'}
+                </Button>
+              </div>
+            </div>
+            <div className="p-4 space-y-4">
+              {runnerStatus !== null && (
+                <div className="rounded border border-border p-3 text-sm space-y-1">
+                  <div className="font-semibold">Runner status</div>
+                  <div>Active strategies: {runnerStatus.activeStrategies} · Last run: {runnerStatus.lastRunAt ? new Date(runnerStatus.lastRunAt).toLocaleString() : '—'} ({runnerStatus.lastRunStatus ?? '—'})</div>
+                  {runnerStatus.blockedUsersCount > 0 && (
+                    <div className="text-amber-600">Blocked users: {runnerStatus.blockedUsersCount} {runnerStatus.lastBlockedReasons?.length ? `(${runnerStatus.lastBlockedReasons.slice(0, 3).join(', ')})` : ''}</div>
+                  )}
+                </div>
+              )}
+              <div>
+                <div className="font-semibold mb-2">Recent tick runs (last 20)</div>
+                {tickRuns.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No tick runs yet. Run cron or wait for scheduler.</p>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Time</TableHead>
+                        <TableHead>Strategy run</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Reason</TableHead>
+                        <TableHead>Latency</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {tickRuns.map((r) => (
+                        <TableRow key={r.id}>
+                          <TableCell className="font-mono text-xs">{new Date(r.started_at).toLocaleString()}</TableCell>
+                          <TableCell className="font-mono text-xs truncate max-w-[120px]">{r.strategy_run_id}</TableCell>
+                          <TableCell>{r.status}</TableCell>
+                          <TableCell className="truncate max-w-[120px]">{r.reason ?? '—'}</TableCell>
+                          <TableCell>{r.latency_ms != null ? `${r.latency_ms}ms` : '—'}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
               </div>
             </div>
           </Card>

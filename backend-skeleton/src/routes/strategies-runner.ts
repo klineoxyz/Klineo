@@ -11,6 +11,7 @@ import { validate, uuidParam } from '../middleware/validation.js';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { runStrategyTick, runDueStrategies } from '../lib/strategyRunner.js';
 import { recordTradeResult } from '../lib/strategyRisk.js';
+import { RUNNER_CONFIG } from '../lib/runnerConfig.js';
 
 let supabase: SupabaseClient | null = null;
 
@@ -23,49 +24,107 @@ function getSupabase(): SupabaseClient | null {
   return supabase;
 }
 
-const ENABLE_RUNNER = process.env.ENABLE_STRATEGY_RUNNER === 'true';
+const ENABLE_RUNNER = RUNNER_CONFIG.ENABLE_STRATEGY_RUNNER;
 const ENABLE_ADMIN_SIMULATE = process.env.ENABLE_RUNNER_ADMIN_ENDPOINTS === 'true';
 
 function requireRunnerEnabled(req: AuthenticatedRequest, res: Response, next: NextFunction) {
   if (!ENABLE_RUNNER) {
-    return res.status(503).json({ error: 'Strategy runner is disabled', code: 'RUNNER_DISABLED' });
+    return res.status(503).json({
+      ok: false,
+      requestId: (req as any).requestId || 'runner',
+      error: 'Strategy runner is disabled',
+      code: 'RUNNER_DISABLED',
+    });
   }
   next();
 }
 
 /**
  * Cron auth: if x-cron-secret matches RUNNER_CRON_SECRET, allow without JWT; else require admin JWT.
+ * If x-cron-secret is provided but RUNNER_CRON_SECRET is not configured -> 503 (cron secret mode disabled).
  * Never return secrets in responses.
  */
 function cronOrAdminAuth(req: Request, res: Response, next: NextFunction) {
   const secret = req.headers['x-cron-secret'];
-  const envSecret = process.env.RUNNER_CRON_SECRET;
-  if (envSecret && typeof secret === 'string' && secret === envSecret) {
+  const hasHeader = typeof secret === 'string' && secret.length > 0;
+  const cronSecretConfigured = RUNNER_CONFIG.cronSecretConfigured;
+
+  if (hasHeader && !cronSecretConfigured) {
+    return res.status(503).json({
+      ok: false,
+      requestId: (req as any).requestId || 'runner',
+      error: 'Cron secret mode is not configured',
+      code: 'CRON_SECRET_NOT_CONFIGURED',
+    });
+  }
+
+  if (cronSecretConfigured && typeof secret === 'string' && secret === process.env.RUNNER_CRON_SECRET) {
     return next();
   }
+
   verifySupabaseJWT(req as AuthenticatedRequest, res, (err?: unknown) => {
     if (err) return next(err);
     requireAdmin(req as AuthenticatedRequest, res, next);
   });
 }
 
+function sanitizeMessage(msg: string): string {
+  return msg.replace(/api[_-]?key/gi, '[REDACTED]').replace(/secret/gi, '[REDACTED]').replace(/\s+/g, ' ').trim();
+}
+
 export const strategiesRunnerRouter: Router = Router();
 
 /**
  * POST /api/runner/cron — run all due strategy_runs. Auth: x-cron-secret (RUNNER_CRON_SECRET) OR admin JWT.
+ * Returns: { ok, requestId, startedAt, finishedAt, summary: { processed, ran, skipped, blocked, errored }, notes }.
  */
 strategiesRunnerRouter.post('/cron', cronOrAdminAuth, requireRunnerEnabled, async (req: Request, res: Response) => {
   const client = getSupabase();
-  if (!client) return res.status(503).json({ error: 'Database unavailable' });
   const requestId = (req as any).requestId || 'runner';
-  const now = new Date();
+  const startedAt = new Date();
+
+  if (!client) {
+    return res.status(503).json({
+      ok: false,
+      requestId,
+      startedAt: startedAt.toISOString(),
+      finishedAt: new Date().toISOString(),
+      summary: { processed: 0, ran: 0, skipped: 0, blocked: 0, errored: 0 },
+      notes: ['Database unavailable'],
+    });
+  }
+
   try {
-    const summary = await runDueStrategies(client, now, { requestId });
-    return res.json({ summary, ranAt: now.toISOString(), requestId });
+    const summary = await runDueStrategies(client, startedAt, { requestId });
+    const finishedAt = new Date();
+    const processed = summary.ran + summary.skipped + summary.blocked + summary.errors;
+    return res.json({
+      ok: true,
+      requestId,
+      startedAt: startedAt.toISOString(),
+      finishedAt: finishedAt.toISOString(),
+      summary: {
+        processed,
+        ran: summary.ran,
+        skipped: summary.skipped,
+        blocked: summary.blocked,
+        errored: summary.errors,
+      },
+      notes: [],
+    });
   } catch (err) {
+    const finishedAt = new Date();
     const msg = err instanceof Error ? err.message : 'Unknown error';
-    console.error(`[${requestId}] cron error:`, msg);
-    return res.status(500).json({ error: 'Cron run failed', requestId });
+    const safe = sanitizeMessage(msg);
+    console.error(`[${requestId}] cron error:`, safe);
+    return res.status(500).json({
+      ok: false,
+      requestId,
+      startedAt: startedAt.toISOString(),
+      finishedAt: finishedAt.toISOString(),
+      summary: { processed: 0, ran: 0, skipped: 0, blocked: 0, errored: 0 },
+      notes: [safe],
+    });
   }
 });
 
@@ -111,7 +170,7 @@ strategiesRunnerRouter.get('/status', async (req: AuthenticatedRequest, res: Res
       .eq('status', 'active');
     const { data: lastRun } = await client
       .from('strategy_tick_runs')
-      .select('scheduled_at, status')
+      .select('scheduled_at, started_at, status')
       .order('scheduled_at', { ascending: false })
       .limit(1)
       .maybeSingle();
@@ -119,17 +178,52 @@ strategiesRunnerRouter.get('/status', async (req: AuthenticatedRequest, res: Res
       .from('strategy_risk_state')
       .select('user_id, paused_reason, paused_until')
       .eq('is_paused', true);
+    const lastBlockedReasons = (pausedUsers ?? []).map((u: { paused_reason?: string }) => u.paused_reason).filter(Boolean);
     return res.json({
+      ok: true,
       enabled: ENABLE_RUNNER,
       activeStrategies: activeCount ?? 0,
-      lastRunAt: lastRun?.scheduled_at ?? null,
+      lastRunAt: lastRun?.scheduled_at ?? lastRun?.started_at ?? null,
       lastRunStatus: lastRun?.status ?? null,
       blockedUsersCount: pausedUsers?.length ?? 0,
+      lastBlockedReasons: [...new Set(lastBlockedReasons)].slice(0, 5),
       requestId,
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Unknown error';
-    return res.status(500).json({ error: 'Status failed', requestId });
+    return res.status(500).json({ ok: false, error: sanitizeMessage(msg), requestId });
+  }
+});
+
+/**
+ * GET /api/runner/tick-runs?limit=20 (admin) — last N from strategy_tick_runs. No secrets; minimal user_id.
+ */
+strategiesRunnerRouter.get('/tick-runs', async (req: AuthenticatedRequest, res: Response) => {
+  const client = getSupabase();
+  if (!client) return res.status(503).json({ error: 'Database unavailable' });
+  const requestId = (req as any).requestId || 'runner';
+  const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 20));
+  try {
+    const { data, error } = await client
+      .from('strategy_tick_runs')
+      .select('id, strategy_run_id, user_id, started_at, status, reason, latency_ms')
+      .order('started_at', { ascending: false })
+      .limit(limit);
+
+    if (error) throw error;
+    const runs = (data ?? []).map((r: { id: string; strategy_run_id: string; user_id: string; started_at: string; status: string; reason: string | null; latency_ms: number | null }) => ({
+      id: r.id,
+      strategy_run_id: r.strategy_run_id,
+      user_id: r.user_id,
+      started_at: r.started_at,
+      status: r.status,
+      reason: r.reason ?? null,
+      latency_ms: r.latency_ms ?? null,
+    }));
+    return res.json({ ok: true, tickRuns: runs, requestId });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Unknown error';
+    return res.status(500).json({ ok: false, error: sanitizeMessage(msg), requestId });
   }
 });
 

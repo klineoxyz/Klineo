@@ -4,6 +4,7 @@ import dotenv from 'dotenv';
 import { randomUUID } from 'crypto';
 import { createClient } from '@supabase/supabase-js';
 import { runDueStrategies } from './lib/strategyRunner.js';
+import { RUNNER_CONFIG, logRunnerConfig } from './lib/runnerConfig.js';
 import { healthRouter } from './routes/health.js';
 import { authRouter } from './routes/auth-with-supabase.js';
 import { adminRouter } from './routes/admin.js';
@@ -60,6 +61,8 @@ if (process.env.NODE_ENV !== 'production') {
     console.warn('[Config] Generate a 32-byte key: openssl rand -hex 32');
   }
 }
+
+logRunnerConfig();
 
 // Support both www and non-www domains for CORS
 // If FRONTEND_URL is https://klineo.xyz, also allow https://www.klineo.xyz
@@ -162,18 +165,17 @@ app.use((err: Error, req: express.Request, res: express.Response, next: express.
 
 // Start server (bind 0.0.0.0 for Railway/Docker)
 const HOST = '0.0.0.0';
-const ENABLE_STRATEGY_RUNNER = process.env.ENABLE_STRATEGY_RUNNER === 'true';
-const RUNNER_TICK_INTERVAL_SEC = Math.max(5, Number(process.env.RUNNER_TICK_INTERVAL_SEC) || 10);
 let runnerScheduled = false;
 
 app.listen(Number(PORT), HOST, () => {
   console.log(`🚀 KLINEO Backend running on ${HOST}:${PORT}`);
   console.log(`📍 Health check: http://localhost:${PORT}/health`);
-  if (ENABLE_STRATEGY_RUNNER) {
+  if (RUNNER_CONFIG.ENABLE_STRATEGY_RUNNER) {
     const url = process.env.SUPABASE_URL;
     const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
     if (url && key) {
       const runnerClient = createClient(url, key);
+      const intervalMs = RUNNER_CONFIG.RUNNER_TICK_INTERVAL_SEC * 1000;
       setInterval(async () => {
         if (runnerScheduled) return;
         runnerScheduled = true;
@@ -188,8 +190,8 @@ app.listen(Number(PORT), HOST, () => {
         } finally {
           runnerScheduled = false;
         }
-      }, RUNNER_TICK_INTERVAL_SEC * 1000);
-      console.log(`[runner] scheduler enabled (interval ${RUNNER_TICK_INTERVAL_SEC}s)`);
+      }, intervalMs);
+      console.log(`[runner] scheduler enabled (interval ${RUNNER_CONFIG.RUNNER_TICK_INTERVAL_SEC}s)`);
     } else {
       console.warn('[runner] ENABLE_STRATEGY_RUNNER=true but SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY missing');
     }

@@ -745,17 +745,17 @@ export const smokeTests: SmokeTestDefinition[] = [
       return result;
     }
   },
-  // POST /api/runner/cron with x-cron-secret (no JWT) — only when VITE_ENABLE_RUNNER_CRON_TEST and VITE_RUNNER_CRON_SECRET set
+  // POST /api/runner/cron with x-cron-secret (no JWT) — only when VITE_ENABLE_RUNNER_CRON_TEST=true and cron-secret configured (never display secret)
   {
     name: 'POST /api/runner/cron (cron-secret)',
     category: 'admin',
     run: async () => {
       if (!import.meta.env.VITE_ENABLE_RUNNER_CRON_TEST) {
-        return { name: 'POST /api/runner/cron (cron-secret)', status: 'SKIP', message: 'VITE_ENABLE_RUNNER_CRON_TEST not set' };
+        return { name: 'POST /api/runner/cron (cron-secret)', status: 'SKIP', message: 'cron-secret test disabled; configured: no' };
       }
       const secret = import.meta.env.VITE_RUNNER_CRON_SECRET as string | undefined;
       if (!secret?.trim()) {
-        return { name: 'POST /api/runner/cron (cron-secret)', status: 'SKIP', message: 'VITE_RUNNER_CRON_SECRET not set' };
+        return { name: 'POST /api/runner/cron (cron-secret)', status: 'SKIP', message: 'cron-secret configured: no' };
       }
       const baseURL = getBaseURL();
       const result = await runTest('POST /api/runner/cron (cron-secret)', () =>
@@ -765,7 +765,7 @@ export const smokeTests: SmokeTestDefinition[] = [
         })
       );
       if (result.httpCode === 200 || result.httpCode === 503) {
-        return { ...result, status: 'PASS', message: result.httpCode === 503 ? 'Runner disabled (503)' : 'Success (cron-secret)' };
+        return { ...result, status: 'PASS', message: result.httpCode === 503 ? 'Runner disabled (503)' : 'Success (cron-secret); configured: yes' };
       }
       if (result.httpCode === 401) return { ...result, status: 'FAIL', message: 'Cron-secret should allow without JWT' };
       return result;

@@ -36,6 +36,7 @@ import {
   Play,
   Square,
   AlertTriangle,
+  RefreshCw,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Alert, AlertDescription } from "@/app/components/ui/alert";
@@ -230,6 +231,15 @@ export function TradingTerminalNew({ onNavigate }: TradingTerminalProps) {
   const [strategyLoading, setStrategyLoading] = useState(false);
   const [strategyStatusUpdating, setStrategyStatusUpdating] = useState(false);
   const [runnerCronLoading, setRunnerCronLoading] = useState(false);
+  const [runnerStatus, setRunnerStatus] = useState<{
+    activeStrategies: number;
+    lastRunAt: string | null;
+    lastRunStatus: string | null;
+    blockedUsersCount: number;
+    lastBlockedReasons?: string[];
+  } | null>(null);
+  const [runnerStatusLoading, setRunnerStatusLoading] = useState(false);
+  const [tickRuns, setTickRuns] = useState<Array<{ id: string; strategy_run_id: string; started_at: string; status: string; reason: string | null; latency_ms: number | null }>>([]);
   const [killSwitchUpdating, setKillSwitchUpdating] = useState<Record<string, boolean>>({});
 
   // Get current pair data (fallback for order book, trades, 24h stats)
@@ -392,6 +402,42 @@ export function TradingTerminalNew({ onNavigate }: TradingTerminalProps) {
       setStrategyStatusUpdating(false);
     }
   };
+
+  const loadRunnerStatus = useCallback(async () => {
+    if (!isAdmin) return;
+    setRunnerStatusLoading(true);
+    try {
+      const res = await api.get<{ ok?: boolean; activeStrategies?: number; lastRunAt?: string | null; lastRunStatus?: string | null; blockedUsersCount?: number; lastBlockedReasons?: string[] }>("/api/runner/status");
+      setRunnerStatus({
+        activeStrategies: res?.activeStrategies ?? 0,
+        lastRunAt: res?.lastRunAt ?? null,
+        lastRunStatus: res?.lastRunStatus ?? null,
+        blockedUsersCount: res?.blockedUsersCount ?? 0,
+        lastBlockedReasons: res?.lastBlockedReasons,
+      });
+    } catch {
+      setRunnerStatus(null);
+    } finally {
+      setRunnerStatusLoading(false);
+    }
+  }, [isAdmin]);
+
+  const loadTickRuns = useCallback(async () => {
+    if (!isAdmin) return;
+    try {
+      const res = await api.get<{ ok?: boolean; tickRuns?: Array<{ id: string; strategy_run_id: string; started_at: string; status: string; reason: string | null; latency_ms: number | null }> }>("/api/runner/tick-runs?limit=20");
+      setTickRuns(res?.tickRuns ?? []);
+    } catch {
+      setTickRuns([]);
+    }
+  }, [isAdmin]);
+
+  useEffect(() => {
+    if (isAdmin) {
+      loadRunnerStatus();
+      loadTickRuns();
+    }
+  }, [isAdmin, loadRunnerStatus, loadTickRuns]);
 
   const handleKillSwitch = async (connectionId: string, enabled: boolean) => {
     setKillSwitchUpdating((prev) => ({ ...prev, [connectionId]: true }));
@@ -993,30 +1039,84 @@ export function TradingTerminalNew({ onNavigate }: TradingTerminalProps) {
                     {!activeStrategy && strategyList.length === 0 && !strategyLoading && (
                       <div className="text-[10px] text-muted-foreground">No strategies. Run a backtest and click &quot;Go Live&quot; in Strategy Backtest.</div>
                     )}
-                    {/* Admin: Run Cron Now — trigger runner cron for testing */}
+                    {/* Admin: Runner — Run Cron Now, status, recent tick runs */}
                     {isAdmin && (
-                      <div className="pt-2 border-t border-border">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-7 text-[10px]"
-                          disabled={runnerCronLoading}
-                          onClick={async () => {
-                            setRunnerCronLoading(true);
-                            try {
-                              await api.post("/api/runner/cron");
-                              toast.success("Cron run completed");
-                            } catch (e: unknown) {
-                              const msg = e instanceof Error ? e.message : "Request failed";
-                              toast.error(msg);
-                            } finally {
-                              setRunnerCronLoading(false);
-                            }
-                          }}
-                        >
-                          {runnerCronLoading ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
-                          Run Cron Now
-                        </Button>
+                      <div className="pt-2 border-t border-border space-y-2">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 text-[10px]"
+                            disabled={runnerCronLoading}
+                            onClick={async () => {
+                              setRunnerCronLoading(true);
+                              try {
+                                const res = await api.post<{
+                                  ok?: boolean;
+                                  requestId?: string;
+                                  summary?: { processed: number; ran: number; skipped: number; blocked: number; errored: number };
+                                  notes?: string[];
+                                }>("/api/runner/cron");
+                                const s = res?.summary;
+                                const id = res?.requestId ?? "";
+                                if (res?.ok && s) {
+                                  toast.success(`Cron: ran=${s.ran} skipped=${s.skipped} blocked=${s.blocked} errored=${s.errored}`, { description: id ? `Request: ${id}` : undefined });
+                                } else if (res?.notes?.length) {
+                                  toast.error(res.notes[0] ?? "Cron failed", { description: id ? `Request: ${id}` : undefined });
+                                } else {
+                                  toast.success("Cron run completed", { description: id ? `Request: ${id}` : undefined });
+                                }
+                                loadRunnerStatus();
+                                loadTickRuns();
+                              } catch (e: unknown) {
+                                const msg = e instanceof Error ? e.message : "Request failed";
+                                toast.error(msg);
+                              } finally {
+                                setRunnerCronLoading(false);
+                              }
+                            }}
+                          >
+                            {runnerCronLoading ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
+                            Run Cron Now
+                          </Button>
+                          <Button size="sm" variant="ghost" className="h-7 text-[10px]" onClick={() => { loadRunnerStatus(); loadTickRuns(); }} disabled={runnerStatusLoading}>
+                            {runnerStatusLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
+                          </Button>
+                        </div>
+                        {runnerStatus !== null && (
+                          <div className="rounded border border-border bg-card/30 p-2 text-[10px] space-y-1">
+                            <div className="font-semibold">Runner status</div>
+                            <div>Active: {runnerStatus.activeStrategies} · Last run: {runnerStatus.lastRunAt ? new Date(runnerStatus.lastRunAt).toLocaleString() : "—"} ({runnerStatus.lastRunStatus ?? "—"})</div>
+                            {runnerStatus.blockedUsersCount > 0 && <div className="text-amber-600">Blocked users: {runnerStatus.blockedUsersCount} {runnerStatus.lastBlockedReasons?.length ? `(${runnerStatus.lastBlockedReasons.slice(0, 2).join(", ")})` : ""}</div>}
+                          </div>
+                        )}
+                        {tickRuns.length > 0 && (
+                          <div className="rounded border border-border bg-card/30 overflow-hidden">
+                            <div className="px-2 py-1 border-b border-border text-[10px] font-semibold">Recent tick runs (last 20)</div>
+                            <div className="max-h-[120px] overflow-y-auto">
+                              <Table>
+                                <TableHeader>
+                                  <TableRow className="border-0">
+                                    <TableHead className="h-6 text-[10px]">Time</TableHead>
+                                    <TableHead className="h-6 text-[10px]">Status</TableHead>
+                                    <TableHead className="h-6 text-[10px]">Reason</TableHead>
+                                    <TableHead className="h-6 text-[10px]">Latency</TableHead>
+                                  </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                  {tickRuns.slice(0, 20).map((r) => (
+                                    <TableRow key={r.id} className="border-0">
+                                      <TableCell className="py-0.5 text-[10px] font-mono">{new Date(r.started_at).toLocaleTimeString()}</TableCell>
+                                      <TableCell className="py-0.5 text-[10px]">{r.status}</TableCell>
+                                      <TableCell className="py-0.5 text-[10px] truncate max-w-[80px]">{r.reason ?? "—"}</TableCell>
+                                      <TableCell className="py-0.5 text-[10px]">{r.latency_ms != null ? `${r.latency_ms}ms` : "—"}</TableCell>
+                                    </TableRow>
+                                  ))}
+                                </TableBody>
+                              </Table>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
