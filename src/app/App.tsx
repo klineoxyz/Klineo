@@ -151,7 +151,7 @@ export default function App() {
       case "subscription":
         return <Subscription onNavigate={handleNavigate} />;
       case "payments":
-        return <Payments onNavigate={handleNavigate} />;
+        return <Payments onNavigate={handleNavigate} viewData={viewData} />;
       case "settings":
         return <Settings onNavigate={handleNavigate} />;
       case "support":

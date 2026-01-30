@@ -73,17 +73,43 @@ export function Subscription({ onNavigate }: SubscriptionProps) {
   const handleJoiningFeeCheckout = async () => {
     setJoiningFeeLoading(true);
     try {
-      await api.post("/api/billing/joining-fee/checkout", { method: "manual" });
-      toast.success("Checkout started", {
-        description: "Complete your joining fee payment to enable API connection.",
+      const data = await api.post<{
+        intent: { id: string; amount_usdt: number; status: string };
+        treasury_address: string;
+        amount_usdt: number;
+        safe_link: string;
+      }>("/api/payments/intents", { kind: "joining_fee" });
+      const newIntent = {
+        id: data.intent.id,
+        amount_usdt: data.amount_usdt,
+        treasury_address: data.treasury_address,
+        safe_link: data.safe_link,
+        status: data.intent.status,
+      };
+      onNavigate("payments", { newIntent });
+      toast.success("Go to Payments", {
+        description: "Send USDT (BEP20) to the Safe address, then submit your transaction hash.",
       });
       await loadEntitlement();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Checkout failed";
-      toast.error("Could not start checkout", { description: msg });
+      if (String(msg).includes("404") || String(msg).includes("503") || String(msg).includes("Not found")) {
+        onNavigate("payments");
+        toast.info("Manual payments", {
+          description: "Go to Payments, add your BSC wallet in Settings, then create a joining fee intent.",
+        });
+      } else {
+        toast.error("Could not create payment", { description: msg });
+      }
     } finally {
       setJoiningFeeLoading(false);
     }
+  };
+
+  const packageCodeForId: Record<string, string> = {
+    entry_100: "ENTRY_100",
+    pro_200: "LEVEL_200",
+    elite_500: "LEVEL_500",
   };
 
   const handlePackageCheckout = async (packageId: string) => {
@@ -95,16 +121,34 @@ export function Subscription({ onNavigate }: SubscriptionProps) {
     }
     setPackageLoading(packageId);
     try {
-      await api.post("/api/billing/packages/checkout", {
-        packageId,
-        method: "manual",
-      });
-      toast.success("Checkout started", {
-        description: "Complete payment to activate your trading allowance.",
+      const packageCode = packageCodeForId[packageId] ?? "ENTRY_100";
+      const data = await api.post<{
+        intent: { id: string; amount_usdt: number; status: string };
+        treasury_address: string;
+        amount_usdt: number;
+        safe_link: string;
+      }>("/api/payments/intents", { kind: "package", package_code: packageCode });
+      const newIntent = {
+        id: data.intent.id,
+        amount_usdt: data.amount_usdt,
+        treasury_address: data.treasury_address,
+        safe_link: data.safe_link,
+        status: data.intent.status,
+      };
+      onNavigate("payments", { newIntent });
+      toast.success("Go to Payments", {
+        description: "Send USDT (BEP20) to the Safe address, then submit your transaction hash.",
       });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Checkout failed";
-      toast.error("Could not start checkout", { description: msg });
+      if (String(msg).includes("404") || String(msg).includes("503") || String(msg).includes("Not found")) {
+        onNavigate("payments");
+        toast.info("Manual payments", {
+          description: "Go to Payments, then create a package intent and follow the instructions.",
+        });
+      } else {
+        toast.error("Could not create payment", { description: msg });
+      }
     } finally {
       setPackageLoading(null);
     }

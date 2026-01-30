@@ -31,9 +31,11 @@ interface PaymentIntent {
 
 interface PaymentsProps {
   onNavigate: (view: string) => void;
+  /** When navigating from Subscription after creating an intent, contains { newIntent } so we show deposit instructions. */
+  viewData?: { newIntent?: { id: string; amount_usdt: number; treasury_address: string; safe_link: string; status: string } };
 }
 
-export function Payments({ onNavigate }: PaymentsProps) {
+export function Payments({ onNavigate, viewData }: PaymentsProps) {
   const [manualEnabled, setManualEnabled] = useState<boolean | null>(null);
   const [profile, setProfile] = useState<{ paymentWalletBsc?: string } | null>(null);
   const [intents, setIntents] = useState<PaymentIntent[]>([]);
@@ -52,6 +54,10 @@ export function Payments({ onNavigate }: PaymentsProps) {
   } | null>(null);
   const [txHash, setTxHash] = useState("");
   const [fromWallet, setFromWallet] = useState("");
+
+  useEffect(() => {
+    if (viewData?.newIntent) setCurrentIntent(viewData.newIntent);
+  }, [viewData?.newIntent]);
 
   useEffect(() => {
     const check = async () => {
