@@ -1250,10 +1250,10 @@ function manualPaymentsEnabled(): boolean {
 /**
  * GET /api/admin/payments/intents
  * List payment intents (manual Safe payments). Query: status=...
- * Returns 503 with code ENABLE_MANUAL_PAYMENTS when feature is disabled (set ENABLE_MANUAL_PAYMENTS=true on backend).
+ * When feature is disabled (ENABLE_MANUAL_PAYMENTS not set), returns 200 with intents: [] and featureDisabled: true so Admin UI can show a message without 503.
  */
 adminRouter.get('/payments/intents', async (req: AuthenticatedRequest, res) => {
-  if (!manualPaymentsEnabled()) return res.status(503).json({ error: 'Payment intents feature is disabled', code: 'ENABLE_MANUAL_PAYMENTS' });
+  if (!manualPaymentsEnabled()) return res.status(200).json({ intents: [], featureDisabled: true });
   const client = getSupabase();
   if (!client) return res.status(503).json({ error: 'Database unavailable' });
 

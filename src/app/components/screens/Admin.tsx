@@ -286,8 +286,9 @@ export function Admin() {
     try {
       const params = new URLSearchParams();
       if (paymentIntentsStatus && paymentIntentsStatus !== "all") params.set("status", paymentIntentsStatus);
-      const data = await api.get(`/api/admin/payments/intents?${params.toString()}`);
-      setPaymentIntents((data as any).intents || []);
+      const data = await api.get(`/api/admin/payments/intents?${params.toString()}`) as { intents?: any[]; featureDisabled?: boolean };
+      setPaymentIntents(data?.intents ?? []);
+      if (data?.featureDisabled === true) setPaymentIntentsFeatureDisabled(true);
     } catch (e: any) {
       const msg = String(e?.message ?? "");
       const isDisabled =
@@ -300,7 +301,6 @@ export function Admin() {
       if (isDisabled) {
         setPaymentIntents([]);
         setPaymentIntentsFeatureDisabled(true);
-        // Don't toast — we show the inline message instead
       } else {
         toast.error("Failed to load payment intents");
       }
