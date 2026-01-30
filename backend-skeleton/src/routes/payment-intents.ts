@@ -1,8 +1,8 @@
 /**
  * Manual USDT (BEP20) payments to Safe. Ticketing + admin approval.
- * Feature flag: ENABLE_MANUAL_PAYMENTS=true. If false, all routes return 404.
+ * Feature flag: ENABLE_MANUAL_PAYMENTS=true. If false, GET returns 200 + featureDisabled; POST/submit return 503.
  */
-import { Router, Request, Response } from 'express';
+import { Router, Response } from 'express';
 import { body, param } from 'express-validator';
 import { verifySupabaseJWT, AuthenticatedRequest } from '../middleware/auth.js';
 import { validate } from '../middleware/validation.js';
@@ -34,16 +34,7 @@ function getSupabase(): SupabaseClient | null {
   return supabase;
 }
 
-function notFound(_req: Request, res: Response) {
-  res.status(404).json({ error: 'Not found' });
-}
-
 export const paymentIntentsRouter: Router = Router();
-
-paymentIntentsRouter.use((req, res, next) => {
-  if (!manualPaymentsEnabled()) return notFound(req, res);
-  next();
-});
 
 paymentIntentsRouter.use(verifySupabaseJWT);
 
@@ -58,6 +49,9 @@ paymentIntentsRouter.post(
     body('package_code').optional().isString().isLength({ max: 64 }),
   ]),
   async (req: AuthenticatedRequest, res: Response) => {
+    if (!manualPaymentsEnabled()) {
+      return res.status(503).json({ error: 'Manual payments are disabled.', featureDisabled: true });
+    }
     const client = getSupabase();
     if (!client) return res.status(503).json({ error: 'Database unavailable' });
 
@@ -122,9 +116,12 @@ paymentIntentsRouter.post(
 
 /**
  * GET /api/payments/intents
- * List current user's intents.
+ * List current user's intents. When ENABLE_MANUAL_PAYMENTS is false, returns 200 with intents: [] and featureDisabled: true.
  */
 paymentIntentsRouter.get('/', async (req: AuthenticatedRequest, res: Response) => {
+  if (!manualPaymentsEnabled()) {
+    return res.status(200).json({ intents: [], featureDisabled: true });
+  }
   const client = getSupabase();
   if (!client) return res.status(503).json({ error: 'Database unavailable' });
 
@@ -151,6 +148,9 @@ paymentIntentsRouter.post(
     body('from_wallet').optional().trim().isString(),
   ]),
   async (req: AuthenticatedRequest, res: Response) => {
+    if (!manualPaymentsEnabled()) {
+      return res.status(503).json({ error: 'Manual payments are disabled.', featureDisabled: true });
+    }
     const client = getSupabase();
     if (!client) return res.status(503).json({ error: 'Database unavailable' });
 

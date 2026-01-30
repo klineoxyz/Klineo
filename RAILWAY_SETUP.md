@@ -80,6 +80,7 @@ Click **"+ New Variable"** (or **"Add variable"**) for each:
 | `SUPABASE_URL` | `https://oyfeadnxwuazidfbjjfo.supabase.co` | Your Supabase Project URL |
 | `SUPABASE_SERVICE_ROLE_KEY` | *(paste service_role key)* | From Supabase → API → service_role |
 | `FRONTEND_URL` | `https://your-app.vercel.app` | Your Vercel frontend URL (for CORS) |
+| `ENABLE_MANUAL_PAYMENTS` | `true` | Enables joining fee + package payment intents (Payments screen). See [docs/ENABLE_MANUAL_PAYMENTS.md](docs/ENABLE_MANUAL_PAYMENTS.md). |
 | `NODE_ENV` | `production` | Optional |
 
 **FRONTEND_URL examples:**

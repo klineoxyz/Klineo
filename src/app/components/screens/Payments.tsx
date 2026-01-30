@@ -64,15 +64,18 @@ export function Payments({ onNavigate, viewData }: PaymentsProps) {
       try {
         const [profileRes, intentsRes] = await Promise.all([
           api.get<{ paymentWalletBsc?: string }>("/api/me/profile").catch(() => null),
-          api.get<{ intents: PaymentIntent[] }>("/api/payments/intents").catch((e) => {
-            if (e?.message?.includes("404") || (e as Error)?.message === "Not found") return null;
+          api.get<{ intents: PaymentIntent[]; featureDisabled?: boolean }>("/api/payments/intents").catch((e) => {
+            if (e?.message?.includes("404") || e?.message?.includes("503") || (e as Error)?.message === "Not found") return null;
             throw e;
           }),
         ]);
         setProfile(profileRes || null);
-        if (intentsRes && "intents" in intentsRes) {
+        if (intentsRes && (intentsRes as { featureDisabled?: boolean }).featureDisabled === true) {
+          setManualEnabled(false);
+          setIntents([]);
+        } else if (intentsRes && "intents" in intentsRes) {
           setManualEnabled(true);
-          setIntents(intentsRes.intents || []);
+          setIntents((intentsRes as { intents: PaymentIntent[] }).intents || []);
         } else {
           setManualEnabled(false);
         }
@@ -88,8 +91,13 @@ export function Payments({ onNavigate, viewData }: PaymentsProps) {
   const loadIntents = async () => {
     setIntentsLoading(true);
     try {
-      const data = await api.get<{ intents: PaymentIntent[] }>("/api/payments/intents");
-      setIntents(data.intents || []);
+      const data = await api.get<{ intents: PaymentIntent[]; featureDisabled?: boolean }>("/api/payments/intents");
+      if (data.featureDisabled) {
+        setManualEnabled(false);
+        setIntents([]);
+      } else {
+        setIntents(data.intents || []);
+      }
     } catch {
       toast.error("Failed to load payment intents");
     } finally {
@@ -178,8 +186,16 @@ export function Payments({ onNavigate, viewData }: PaymentsProps) {
     return (
       <div className="p-6 space-y-6">
         <h1 className="text-2xl font-semibold">Payments</h1>
-        <Card className="p-6">
-          <p className="text-muted-foreground">Manual payments are not enabled. Payment history will appear here when available.</p>
+        <Card className="p-6 border-amber-500/30 bg-amber-500/5">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="size-5 text-amber-600 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-medium">Manual payments are not enabled</p>
+              <p className="text-sm text-muted-foreground mt-1">
+                Payment intents and deposit instructions are turned off on the server. When enabled, you can pay the joining fee and packages here via USDT (BEP20) to the Treasury Safe.
+              </p>
+            </div>
+          </div>
         </Card>
       </div>
     );
