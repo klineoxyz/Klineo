@@ -745,6 +745,32 @@ export const smokeTests: SmokeTestDefinition[] = [
       return result;
     }
   },
+  // POST /api/runner/cron with x-cron-secret (no JWT) — only when VITE_ENABLE_RUNNER_CRON_TEST and VITE_RUNNER_CRON_SECRET set
+  {
+    name: 'POST /api/runner/cron (cron-secret)',
+    category: 'admin',
+    run: async () => {
+      if (!import.meta.env.VITE_ENABLE_RUNNER_CRON_TEST) {
+        return { name: 'POST /api/runner/cron (cron-secret)', status: 'SKIP', message: 'VITE_ENABLE_RUNNER_CRON_TEST not set' };
+      }
+      const secret = import.meta.env.VITE_RUNNER_CRON_SECRET as string | undefined;
+      if (!secret?.trim()) {
+        return { name: 'POST /api/runner/cron (cron-secret)', status: 'SKIP', message: 'VITE_RUNNER_CRON_SECRET not set' };
+      }
+      const baseURL = getBaseURL();
+      const result = await runTest('POST /api/runner/cron (cron-secret)', () =>
+        fetch(`${baseURL}/api/runner/cron`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-cron-secret': secret },
+        })
+      );
+      if (result.httpCode === 200 || result.httpCode === 503) {
+        return { ...result, status: 'PASS', message: result.httpCode === 503 ? 'Runner disabled (503)' : 'Success (cron-secret)' };
+      }
+      if (result.httpCode === 401) return { ...result, status: 'FAIL', message: 'Cron-secret should allow without JWT' };
+      return result;
+    }
+  },
   {
     name: 'GET /api/runner/status',
     category: 'admin',

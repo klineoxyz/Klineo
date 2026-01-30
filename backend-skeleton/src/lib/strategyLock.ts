@@ -8,12 +8,12 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 const LOCK_OWNER = process.env.RUNNER_LOCK_OWNER || 'klineo-runner';
 
 /**
- * Acquire lock for strategy if not currently locked or lock expired.
+ * Acquire lock for strategy_run if not currently locked or lock expired.
  * Returns true if acquired, false otherwise.
  */
 export async function acquireStrategyLock(
   client: SupabaseClient,
-  strategyId: string,
+  strategyRunId: string,
   ttlMs: number,
   owner: string = LOCK_OWNER
 ): Promise<boolean> {
@@ -22,8 +22,8 @@ export async function acquireStrategyLock(
 
   const { data: existing } = await client
     .from('strategy_locks')
-    .select('strategy_id, locked_until')
-    .eq('strategy_id', strategyId)
+    .select('strategy_run_id, locked_until')
+    .eq('strategy_run_id', strategyRunId)
     .maybeSingle();
 
   if (existing && new Date(existing.locked_until) > now) {
@@ -32,12 +32,12 @@ export async function acquireStrategyLock(
 
   const { error } = await client.from('strategy_locks').upsert(
     {
-      strategy_id: strategyId,
+      strategy_run_id: strategyRunId,
       locked_until: lockedUntil.toISOString(),
       lock_owner: owner,
       updated_at: now.toISOString(),
     },
-    { onConflict: 'strategy_id' }
+    { onConflict: 'strategy_run_id' }
   );
 
   if (error) return false;
@@ -49,16 +49,16 @@ export async function acquireStrategyLock(
  */
 export async function releaseStrategyLock(
   client: SupabaseClient,
-  strategyId: string,
+  strategyRunId: string,
   owner: string = LOCK_OWNER
 ): Promise<void> {
   const { data } = await client
     .from('strategy_locks')
     .select('lock_owner')
-    .eq('strategy_id', strategyId)
+    .eq('strategy_run_id', strategyRunId)
     .maybeSingle();
 
   if (data && data.lock_owner === owner) {
-    await client.from('strategy_locks').delete().eq('strategy_id', strategyId);
+    await client.from('strategy_locks').delete().eq('strategy_run_id', strategyRunId);
   }
 }

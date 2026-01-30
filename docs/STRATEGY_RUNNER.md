@@ -1,152 +1,144 @@
 # Strategy Runner
 
-Production-grade strategy runner for KLINEO: Railway cron-style scheduler, timeframe alignment, risk gates (pause-on-loss, daily max loss, max trades/day, cooldowns), and distributed locking. No real orders yet; scaffolding only.
+Unified strategy runner for KLINEO: **strategy_runs** (Futures Go Live config) + **strategy_events** (immutable log) are the source of truth. Runner infrastructure (locks, risk state, tick audit) executes **strategy_runs** on schedule: candles → RSI → signal → real orders via Binance/Bybit Futures when enabled.
 
 ## How the scheduler works
 
 1. **In-process (Railway)**  
-   When `ENABLE_STRATEGY_RUNNER=true`, the backend starts a `setInterval` every `RUNNER_TICK_INTERVAL_SEC` seconds (default 10). Each tick calls `runDueStrategies(now)`. Only one tick runs at a time (mutex).
+   When `ENABLE_STRATEGY_RUNNER=true`, the backend starts a `setInterval` every `RUNNER_TICK_INTERVAL_SEC` seconds (default 10). Each tick calls `runDueStrategies(now)`. Only one tick runs at a time (single-flight guard).
 
-2. **External cron fallback**  
-   You can call `POST /api/runner/cron` (admin only) from an external cron (e.g. Railway cron, Vercel cron). Same behavior as one in-process tick.
+2. **External cron (recommended for production)**  
+   Call `POST /api/runner/cron` with either:
+   - **x-cron-secret** header (value = `RUNNER_CRON_SECRET`) — no JWT required; use for Railway Cron or external cron.
+   - **Authorization: Bearer <admin JWT>** — for manual/testing.
 
 3. **Due check**  
-   For each active strategy, the runner:
+   For each **active** row in `strategy_runs`, the runner:
    - Aligns to **timeframe boundary** (1m / 5m / 15m / 1h) with a ±5s grace window.
    - Skips if **last_run_at** is within the interval (cooldown).
-   - **Locks** the strategy (2 min TTL) to avoid double execution.
-   - **Risk gate**: if user is paused (daily loss, consecutive losses, max trades, cooldown), the run is recorded as `blocked` and no order is placed.
-   - **MVP**: records run with `signal='hold'`, `status='ok'`; no real orders.
+   - **Locks** the strategy_run (2 min TTL) via `strategy_locks`.
+   - **Risk gate**: if user is paused (daily loss, consecutive losses, max trades, cooldown) in `strategy_risk_state`, the run is recorded as `blocked`.
+   - Loads connection, decrypts credentials, runs **real engine** (candles → RSI → signal → place order via Binance/Bybit Futures adapter).
+   - Logs to **strategy_tick_runs** (one row per tick) and **strategy_events** (signal/order_submit/order_fill/risk_block/error).
+   - Kill switch on connection blocks orders before adapter calls. After 3 consecutive adapter errors, strategy is auto-paused.
 
 ## Env vars (Railway / backend)
 
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `ENABLE_STRATEGY_RUNNER` | `false` | Set `true` to enable in-process scheduler and runner endpoints. |
+| `RUNNER_CRON_SECRET` | — | Optional. If set, `POST /api/runner/cron` accepts `x-cron-secret` header (no JWT). Use for Railway Cron. Never log or return. |
 | `RUNNER_TICK_INTERVAL_SEC` | `10` | Interval (seconds) between scheduler ticks. |
 | `DAILY_MAX_LOSS_USDT` | `50` | Daily realized PnL cap (pause user when ≤ -this). |
 | `MAX_TRADES_PER_DAY` | `20` | Max trades per user per day (block when reached). |
-| `MAX_CONSECUTIVE_LOSSES` | `3` | Consecutive losses before pause (e.g. 60 min). |
-| `COOLDOWN_AFTER_TRADE_SEC` | `30` | Min seconds between trades (micro-cooldown). |
-| `PAUSE_DURATION_MIN` | `1440` | Pause duration in minutes (e.g. 1440 = 24h). |
-| `ENABLE_RUNNER_ADMIN_ENDPOINTS` | `false` | Set `true` to allow `POST /api/runner/simulate-trade-result` (testing risk gates). |
-
-## Risk gates
-
-1. **Pause-on-loss**  
-   - If `realized_pnl_usdt` for the day ≤ `-DAILY_MAX_LOSS_USDT` → user paused until end of day (or `PAUSE_DURATION_MIN`).  
-   - If `consecutive_losses` ≥ `MAX_CONSECUTIVE_LOSSES` → user paused for `PAUSE_DURATION_MIN`.
-
-2. **Daily max trades**  
-   If `trades_count` ≥ `MAX_TRADES_PER_DAY` → further ticks that would place orders are **blocked** (run status `blocked`).
-
-3. **Cooldown**  
-   After a trade, `last_trade_at` is set; next tick is blocked until `now - last_trade_at >= COOLDOWN_AFTER_TRADE_SEC`.
-
-4. **Strategy-level**  
-   If user is paused, strategy tick is **blocked** and run recorded with reason. Strategies are not deleted; admin/user can resume later.
-
-## Runner endpoints (admin only)
-
-All require `Authorization: Bearer <JWT>` and **admin role**.
-
-| Method | Path | Description |
-|--------|------|-------------|
-| `POST` | `/api/runner/execute-tick` | Run one strategy tick. Body: `{ "strategyId": "uuid" }`. |
-| `POST` | `/api/runner/cron` | Run all due strategies (same as one scheduler tick). Returns `{ summary: { ran, skipped, blocked, errors }, ranAt }`. |
-| `GET`  | `/api/runner/status` | Counts: active strategies, last run time, blocked users. |
-| `POST` | `/api/runner/simulate-trade-result` | **(Only if `ENABLE_RUNNER_ADMIN_ENDPOINTS=true`)** Body: `{ "userId", "pnlDeltaUsdt" }`. Updates risk state (for testing). |
-
-## Runner strategies CRUD (authenticated)
-
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET`  | `/api/runner/strategies` | List current user's strategies (runner table). |
-| `GET`  | `/api/runner/strategies/:id` | Get one strategy. |
-| `POST` | `/api/runner/strategies` | Create strategy. Default timeframe `5m`; `1m` allowed only for admin. |
-| `PUT`  | `/api/runner/strategies/:id` | Update strategy (timeframe validation: 1m admin-only). |
-
-## Timeframe policy
-
-- **Default** for new strategies: `5m`.  
-- **Allowed**: `1m`, `5m`, `15m`, `1h`.  
-- **1m** is feature-gated: only admin can create/update a strategy with `timeframe: '1m'` (to avoid rate limits).  
-- **Futures** default min 1m; default recommended `5m`.
-
-## Database (runner)
-
-- **strategies** — Config (user_id, name, exchange, market_type, symbol, timeframe, status, side_mode, leverage, order_size_pct, take_profit_pct, stop_loss_pct, last_run_at).  
-- **strategy_tick_runs** — Append-only audit per tick (strategy_id, user_id, scheduled_at, started_at, finished_at, status, reason, signal, latency_ms, meta).  
-- **strategy_risk_state** — Per user per day (realized_pnl_usdt, trades_count, consecutive_losses, is_paused, paused_reason, paused_until, last_trade_at).  
-- **strategy_locks** — Distributed lock per strategy (locked_until, lock_owner). Backend uses service role to acquire/release.
-
-## How to test locally
-
-1. Set backend env (e.g. `backend-skeleton/.env`):
-   - `ENABLE_STRATEGY_RUNNER=true`
-   - `ENABLE_RUNNER_ADMIN_ENDPOINTS=true` (optional, for simulate)
-   - Supabase URL + service role key
-
-2. Run migrations (includes `supabase/migrations/20260129160000_strategy_runner.sql` — runner tables: strategies, strategy_tick_runs, strategy_risk_state, strategy_locks).
-
-3. **As admin**, with Bearer token:
-   - `GET /api/runner/status` — expect 200, `enabled: true`, `activeStrategies`, etc.
-   - `POST /api/runner/cron` — expect 200, `summary: { ran, skipped, blocked, errors }`.
-   - (Optional) `POST /api/runner/simulate-trade-result` with `{ "userId": "<your-user-uuid>", "pnlDeltaUsdt": -25 }` to trigger pause; then `GET /api/runner/status` to see blocked user.
-
-4. **As non-admin**: `POST /api/runner/cron` and `GET /api/runner/status` should return **403**.
-
-## How to verify in production (Railway)
-
-1. Set env on Railway:
-   - `ENABLE_STRATEGY_RUNNER=true`
-   - `RUNNER_TICK_INTERVAL_SEC=10` (or desired interval)
-   - `DAILY_MAX_LOSS_USDT`, `MAX_TRADES_PER_DAY`, etc. as needed
-   - `ENABLE_RUNNER_ADMIN_ENDPOINTS=false` (recommended in prod)
-
-2. Deploy; check logs for `[runner] scheduler enabled (interval 10s)`.
-
-3. Optionally call `POST /api/runner/cron` from an external cron (same auth: admin JWT). In-process scheduler and external cron can coexist; locking prevents double execution per strategy.
-
-## Smoke test steps
-
-- **Admin**: Run smoke tests; expect `POST /api/runner/cron` and `GET /api/runner/status` to **PASS** (200).  
-- **Non-admin**: Expect **PASS** with “Correctly blocked (non-admin)” (403).  
-- If `VITE_ENABLE_RUNNER_SIM_TESTS=true`, smoke test can include `POST /api/runner/simulate-trade-result` with `pnlDeltaUsdt: -25` (admin only).
-
-## Security
-
-- Runner endpoints (execute-tick, cron, status, simulate) require **admin** (JWT + role).  
-- No secrets or tokens in responses.  
-- Lock table RLS: admin read; write/delete via service role only.  
-- Idempotent: safe under retries; lock prevents overlapping runs per strategy.
-
----
-
-## Quick reference: env vars (Railway / Vercel backend)
-
-| Env var | Value | Notes |
-|---------|--------|--------|
-| `ENABLE_STRATEGY_RUNNER` | `true` | Enables in-process scheduler and runner endpoints. |
-| `RUNNER_TICK_INTERVAL_SEC` | `10` | Seconds between scheduler ticks. |
-| `DAILY_MAX_LOSS_USDT` | `50` | Daily loss cap (pause user). |
-| `MAX_TRADES_PER_DAY` | `20` | Max trades per user per day. |
 | `MAX_CONSECUTIVE_LOSSES` | `3` | Consecutive losses before pause. |
 | `COOLDOWN_AFTER_TRADE_SEC` | `30` | Min seconds between trades. |
 | `PAUSE_DURATION_MIN` | `1440` | Pause duration in minutes (e.g. 24h). |
-| `ENABLE_RUNNER_ADMIN_ENDPOINTS` | `false` | Set `true` only for testing simulate-trade-result. |
+| `ENABLE_RUNNER_ADMIN_ENDPOINTS` | `false` | Set `true` to allow `POST /api/runner/simulate-trade-result` (testing risk gates). |
 
-Ensure `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are set so the runner can read/write strategies and risk state.
+## Runner endpoints
 
-## Verify quickly (smoke test steps)
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| `POST` | `/api/runner/cron` | **x-cron-secret** (if `RUNNER_CRON_SECRET` set) **or** admin JWT | Run all due strategy_runs. Returns `{ summary, ranAt }`. |
+| `POST` | `/api/runner/execute-tick` | Admin JWT | Run one tick. Body: `{ "strategyRunId": "uuid" }`. |
+| `GET`  | `/api/runner/status` | Admin JWT | Counts: active strategy_runs, last tick run, blocked users. |
+| `POST` | `/api/runner/simulate-trade-result` | Admin JWT | **(Only if `ENABLE_RUNNER_ADMIN_ENDPOINTS=true`)** Body: `{ "userId", "pnlDeltaUsdt" }`. |
 
-1. **Apply migration**: Run `supabase db push` or apply `20260129160000_strategy_runner.sql`.
-2. **Backend env**: Set `ENABLE_STRATEGY_RUNNER=true` (and optionally `ENABLE_RUNNER_ADMIN_ENDPOINTS=true` for simulate).
-3. **As admin**: Open Smoke Test page (when `VITE_ENABLE_SMOKE_TEST_PAGE=true`). Run all tests. Expect:
-   - **POST /api/runner/cron** → PASS (200 or 503 if runner disabled).
-   - **GET /api/runner/status** → PASS (200).
-   - **POST /api/runner/simulate-trade-result** → SKIP unless `VITE_ENABLE_RUNNER_SIM_TESTS=true`, else PASS (200) or SKIP (403 if ENABLE_RUNNER_ADMIN_ENDPOINTS=false).
-4. **As non-admin**: Expect **POST /api/runner/cron** and **GET /api/runner/status** → PASS with “Correctly blocked (non-admin)” (403).
-5. **Manual curl (admin JWT)**:
-   - `curl -X POST https://your-backend/api/runner/cron -H "Authorization: Bearer YOUR_ADMIN_JWT" -H "Content-Type: application/json"`
-   - `curl https://your-backend/api/runner/status -H "Authorization: Bearer YOUR_ADMIN_JWT"`
+**Strategy config**: Use **/api/strategies** (strategy_runs). There is no separate runner strategies CRUD; Terminal Strategy tab lists strategy_runs.
+
+## Database (unified)
+
+- **strategy_runs** — Live strategy config (from Strategy Backtest “Go Live”): exchange_connection_id, symbol, timeframe, direction, leverage, TP/SL, order_size_pct, **last_run_at**, status.
+- **strategy_events** — Immutable log (signal, order_submit, order_fill, risk_block, error); payload sanitized (no secrets).
+- **strategy_tick_runs** — Runner audit: one row per tick (strategy_run_id, scheduled_at, status, signal, latency_ms).
+- **strategy_risk_state** — Per user per day (realized_pnl_usdt, trades_count, consecutive_losses, is_paused, etc.).
+- **strategy_locks** — Distributed lock per strategy_run (strategy_run_id, locked_until, lock_owner).
+
+## Build and local commands (Windows PowerShell)
+
+- **Backend (backend-skeleton)**  
+  `cd backend-skeleton; npm ci; npm run build`
+
+- **Frontend (repo root)**  
+  `cd ..; pnpm i; pnpm run build`
+
+Use `;` (not `&&`) in PowerShell for chaining. Ensure Node/npm and pnpm are installed.
+
+## How to test locally
+
+1. Backend env (e.g. `backend-skeleton/.env`):
+   - `ENABLE_STRATEGY_RUNNER=true`
+   - `RUNNER_CRON_SECRET=<random long string>` (optional; for cron-secret tests)
+   - `ENABLE_RUNNER_ADMIN_ENDPOINTS=true` (optional, for simulate)
+   - Supabase URL + service role key
+
+2. Migrations (in order):
+   - `20260129150000_strategy_runs_and_events.sql` — strategy_runs, strategy_events
+   - `20260129160000_strategy_runner.sql` — strategy_tick_runs, strategy_risk_state, strategy_locks (and legacy `strategies` table; runner no longer uses it)
+   - `20260129170000_unify_runner_strategy_runs.sql` — last_run_at on strategy_runs; tick_runs/locks reference strategy_runs
+
+3. **As admin** (Bearer token):
+   - `GET /api/runner/status` — 200, `activeStrategies` from strategy_runs
+   - `POST /api/runner/cron` — 200, `summary: { ran, skipped, blocked, errors }`
+   - Terminal → Strategy tab → “Run Cron Now” (admin only)
+
+4. **Cron without JWT** (e.g. Railway Cron):  
+   `POST /api/runner/cron` with header `x-cron-secret: <RUNNER_CRON_SECRET>`
+
+5. **Non-admin**: `POST /api/runner/cron` and `GET /api/runner/status` → **403**.
+
+## Production (Railway)
+
+1. Set env:
+   - `ENABLE_STRATEGY_RUNNER=true`
+   - `RUNNER_CRON_SECRET=<strong random string>` (for Railway Cron; never expose in frontend)
+   - `RUNNER_TICK_INTERVAL_SEC=10` (or 30)
+   - Risk limits: `DAILY_MAX_LOSS_USDT`, `MAX_TRADES_PER_DAY`, etc.
+   - `ENABLE_RUNNER_ADMIN_ENDPOINTS=false`
+
+2. **Railway Cron**: Call `POST /api/runner/cron` every 10–30 seconds with header `x-cron-secret: <RUNNER_CRON_SECRET>`. In-process scheduler and external cron can coexist; locking prevents double execution per strategy_run.
+
+3. Logs: look for `[runner] scheduler enabled (interval Ns)`.
+
+## Smoke test
+
+- **Admin**: `POST /api/runner/cron` and `GET /api/runner/status` → PASS (200 or 503 if disabled).
+- **Non-admin**: PASS with “Correctly blocked (non-admin)” (403).
+- **Cron-secret**: When `VITE_ENABLE_RUNNER_CRON_TEST=true` and `VITE_RUNNER_CRON_SECRET` is set (test only), “POST /api/runner/cron (cron-secret)” calls cron with `x-cron-secret` and no JWT; expect 200 or 503.
+
+## Security
+
+- Cron: **x-cron-secret** or admin JWT; never return or log secrets.
+- Other runner endpoints: admin JWT only.
+- CORS: allow only configured origins (e.g. FRONTEND_URL).
+- Kill switch blocks orders before adapter calls. Reduce-only for exits; symbol whitelist (e.g. BTCUSDT, ETHUSDT, SOLUSDT); max leverage enforced.
+
+---
+
+## Quick reference: env vars (Railway)
+
+| Env var | Value | Notes |
+|---------|--------|--------|
+| `ENABLE_STRATEGY_RUNNER` | `true` | Enables scheduler and runner endpoints. |
+| `RUNNER_CRON_SECRET` | `<random long string>` | Cron auth without JWT; set for Railway Cron. |
+| `RUNNER_TICK_INTERVAL_SEC` | `10` | Seconds between in-process ticks. |
+| `DAILY_MAX_LOSS_USDT` | `50` | Daily loss cap. |
+| `MAX_TRADES_PER_DAY` | `20` | Max trades per user per day. |
+| `MAX_CONSECUTIVE_LOSSES` | `3` | Consecutive losses before pause. |
+| `COOLDOWN_AFTER_TRADE_SEC` | `30` | Min seconds between trades. |
+| `PAUSE_DURATION_MIN` | `1440` | Pause duration (minutes). |
+| `ENABLE_RUNNER_ADMIN_ENDPOINTS` | `false` | Set `true` only for simulate-trade-result testing. |
+
+Ensure `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are set.
+
+## Curl examples
+
+- **Cron (cron-secret)**  
+  `curl -X POST https://your-backend/api/runner/cron -H "Content-Type: application/json" -H "x-cron-secret: YOUR_RUNNER_CRON_SECRET"`
+
+- **Cron (admin JWT)**  
+  `curl -X POST https://your-backend/api/runner/cron -H "Authorization: Bearer YOUR_ADMIN_JWT" -H "Content-Type: application/json"`
+
+- **Status**  
+  `curl https://your-backend/api/runner/status -H "Authorization: Bearer YOUR_ADMIN_JWT"`

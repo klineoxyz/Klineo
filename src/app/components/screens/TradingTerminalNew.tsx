@@ -42,6 +42,7 @@ import { Alert, AlertDescription } from "@/app/components/ui/alert";
 import { Badge } from "@/app/components/ui/badge";
 import { Switch } from "@/app/components/ui/switch";
 import { useDemo } from "@/app/contexts/DemoContext";
+import { useAuth } from "@/app/contexts/AuthContext";
 import { useExchangeBalances } from "@/app/hooks/useExchangeBalances";
 import { api, exchangeConnections, strategies, type EntitlementResponse, type StrategyRun, type StrategyEvent, type ExchangeConnection } from "@/lib/api";
 import { TradingViewChart } from "@/app/components/TradingViewChart";
@@ -222,11 +223,13 @@ export function TradingTerminalNew({ onNavigate }: TradingTerminalProps) {
 
   // Futures Strategy panel
   const [strategyList, setStrategyList] = useState<StrategyRun[]>([]);
+  const { isAdmin } = useAuth();
   const [strategyEvents, setStrategyEvents] = useState<StrategyEvent[]>([]);
   const [connections, setConnections] = useState<ExchangeConnection[]>([]);
   const [selectedStrategyId, setSelectedStrategyId] = useState<string | null>(null);
   const [strategyLoading, setStrategyLoading] = useState(false);
   const [strategyStatusUpdating, setStrategyStatusUpdating] = useState(false);
+  const [runnerCronLoading, setRunnerCronLoading] = useState(false);
   const [killSwitchUpdating, setKillSwitchUpdating] = useState<Record<string, boolean>>({});
 
   // Get current pair data (fallback for order book, trades, 24h stats)
@@ -984,6 +987,32 @@ export function TradingTerminalNew({ onNavigate }: TradingTerminalProps) {
                     )}
                     {!activeStrategy && strategyList.length === 0 && !strategyLoading && (
                       <div className="text-[10px] text-muted-foreground">No strategies. Run a backtest and click &quot;Go Live&quot; in Strategy Backtest.</div>
+                    )}
+                    {/* Admin: Run Cron Now — trigger runner cron for testing */}
+                    {isAdmin && (
+                      <div className="pt-2 border-t border-border">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-[10px]"
+                          disabled={runnerCronLoading}
+                          onClick={async () => {
+                            setRunnerCronLoading(true);
+                            try {
+                              await api.post("/api/runner/cron");
+                              toast.success("Cron run completed");
+                            } catch (e: unknown) {
+                              const msg = e instanceof Error ? e.message : "Request failed";
+                              toast.error(msg);
+                            } finally {
+                              setRunnerCronLoading(false);
+                            }
+                          }}
+                        >
+                          {runnerCronLoading ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
+                          Run Cron Now
+                        </Button>
+                      </div>
                     )}
                   </div>
                 )}

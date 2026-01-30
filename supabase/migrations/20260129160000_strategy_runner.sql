@@ -126,12 +126,12 @@ $$ LANGUAGE plpgsql;
 DROP TRIGGER IF EXISTS strategies_updated_at ON public.strategies;
 CREATE TRIGGER strategies_updated_at
   BEFORE UPDATE ON public.strategies
-  FOR EACH ROW EXECUTE PROCEDURE public.set_updated_at();
+  FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 
 DROP TRIGGER IF EXISTS strategy_locks_updated_at ON public.strategy_locks;
 CREATE TRIGGER strategy_locks_updated_at
   BEFORE UPDATE ON public.strategy_locks
-  FOR EACH ROW EXECUTE PROCEDURE public.set_updated_at();
+  FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 
 COMMENT ON TABLE public.strategies IS 'Strategy runner config (exchange, symbol, timeframe, risk params)';
 COMMENT ON TABLE public.strategy_tick_runs IS 'Append-only audit of each strategy tick (scheduled_at, status, signal)';
