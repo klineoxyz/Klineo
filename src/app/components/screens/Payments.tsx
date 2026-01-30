@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { api } from "@/lib/api";
 import { toast } from "@/app/lib/toast";
 import { copyToClipboard } from "@/app/lib/clipboard";
-import { Copy, ExternalLink, Wallet, AlertCircle, Loader2, Send } from "lucide-react";
+import { Copy, ExternalLink, Wallet, AlertCircle, Loader2, Send, Tag, X } from "lucide-react";
 
 const SAFE_LINK = "https://app.safe.global/home?safe=bnb:0x0E60e94252F58aBb56604A8260492d96cf879007";
 const BSCSCAN_TX = (tx: string) => `https://bscscan.com/tx/${tx}`;
@@ -54,6 +54,14 @@ export function Payments({ onNavigate, viewData }: PaymentsProps) {
   } | null>(null);
   const [txHash, setTxHash] = useState("");
   const [fromWallet, setFromWallet] = useState("");
+  const [couponCode, setCouponCode] = useState("");
+  const [couponValidating, setCouponValidating] = useState(false);
+  const [couponApplied, setCouponApplied] = useState<{
+    code: string;
+    discountPercent: number;
+    originalAmountUsdt: number;
+    amountUsdt: number;
+  } | null>(null);
 
   useEffect(() => {
     if (viewData?.newIntent) setCurrentIntent(viewData.newIntent);
@@ -107,6 +115,51 @@ export function Payments({ onNavigate, viewData }: PaymentsProps) {
 
   const hasPaymentWallet = profile?.paymentWalletBsc?.trim().length > 0;
 
+  const baseAmountUsdt = kind === "joining_fee" ? 100 : (kind === "package" ? { ENTRY_100: 100, LEVEL_200: 200, LEVEL_500: 500 }[packageCode] ?? 100 : 100);
+  const displayAmountUsdt = couponApplied?.amountUsdt ?? baseAmountUsdt;
+
+  const handleApplyCoupon = async () => {
+    const code = couponCode.trim().toUpperCase();
+    if (!code) {
+      toast.error("Enter a coupon code");
+      return;
+    }
+    setCouponValidating(true);
+    setCouponApplied(null);
+    try {
+      const params = new URLSearchParams({ code, kind });
+      if (kind === "package") params.set("package_code", packageCode);
+      const data = await api.get<{
+        valid: boolean;
+        error?: string;
+        discountPercent?: number;
+        originalAmountUsdt?: number;
+        amountUsdt?: number;
+      }>(`/api/payments/validate-coupon?${params.toString()}`);
+      if (data.valid && data.discountPercent != null && data.originalAmountUsdt != null && data.amountUsdt != null) {
+        setCouponApplied({
+          code,
+          discountPercent: data.discountPercent,
+          originalAmountUsdt: data.originalAmountUsdt,
+          amountUsdt: data.amountUsdt,
+        });
+        toast.success(`${data.discountPercent}% off applied — Pay $${data.amountUsdt} instead of $${data.originalAmountUsdt}`);
+      } else {
+        toast.error(data.error ?? "Invalid or expired coupon");
+      }
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Could not validate coupon";
+      toast.error(msg);
+    } finally {
+      setCouponValidating(false);
+    }
+  };
+
+  const handleRemoveCoupon = () => {
+    setCouponApplied(null);
+    setCouponCode("");
+  };
+
   const handleCreateIntent = async () => {
     if (!hasPaymentWallet) {
       toast.error("Save your payment wallet (BSC) in Settings first");
@@ -114,7 +167,9 @@ export function Payments({ onNavigate, viewData }: PaymentsProps) {
     }
     setCreating(true);
     try {
-      const body = kind === "package" ? { kind, package_code: packageCode } : { kind };
+      const body: { kind: "joining_fee" | "package"; package_code?: string; coupon_code?: string } =
+        kind === "package" ? { kind, package_code: packageCode } : { kind };
+      if (couponApplied?.code) body.coupon_code = couponApplied.code;
       const data = await api.post<{
         intent: { id: string; amount_usdt: number; status: string };
         treasury_address: string;
@@ -130,6 +185,8 @@ export function Payments({ onNavigate, viewData }: PaymentsProps) {
       });
       setTxHash("");
       setFromWallet("");
+      setCouponApplied(null);
+      setCouponCode("");
       await loadIntents();
       toast.success("Payment intent created");
     } catch (e: unknown) {
@@ -230,7 +287,13 @@ export function Payments({ onNavigate, viewData }: PaymentsProps) {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Kind</Label>
-                <Select value={kind} onValueChange={(v) => setKind(v as "joining_fee" | "package")}>
+                <Select
+                  value={kind}
+                  onValueChange={(v) => {
+                    setKind(v as "joining_fee" | "package");
+                    setCouponApplied(null);
+                  }}
+                >
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
@@ -243,7 +306,13 @@ export function Payments({ onNavigate, viewData }: PaymentsProps) {
               {kind === "package" && (
                 <div className="space-y-2">
                   <Label>Package</Label>
-                  <Select value={packageCode} onValueChange={setPackageCode}>
+                  <Select
+                    value={packageCode}
+                    onValueChange={(v) => {
+                      setPackageCode(v);
+                      setCouponApplied(null);
+                    }}
+                  >
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
@@ -255,6 +324,40 @@ export function Payments({ onNavigate, viewData }: PaymentsProps) {
                   </Select>
                 </div>
               )}
+            </div>
+            <div className="space-y-2">
+              <Label className="flex items-center gap-2">
+                <Tag className="size-4" />
+                Coupon code
+              </Label>
+              <div className="flex gap-2">
+                <Input
+                  placeholder="e.g. LAUNCH50"
+                  value={couponCode}
+                  onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+                  className="font-mono max-w-[180px]"
+                  disabled={!!couponApplied}
+                />
+                {couponApplied ? (
+                  <Button type="button" variant="outline" size="sm" onClick={handleRemoveCoupon} className="shrink-0">
+                    <X className="size-4 mr-1" />
+                    Remove
+                  </Button>
+                ) : (
+                  <Button type="button" variant="secondary" size="sm" onClick={handleApplyCoupon} disabled={couponValidating || !couponCode.trim()}>
+                    {couponValidating ? <Loader2 className="size-4 animate-spin" /> : "Apply"}
+                  </Button>
+                )}
+              </div>
+              {couponApplied && (
+                <p className="text-sm text-[#10B981] font-medium">
+                  {couponApplied.discountPercent}% off — Pay ${couponApplied.amountUsdt} instead of ${couponApplied.originalAmountUsdt}
+                </p>
+              )}
+            </div>
+            <div className="flex flex-wrap items-center gap-2 pt-1">
+              <span className="text-sm text-muted-foreground">Amount to pay:</span>
+              <span className="font-mono font-semibold">{displayAmountUsdt} USDT</span>
             </div>
             <Button onClick={handleCreateIntent} disabled={creating}>
               {creating ? <Loader2 className="size-4 animate-spin" /> : "Create intent"}
