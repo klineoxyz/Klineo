@@ -27,12 +27,12 @@ export const authLimiter = rateLimit({
 });
 
 /**
- * Very strict rate limiter for admin endpoints
- * 50 requests per 15 minutes per IP
+ * Rate limiter for admin endpoints (dashboard: many tabs × multiple requests per tab)
+ * 200 requests per 15 minutes per IP so admins can use Discounts, Users, etc. without 429
  */
 export const adminLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 50,
+  max: 200,
   message: 'Too many admin requests, please try again later.',
   standardHeaders: true,
   legacyHeaders: false,

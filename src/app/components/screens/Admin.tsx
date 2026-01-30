@@ -289,9 +289,12 @@ export function Admin() {
       const data = await api.get(`/api/admin/payments/intents?${params.toString()}`);
       setPaymentIntents((data as any).intents || []);
     } catch (e: any) {
-      if (e?.message?.includes("404") || e?.message === "Not found") {
+      const msg = String(e?.message ?? "");
+      const is404 = msg.includes("404") || msg.includes("Not found") || msg.toLowerCase().includes("not found");
+      if (is404) {
         setPaymentIntents([]);
         setPaymentIntentsFeatureDisabled(true);
+        // Don't toast — we show the inline message instead
       } else {
         toast.error("Failed to load payment intents");
       }
@@ -582,6 +585,11 @@ export function Admin() {
         onValueChange={(v) => {
           setAdminTab(v);
           if (v === "payments") loadPaymentIntents();
+          if (v === "discounts") {
+            loadCoupons();
+            loadUserDiscounts();
+            loadUsers(1, "");
+          }
         }}
         className="space-y-6"
       >
@@ -1302,7 +1310,7 @@ export function Admin() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="discounts" className="space-y-6" onFocus={() => { loadCoupons(); loadUserDiscounts(); loadUsers(1, ""); }}>
+        <TabsContent value="discounts" className="space-y-6">
           {/* Create New Coupon — onboarding and/or trading packages */}
           <Card className="p-6">
             <div className="flex items-center gap-3 mb-6">
@@ -1728,6 +1736,18 @@ export function Admin() {
         </TabsContent>
 
         <TabsContent value="payments" className="space-y-4">
+          {paymentIntentsFeatureDisabled && (
+            <Card className="p-4 border-amber-500/50 bg-amber-500/5">
+              <p className="text-sm text-foreground">
+                <strong>Payment intents are disabled.</strong> The backend returned 404 — set{" "}
+                <code className="rounded bg-muted px-1.5 py-0.5 text-xs">ENABLE_MANUAL_PAYMENTS=true</code> on the
+                backend (e.g. Railway) and apply the <code className="rounded bg-muted px-1.5 py-0.5 text-xs">payment_intents</code> migration to enable.
+              </p>
+              <Button variant="outline" size="sm" className="mt-3" onClick={loadPaymentIntents} disabled={paymentIntentsLoading}>
+                Try again
+              </Button>
+            </Card>
+          )}
           <Card>
             <div className="p-6 border-b border-border flex flex-wrap items-center justify-between gap-4">
               <h3 className="text-lg font-semibold">Payment Intents (Manual Safe)</h3>
@@ -1755,7 +1775,7 @@ export function Admin() {
               </div>
             </div>
             {paymentIntentsLoading ? (
-              <div className="p-8 text-center text-muted-foreground">Loading payment intents...</div>
+              <div className="p-8 text-center text-foreground">Loading payment intents…</div>
             ) : (
               <Table>
                 <TableHeader>
