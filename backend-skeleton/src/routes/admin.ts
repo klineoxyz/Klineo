@@ -70,6 +70,82 @@ adminRouter.get('/stats', async (req, res) => {
 });
 
 /**
+ * GET /api/admin/settings
+ * Platform settings (fee percentages etc.)
+ */
+adminRouter.get('/settings', async (req, res) => {
+  const client = getSupabase();
+  if (!client) {
+    return res.status(503).json({ error: 'Database unavailable' });
+  }
+  try {
+    const { data: rows, error } = await client
+      .from('platform_settings')
+      .select('key, value');
+    if (error) {
+      console.error('Admin settings get error:', error);
+      return res.status(500).json({ error: 'Failed to fetch settings' });
+    }
+    const map = new Map((rows || []).map((r: { key: string; value: string }) => [r.key, r.value]));
+    res.json({
+      feeEntryPct: map.get('fee_entry_pct') ?? '20',
+      feeProPct: map.get('fee_pro_pct') ?? '15',
+      feeElitePct: map.get('fee_elite_pct') ?? '10',
+    });
+  } catch (err) {
+    console.error('Admin settings get error:', err);
+    res.status(500).json({ error: 'Failed to fetch settings' });
+  }
+});
+
+/**
+ * PUT /api/admin/settings
+ * Update platform settings (fee percentages). Body: { feeEntryPct?, feeProPct?, feeElitePct? }
+ */
+adminRouter.put('/settings',
+  validate([
+    body('feeEntryPct').optional().isFloat({ min: 0, max: 100 }).withMessage('feeEntryPct must be 0-100'),
+    body('feeProPct').optional().isFloat({ min: 0, max: 100 }).withMessage('feeProPct must be 0-100'),
+    body('feeElitePct').optional().isFloat({ min: 0, max: 100 }).withMessage('feeElitePct must be 0-100'),
+  ]),
+  async (req: AuthenticatedRequest, res) => {
+    const client = getSupabase();
+    if (!client) {
+      return res.status(503).json({ error: 'Database unavailable' });
+    }
+    const { feeEntryPct, feeProPct, feeElitePct } = req.body as { feeEntryPct?: string | number; feeProPct?: string | number; feeElitePct?: string | number };
+    try {
+      const updates: Array<{ key: string; value: string }> = [];
+      if (feeEntryPct != null) updates.push({ key: 'fee_entry_pct', value: String(feeEntryPct) });
+      if (feeProPct != null) updates.push({ key: 'fee_pro_pct', value: String(feeProPct) });
+      if (feeElitePct != null) updates.push({ key: 'fee_elite_pct', value: String(feeElitePct) });
+      if (updates.length === 0) {
+        return res.status(400).json({ error: 'No settings to update' });
+      }
+      for (const { key, value } of updates) {
+        const { error } = await client
+          .from('platform_settings')
+          .upsert({ key, value, updated_at: new Date().toISOString() }, { onConflict: 'key' });
+        if (error) {
+          console.error('Admin settings put error:', error);
+          return res.status(500).json({ error: 'Failed to update settings' });
+        }
+      }
+      const { data: rows } = await client.from('platform_settings').select('key, value');
+      const map = new Map((rows || []).map((r: { key: string; value: string }) => [r.key, r.value]));
+      res.json({
+        feeEntryPct: map.get('fee_entry_pct') ?? '20',
+        feeProPct: map.get('fee_pro_pct') ?? '15',
+        feeElitePct: map.get('fee_elite_pct') ?? '10',
+      });
+    } catch (err) {
+      console.error('Admin settings put error:', err);
+      res.status(500).json({ error: 'Failed to update settings' });
+    }
+  }
+);
+
+/**
  * GET /api/admin/entitlements
  * List entitlements for debugging (limit, page)
  */

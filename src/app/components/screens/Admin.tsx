@@ -15,7 +15,24 @@ import { toast } from "@/app/lib/toast";
 import { copyToClipboard } from "@/app/lib/clipboard";
 import { Search, Shield, ChevronLeft, ChevronRight, Download, Filter, Settings2, Percent, Calendar, Save, Copy, Link2, Trash2, RefreshCw, Ticket, Banknote, CheckCircle } from "lucide-react";
 
-// Mock data removed - now loaded from API
+/** Download array of objects as CSV (client-side). */
+function downloadCSV(rows: Record<string, unknown>[], columns: { key: string; header: string }[], filename: string) {
+  const escape = (v: unknown) => {
+    const s = v == null ? "" : String(v);
+    if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+    return s;
+  };
+  const header = columns.map((c) => c.header).join(",");
+  const body = rows.map((r) => columns.map((c) => escape(r[c.key])).join(",")).join("\n");
+  const csv = "\uFEFF" + header + "\n" + body;
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 export function Admin() {
   // Data state
@@ -41,6 +58,7 @@ export function Admin() {
   const [paymentIntents, setPaymentIntents] = useState<any[]>([]);
   const [paymentIntentsLoading, setPaymentIntentsLoading] = useState(false);
   const [paymentIntentsStatus, setPaymentIntentsStatus] = useState<string>("");
+  const [paymentIntentsFeatureDisabled, setPaymentIntentsFeatureDisabled] = useState(false);
   const [paymentIntentActionNote, setPaymentIntentActionNote] = useState("");
   const [paymentIntentActionLoading, setPaymentIntentActionLoading] = useState(false);
 
@@ -263,6 +281,7 @@ export function Admin() {
 
   const loadPaymentIntents = async () => {
     setPaymentIntentsLoading(true);
+    setPaymentIntentsFeatureDisabled(false);
     try {
       const params = new URLSearchParams();
       if (paymentIntentsStatus) params.set('status', paymentIntentsStatus);
@@ -271,6 +290,7 @@ export function Admin() {
     } catch (e: any) {
       if (e?.message?.includes('404') || e?.message === 'Not found') {
         setPaymentIntents([]);
+        setPaymentIntentsFeatureDisabled(true);
       } else {
         toast.error('Failed to load payment intents');
       }
@@ -337,11 +357,31 @@ export function Admin() {
     }
   };
 
-  const handleSaveFeeSettings = () => {
+  const loadPlatformSettings = async () => {
+    try {
+      const data = await api.get<{ feeEntryPct?: string; feeProPct?: string; feeElitePct?: string }>('/api/admin/settings');
+      if (data?.feeEntryPct != null) setStarterFee(String(data.feeEntryPct));
+      if (data?.feeProPct != null) setProFee(String(data.feeProPct));
+      if (data?.feeElitePct != null) setUnlimitedFee(String(data.feeElitePct));
+    } catch {
+      // 503 or no table: keep current state
+    }
+  };
+
+  const handleSaveFeeSettings = async () => {
     setShowFeeConfirm(false);
-    toast.success("Platform fees updated", {
-      description: `Entry/Pro: ${starterFee}%, Elite: ${unlimitedFee}%`,
-    });
+    try {
+      await api.put('/api/admin/settings', {
+        feeEntryPct: parseFloat(starterFee) || 20,
+        feeProPct: parseFloat(proFee) || 15,
+        feeElitePct: parseFloat(unlimitedFee) || 10,
+      });
+      toast.success("Platform fees updated", {
+        description: `Entry: ${starterFee}%, Pro: ${proFee}%, Elite: ${unlimitedFee}%`,
+      });
+    } catch (err: any) {
+      toast.error("Failed to save fee settings", { description: err?.message });
+    }
   };
 
   const generateCouponCode = () => {
@@ -811,7 +851,26 @@ export function Admin() {
                 <RefreshCw className="size-4 mr-2" />
                 Refresh
               </Button>
-              <Button variant="outline" size="sm">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  downloadCSV(
+                    subscriptionPayments,
+                    [
+                      { key: "userId", header: "User ID" },
+                      { key: "email", header: "Email" },
+                      { key: "plan", header: "Plan" },
+                      { key: "amount", header: "Amount" },
+                      { key: "status", header: "Status" },
+                      { key: "date", header: "Payment Date" },
+                      { key: "nextRenewal", header: "Next Renewal" },
+                      { key: "txHash", header: "Tx Hash" },
+                    ],
+                    "subscriptions.csv"
+                  )
+                }
+              >
                 <Download className="size-4 mr-2" />
                 Export CSV
               </Button>
@@ -894,7 +953,24 @@ export function Admin() {
                 <RefreshCw className="size-4 mr-2" />
                 Refresh
               </Button>
-              <Button variant="outline" size="sm">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  downloadCSV(
+                    feeTransactions,
+                    [
+                      { key: "userId", header: "User ID" },
+                      { key: "trade", header: "Type" },
+                      { key: "profit", header: "Description" },
+                      { key: "fee", header: "Amount" },
+                      { key: "date", header: "Timestamp" },
+                      { key: "trader", header: "Reference" },
+                    ],
+                    "revenue-report.csv"
+                  )
+                }
+              >
                 <Download className="size-4 mr-2" />
                 Export Report
               </Button>
@@ -961,7 +1037,26 @@ export function Admin() {
                 <RefreshCw className="size-4 mr-2" />
                 Refresh
               </Button>
-              <Button variant="outline" size="sm">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  downloadCSV(
+                    referralPayouts,
+                    [
+                      { key: "referrer", header: "Referrer" },
+                      { key: "buyerEmail", header: "Referred" },
+                      { key: "level", header: "Level" },
+                      { key: "purchaseType", header: "Purchase type" },
+                      { key: "amount", header: "Amount earned" },
+                      { key: "date", header: "Date" },
+                      { key: "payoutStatus", header: "Status" },
+                      { key: "transactionId", header: "Transaction" },
+                    ],
+                    "referrals.csv"
+                  )
+                }
+              >
                 <Download className="size-4 mr-2" />
                 Export CSV
               </Button>
@@ -1076,7 +1171,7 @@ export function Admin() {
           </Dialog>
         </TabsContent>
 
-        <TabsContent value="platform-settings" className="space-y-6">
+        <TabsContent value="platform-settings" className="space-y-6" onFocus={loadPlatformSettings}>
           <Card className="p-6">
             <div className="flex items-center gap-3 mb-6">
               <Settings2 className="size-6 text-primary" />
@@ -1668,7 +1763,13 @@ export function Admin() {
                 <TableBody>
                   {paymentIntents.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={9} className="text-center text-muted-foreground py-8">No payment intents found.</TableCell>
+                      <TableCell colSpan={9} className="text-center text-muted-foreground py-8">
+                        {paymentIntentsFeatureDisabled ? (
+                          <span>Payment intents are disabled. Set <code className="text-xs bg-muted px-1 rounded">ENABLE_MANUAL_PAYMENTS=true</code> on the backend to enable.</span>
+                        ) : (
+                          'No payment intents found.'
+                        )}
+                      </TableCell>
                     </TableRow>
                   ) : (
                     paymentIntents.map((pi: any) => (
