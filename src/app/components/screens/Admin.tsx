@@ -290,8 +290,14 @@ export function Admin() {
       setPaymentIntents((data as any).intents || []);
     } catch (e: any) {
       const msg = String(e?.message ?? "");
-      const is404 = msg.includes("404") || msg.includes("Not found") || msg.toLowerCase().includes("not found");
-      if (is404) {
+      const isDisabled =
+        msg.includes("503") ||
+        msg.includes("404") ||
+        msg.includes("ENABLE_MANUAL_PAYMENTS") ||
+        msg.includes("Payment intents feature is disabled") ||
+        msg.includes("Not found") ||
+        msg.toLowerCase().includes("not found");
+      if (isDisabled) {
         setPaymentIntents([]);
         setPaymentIntentsFeatureDisabled(true);
         // Don't toast — we show the inline message instead
@@ -1739,7 +1745,7 @@ export function Admin() {
           {paymentIntentsFeatureDisabled && (
             <Card className="p-4 border-amber-500/50 bg-amber-500/5">
               <p className="text-sm text-foreground">
-                <strong>Payment intents are disabled.</strong> The backend returned 404 — set{" "}
+                <strong>Payment intents are disabled.</strong> The backend returned 404/503 — set{" "}
                 <code className="rounded bg-muted px-1.5 py-0.5 text-xs">ENABLE_MANUAL_PAYMENTS=true</code> on the
                 backend (e.g. Railway) and apply the <code className="rounded bg-muted px-1.5 py-0.5 text-xs">payment_intents</code> migration to enable.
               </p>

@@ -1250,9 +1250,10 @@ function manualPaymentsEnabled(): boolean {
 /**
  * GET /api/admin/payments/intents
  * List payment intents (manual Safe payments). Query: status=...
+ * Returns 503 with code ENABLE_MANUAL_PAYMENTS when feature is disabled (set ENABLE_MANUAL_PAYMENTS=true on backend).
  */
 adminRouter.get('/payments/intents', async (req: AuthenticatedRequest, res) => {
-  if (!manualPaymentsEnabled()) return res.status(404).json({ error: 'Not found' });
+  if (!manualPaymentsEnabled()) return res.status(503).json({ error: 'Payment intents feature is disabled', code: 'ENABLE_MANUAL_PAYMENTS' });
   const client = getSupabase();
   if (!client) return res.status(503).json({ error: 'Database unavailable' });
 
@@ -1283,7 +1284,7 @@ adminRouter.get('/payments/intents', async (req: AuthenticatedRequest, res) => {
 adminRouter.post('/payments/intents/:id/approve',
   validate([uuidParam('id'), body('note').optional().trim().isString()]),
   async (req: AuthenticatedRequest, res) => {
-    if (!manualPaymentsEnabled()) return res.status(404).json({ error: 'Not found' });
+    if (!manualPaymentsEnabled()) return res.status(503).json({ error: 'Payment intents feature is disabled', code: 'ENABLE_MANUAL_PAYMENTS' });
     const client = getSupabase();
     if (!client) return res.status(503).json({ error: 'Database unavailable' });
 
@@ -1361,7 +1362,7 @@ adminRouter.post('/payments/intents/:id/approve',
 adminRouter.post('/payments/intents/:id/reject',
   validate([uuidParam('id'), body('note').optional().trim().isString()]),
   async (req: AuthenticatedRequest, res) => {
-    if (!manualPaymentsEnabled()) return res.status(404).json({ error: 'Not found' });
+    if (!manualPaymentsEnabled()) return res.status(503).json({ error: 'Payment intents feature is disabled', code: 'ENABLE_MANUAL_PAYMENTS' });
     const client = getSupabase();
     if (!client) return res.status(503).json({ error: 'Database unavailable' });
 
