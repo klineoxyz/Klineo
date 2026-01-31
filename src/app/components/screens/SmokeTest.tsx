@@ -5,10 +5,10 @@ import { Badge } from "@/app/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/app/components/ui/table";
 import { Alert, AlertDescription } from "@/app/components/ui/alert";
 import { Input } from "@/app/components/ui/input";
-import { Loader2, Copy, Trash2, CheckCircle2, XCircle, MinusCircle, ChevronDown, ChevronUp, Shield, Coins } from "lucide-react";
+import { Loader2, Copy, Trash2, CheckCircle2, XCircle, MinusCircle, ChevronDown, ChevronUp, Shield, Coins, Play } from "lucide-react";
 import { useAuth } from "@/app/contexts/AuthContext";
 import { api } from "@/lib/api";
-import { runAllTests, runTestByName, smokeTests, type SmokeTestResult, sanitizeResponse } from "@/lib/smokeTests";
+import { runAllTests, runLaunchTests, runTestByName, smokeTests, type SmokeTestResult, sanitizeResponse } from "@/lib/smokeTests";
 import { toast } from "sonner";
 
 type EntitlementState = {
@@ -99,6 +99,20 @@ export function SmokeTest() {
     }
   };
 
+  const handleRunLaunch = async () => {
+    setIsRunning(true);
+    setResults([]);
+    try {
+      const testResults = await runLaunchTests();
+      setResults(testResults);
+      toast.success("Launch preset complete", { description: `${testResults.filter(r => r.status === "PASS").length} pass, ${testResults.filter(r => r.status === "FAIL").length} fail, ${testResults.filter(r => r.status === "SKIP").length} skip` });
+    } catch (err: any) {
+      toast.error("Launch preset failed", { description: err?.message });
+    } finally {
+      setIsRunning(false);
+    }
+  };
+
   const handleRunSingle = async (testName: string) => {
     setIsRunning(true);
     try {
@@ -120,14 +134,14 @@ export function SmokeTest() {
   };
 
   const handleCopyReport = () => {
-    // Create fully sanitized report
+    // Create fully sanitized report (no secrets; apiKey/apiSecret/token redacted)
     const report = {
+      reportId: crypto.randomUUID?.() ?? `report-${Date.now()}`,
       timestamp: new Date().toISOString(),
       environment: {
         api_domain: maskedApiDomain,
         supabase_domain: maskedSupabaseDomain,
         user_role: userInfo?.role || 'none',
-        // Never include email in report
       },
       summary: {
         total: results.length,
@@ -255,7 +269,7 @@ export function SmokeTest() {
 
   const overallStatus = getOverallStatus();
 
-  if (isProduction && !isAdmin) return null;
+  if (isProduction && (!isAdmin || import.meta.env.VITE_ENABLE_SMOKE_TEST_PAGE !== 'true')) return null;
 
   return (
     <div className="p-6 space-y-6">
@@ -414,6 +428,10 @@ export function SmokeTest() {
         <Button onClick={handleRunAll} disabled={isRunning} className="gap-2">
           {isRunning ? <Loader2 className="size-4 animate-spin" /> : <CheckCircle2 className="size-4" />}
           Run All Tests
+        </Button>
+        <Button onClick={handleRunLaunch} disabled={isRunning} variant="secondary" className="gap-2">
+          {isRunning ? <Loader2 className="size-4 animate-spin" /> : <Play className="size-4" />}
+          Run All (Launch)
         </Button>
         <Button onClick={handleCopyReport} variant="outline" disabled={results.length === 0} className="gap-2">
           <Copy className="size-4" />

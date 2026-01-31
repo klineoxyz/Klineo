@@ -167,7 +167,7 @@ export function sanitizeResponse(data: unknown): unknown {
   if (Array.isArray(data)) return data.map(sanitizeResponse);
   
   const sanitized: Record<string, unknown> = {};
-  const sensitivePatterns = ['token', 'secret', 'password', 'authorization', 'apikey', 'key', 'bearer'];
+  const sensitivePatterns = ['token', 'secret', 'password', 'authorization', 'apikey', 'apisecret', 'key', 'bearer'];
   
   for (const [key, value] of Object.entries(data)) {
     const lowerKey = key.toLowerCase();
@@ -1049,4 +1049,67 @@ export async function runTestByName(name: string): Promise<SmokeTestResult | nul
   const test = smokeTests.find(t => t.name === name);
   if (!test) return null;
   return test.run();
+}
+
+/** Launch preset test names: Public + Auth + Runner status; Futures and Runner cron SKIP unless env set. */
+const LAUNCH_PRESET_NAMES = [
+  'Health Check',
+  'GET /api/traders (Public)',
+  'GET /api/auth/me',
+  'GET /api/me/profile',
+  'GET /api/exchange-connections',
+  'GET /api/portfolio/summary',
+  'GET /api/positions',
+  'GET /api/orders',
+  'GET /api/trades',
+  'GET /api/notifications',
+  'GET /api/runner/status',
+  'POST /api/runner/cron',
+  'POST /api/exchange-connections/:id/futures/test',
+  'POST /api/exchange-connections/:id/futures/enable',
+  'POST /api/futures/order',
+  'POST /api/runner/cron (cron-secret)',
+];
+
+/**
+ * Run Launch preset: Public + Auth + Runner status; Futures tests SKIP unless VITE_ENABLE_EXCHANGE_SMOKE_TESTS;
+ * POST /api/runner/cron (cron-secret) SKIP unless VITE_ENABLE_RUNNER_CRON_TEST.
+ */
+export async function runLaunchTests(): Promise<SmokeTestResult[]> {
+  const results: SmokeTestResult[] = [];
+  const exchangeSmokeEnabled = import.meta.env.VITE_ENABLE_EXCHANGE_SMOKE_TESTS === 'true';
+  const runnerCronTestEnabled = import.meta.env.VITE_ENABLE_RUNNER_CRON_TEST === 'true';
+  let stopAfter401 = false;
+
+  for (const name of LAUNCH_PRESET_NAMES) {
+    if (stopAfter401) {
+      const t = smokeTests.find(x => x.name === name);
+      if (t && (t.category === 'authenticated' || t.category === 'admin')) {
+        results.push({ name, status: 'SKIP', message: 'Stopped after 401' });
+      }
+      continue;
+    }
+    if (name.startsWith('POST /api/exchange-connections/:id/futures') || name === 'POST /api/futures/order') {
+      if (!exchangeSmokeEnabled) {
+        results.push({ name, status: 'SKIP', message: 'VITE_ENABLE_EXCHANGE_SMOKE_TESTS not set' });
+        continue;
+      }
+    }
+    if (name === 'POST /api/runner/cron (cron-secret)') {
+      if (!runnerCronTestEnabled) {
+        results.push({ name, status: 'SKIP', message: 'VITE_ENABLE_RUNNER_CRON_TEST not set' });
+        continue;
+      }
+    }
+
+    const test = smokeTests.find(t => t.name === name);
+    if (!test) {
+      results.push({ name, status: 'SKIP', message: 'Test not found' });
+      continue;
+    }
+    const result = await test.run();
+    results.push(result);
+    if (result.httpCode === 401) stopAfter401 = true;
+  }
+  return results;
 }

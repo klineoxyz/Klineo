@@ -28,6 +28,7 @@ import { entitlementsMeRouter } from './routes/entitlements-me.js';
 import { coinpaymentsRouter } from './routes/coinpayments.js';
 import { referralsRouter } from './routes/referrals.js';
 import { paymentIntentsRouter, validateCouponHandler } from './routes/payment-intents.js';
+import { launchRouter } from './routes/launch.js';
 import { verifySupabaseJWT } from './middleware/auth.js';
 import { apiLimiter, authLimiter, adminLimiter } from './middleware/rateLimit.js';
 
@@ -143,6 +144,7 @@ app.use('/api/purchases', purchasesRouter);
 app.use('/api/billing', billingRouter);
 app.use('/api/payments/coinpayments', coinpaymentsRouter);
 app.use('/api/referrals', referralsRouter);
+app.use('/api/launch', launchRouter);
 app.get('/api/payments/validate-coupon', verifySupabaseJWT, ...validateCouponHandler);
 app.use('/api/payments/intents', paymentIntentsRouter);
 app.use('/api/entitlement', entitlementsRouter);

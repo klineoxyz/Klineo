@@ -176,10 +176,12 @@ export default function App() {
         }
         return <UIStatesDemo onNavigate={handleNavigate} />;
       case "smoke-test":
-        // Prod: admin-only; no env var required (Smoke Test enabled for all admins in production)
-        if (import.meta.env.PROD && !isAdmin) {
-          setTimeout(() => toast.error("Admin only", { description: "Smoke test is restricted to admins." }), 100);
-          return <Dashboard onNavigate={handleNavigate} />;
+        // Prod: only when VITE_ENABLE_SMOKE_TEST_PAGE=true AND admin
+        if (import.meta.env.PROD) {
+          if (!isAdmin || import.meta.env.VITE_ENABLE_SMOKE_TEST_PAGE !== 'true') {
+            setTimeout(() => toast.error("Not available", { description: "Smoke test is enabled only for admins when VITE_ENABLE_SMOKE_TEST_PAGE=true." }), 100);
+            return <Dashboard onNavigate={handleNavigate} />;
+          }
         }
         return <SmokeTest />;
       case "onboarding-wizard":
