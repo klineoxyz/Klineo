@@ -359,3 +359,42 @@ paymentIntentsRouter.post(
     });
   }
 );
+
+/**
+ * DELETE /api/payments/intents/:id
+ * Cancel (delete) a draft intent. Only the owner can delete; only draft status allowed.
+ */
+paymentIntentsRouter.delete(
+  '/:id',
+  validate([param('id').isUUID().withMessage('Intent ID must be a valid UUID')]),
+  async (req: AuthenticatedRequest, res: Response) => {
+    if (!manualPaymentsEnabled()) {
+      return res.status(503).json({ error: 'Manual payments are disabled.', featureDisabled: true });
+    }
+    const client = getSupabase();
+    if (!client) return res.status(503).json({ error: 'Database unavailable' });
+
+    const userId = req.user!.id;
+    const intentId = req.params.id;
+
+    const { data: intent, error: findErr } = await client
+      .from('payment_intents')
+      .select('id, user_id, status')
+      .eq('id', intentId)
+      .single();
+
+    if (findErr || !intent || intent.user_id !== userId) {
+      return res.status(404).json({ error: 'Intent not found' });
+    }
+    if (intent.status !== 'draft') {
+      return res.status(400).json({ error: 'Only draft intents can be cancelled' });
+    }
+
+    const { error: deleteErr } = await client.from('payment_intents').delete().eq('id', intentId);
+
+    if (deleteErr) {
+      return res.status(500).json({ error: 'Failed to cancel intent' });
+    }
+    return res.status(200).json({ id: intentId, message: 'Intent cancelled' });
+  }
+);

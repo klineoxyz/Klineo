@@ -9,9 +9,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { api } from "@/lib/api";
 import { toast } from "@/app/lib/toast";
 import { copyToClipboard } from "@/app/lib/clipboard";
-import { Copy, ExternalLink, Wallet, AlertCircle, Loader2, Send, Tag, X } from "lucide-react";
+import { Copy, ExternalLink, Wallet, AlertCircle, Loader2, Send, Tag, X, Trash2 } from "lucide-react";
 
 const SAFE_LINK = "https://app.safe.global/home?safe=bnb:0x0E60e94252F58aBb56604A8260492d96cf879007";
+const TREASURY_ADDRESS = "0x0E60e94252F58aBb56604A8260492d96cf879007";
 const BSCSCAN_TX = (tx: string) => `https://bscscan.com/tx/${tx}`;
 
 type IntentStatus = "draft" | "pending_review" | "flagged" | "approved" | "rejected";
@@ -43,6 +44,7 @@ export function Payments({ onNavigate, viewData }: PaymentsProps) {
   const [intentsLoading, setIntentsLoading] = useState(false);
   const [creating, setCreating] = useState(false);
   const [submitting, setSubmitting] = useState<string | null>(null);
+  const [cancellingIntentId, setCancellingIntentId] = useState<string | null>(null);
   const [kind, setKind] = useState<"joining_fee" | "package">("joining_fee");
   const [packageCode, setPackageCode] = useState("ENTRY_100");
   const [currentIntent, setCurrentIntent] = useState<{
@@ -158,6 +160,35 @@ export function Payments({ onNavigate, viewData }: PaymentsProps) {
   const handleRemoveCoupon = () => {
     setCouponApplied(null);
     setCouponCode("");
+  };
+
+  const handleCancelIntent = async (intentId: string) => {
+    setCancellingIntentId(intentId);
+    try {
+      await api.delete(`/api/payments/intents/${intentId}`);
+      toast.success("Intent cancelled");
+      if (currentIntent?.id === intentId) setCurrentIntent(null);
+      await loadIntents();
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Failed to cancel";
+      toast.error(msg);
+    } finally {
+      setCancellingIntentId(null);
+    }
+  };
+
+  const handleUseDraftIntent = (i: PaymentIntent) => {
+    if (i.status !== "draft") return;
+    setCurrentIntent({
+      id: i.id,
+      amount_usdt: i.amount_usdt,
+      treasury_address: TREASURY_ADDRESS,
+      safe_link: SAFE_LINK,
+      status: i.status,
+    });
+    setTxHash("");
+    setFromWallet("");
+    toast.info("Fill in your tx hash above and submit");
   };
 
   const handleCreateIntent = async () => {
@@ -450,12 +481,13 @@ export function Payments({ onNavigate, viewData }: PaymentsProps) {
               <TableHead>Status</TableHead>
               <TableHead>Tx hash</TableHead>
               <TableHead>Created</TableHead>
+              <TableHead className="text-right w-[180px]">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {intents.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5} className="text-muted-foreground text-center py-8">No payment intents yet</TableCell>
+                <TableCell colSpan={6} className="text-muted-foreground text-center py-8">No payment intents yet</TableCell>
               </TableRow>
             ) : (
               intents.map((i) => (
@@ -471,6 +503,38 @@ export function Payments({ onNavigate, viewData }: PaymentsProps) {
                     ) : "—"}
                   </TableCell>
                   <TableCell className="text-muted-foreground text-sm">{new Date(i.created_at).toLocaleDateString()}</TableCell>
+                  <TableCell className="text-right">
+                    {i.status === "draft" ? (
+                      <div className="flex gap-1 justify-end flex-wrap">
+                        <Button
+                          variant="default"
+                          size="sm"
+                          onClick={() => handleUseDraftIntent(i)}
+                          disabled={cancellingIntentId === i.id}
+                        >
+                          Submit tx
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="text-muted-foreground hover:text-destructive"
+                          onClick={() => handleCancelIntent(i.id)}
+                          disabled={cancellingIntentId === i.id}
+                        >
+                          {cancellingIntentId === i.id ? (
+                            <Loader2 className="size-4 animate-spin" />
+                          ) : (
+                            <>
+                              <Trash2 className="size-4 mr-1" />
+                              Cancel
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    ) : (
+                      "—"
+                    )}
+                  </TableCell>
                 </TableRow>
               ))
             )}
