@@ -1756,7 +1756,12 @@ export function Admin() {
           )}
           <Card>
             <div className="p-6 border-b border-border flex flex-wrap items-center justify-between gap-4">
-              <h3 className="text-lg font-semibold">Payment Intents (Manual Safe)</h3>
+              <div>
+                <h3 className="text-lg font-semibold">Payment Intents (Manual Safe)</h3>
+                <p className="text-sm text-muted-foreground mt-0.5">
+                  Approve/Reject appear only for <strong>Pending review</strong> or <strong>Flagged</strong>. Draft = user must send USDT and submit tx hash on their Payments page first.
+                </p>
+              </div>
               <div className="flex items-center gap-2">
                 <Select
                   value={paymentIntentsStatus === "" ? "all" : paymentIntentsStatus}
@@ -1828,7 +1833,7 @@ export function Admin() {
                         <TableCell className="font-mono text-xs max-w-[120px] truncate" title={pi.declared_from_wallet || ''}>{pi.declared_from_wallet || '—'}</TableCell>
                         <TableCell className="text-xs text-orange-600">{pi.mismatch_reason || '—'}</TableCell>
                         <TableCell className="text-right">
-                          {(pi.status === 'pending_review' || pi.status === 'flagged') && (
+                          {pi.status === 'pending_review' || pi.status === 'flagged' ? (
                             <div className="flex gap-1 justify-end">
                               <Button size="sm" variant="default" onClick={() => handleApproveIntent(pi.id)} disabled={paymentIntentActionLoading}>
                                 Approve
@@ -1837,6 +1842,10 @@ export function Admin() {
                                 Reject
                               </Button>
                             </div>
+                          ) : pi.status === 'draft' ? (
+                            <span className="text-xs text-muted-foreground">User must submit tx hash first</span>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">—</span>
                           )}
                         </TableCell>
                       </TableRow>
