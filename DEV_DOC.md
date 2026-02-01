@@ -83,6 +83,12 @@ Migrations:
 
 Request ID is set by existing middleware (`X-Request-ID`).
 
+## Backend environment (Railway)
+
+- **Required:** `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `ENCRYPTION_KEY`, `FRONTEND_URL`, `NODE_ENV`, `ADMIN_EMAILS`, `ENABLE_MANUAL_PAYMENTS`, `ENABLE_STRATEGY_RUNNER`. If `ENABLE_STRATEGY_RUNNER=true`, also `RUNNER_CRON_SECRET`.
+- **SUPABASE_ANON_KEY is frontend-only and must NOT be added to Railway.** Backend uses `SUPABASE_SERVICE_ROLE_KEY` only for all privileged Supabase access.
+- No env variable values are logged; no secrets are returned in API responses; no `VITE_*` variables are referenced in backend code.
+
 ## Testing with Binance Testnet
 
 1. **Create testnet API keys**

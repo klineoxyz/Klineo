@@ -11,17 +11,18 @@
 **Railway (Backend)**  
 Set in Railway Dashboard → Your backend service → Variables.
 
+**SUPABASE_ANON_KEY is frontend-only and must NOT be added to Railway.** Backend uses `SUPABASE_SERVICE_ROLE_KEY` only.
+
 | Variable | Required | Notes |
 |----------|----------|--------|
 | `SUPABASE_URL` | Yes | Supabase project URL |
 | `SUPABASE_SERVICE_ROLE_KEY` | Yes | From Supabase → API → service_role |
-| `SUPABASE_ANON_KEY` | Recommended | For RLS/self-test; optional for core API |
-| `FRONTEND_URL` | Yes | Vercel frontend URL (for CORS) |
 | `ENCRYPTION_KEY` | Yes | 32-byte hex; `openssl rand -hex 32` |
-| `ADMIN_EMAILS` | Recommended | Comma-separated admin emails |
+| `FRONTEND_URL` | Yes | Vercel frontend URL (for CORS) |
 | `NODE_ENV` | Yes | `production` |
-| `ENABLE_MANUAL_PAYMENTS` | Optional | `true` to enable Payments / payment intents |
-| `ENABLE_STRATEGY_RUNNER` | Optional | `true` to enable strategy cron |
+| `ADMIN_EMAILS` | Yes | Comma-separated admin emails |
+| `ENABLE_MANUAL_PAYMENTS` | Yes | Set to `true` or `false` |
+| `ENABLE_STRATEGY_RUNNER` | Yes | Set to `true` or `false` |
 | `RUNNER_CRON_SECRET` | If runner enabled | Strong random string; never log or expose |
 | `RUNNER_TICK_INTERVAL_SEC` | Optional | Default 30; 5–300 |
 | `DAILY_MAX_LOSS_USDT` | Optional | Risk limit; default 50 |

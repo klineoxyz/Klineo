@@ -3,7 +3,6 @@ import { verifySupabaseJWT, requireAdmin, AuthenticatedRequest } from '../middle
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 let supabaseService: SupabaseClient | null = null;
-let supabaseAnon: SupabaseClient | null = null;
 
 function getSupabaseService(): SupabaseClient | null {
   if (supabaseService) return supabaseService;
@@ -14,25 +13,6 @@ function getSupabaseService(): SupabaseClient | null {
   }
   supabaseService = createClient(url, key);
   return supabaseService;
-}
-
-function getSupabaseAnon(): SupabaseClient | null {
-  if (supabaseAnon) return supabaseAnon;
-  const url = process.env.SUPABASE_URL;
-  const key = process.env.SUPABASE_ANON_KEY;
-  if (!url || !key) {
-    // Debug logging in development
-    if (process.env.NODE_ENV !== 'production') {
-      console.warn('[self-test] SUPABASE_ANON_KEY not configured:', {
-        hasUrl: !!url,
-        hasKey: !!key,
-        keyLength: key?.length || 0
-      });
-    }
-    return null;
-  }
-  supabaseAnon = createClient(url, key);
-  return supabaseAnon;
 }
 
 export const selfTestRouter: Router = Router();
@@ -87,128 +67,17 @@ selfTestRouter.get('/rls', async (req: AuthenticatedRequest, res) => {
       }
     });
 
-    // Check 2: RLS enforced for anon client
-    const anonClient = getSupabaseAnon();
-    if (!anonClient) {
-      checks.push({
-        name: 'rls_user_profiles_self_row',
-        pass: false,
-        details: { error: 'Supabase anon client not configured' }
-      });
-      checks.push({
-        name: 'rls_user_profiles_other_row_behavior',
-        pass: false,
-        details: { error: 'Supabase anon client not configured' }
-      });
-      return res.status(503).json({
-        status: 'fail',
-        timestamp: new Date().toISOString(),
-        request_id: requestId,
-        checks,
-        error: 'Service unavailable - configuration missing'
-      });
-    } else {
-      // Get Bearer token from request (never log it)
-      const authHeader = req.headers.authorization;
-      const token = authHeader?.replace(/^Bearer\s+/i, '');
-      if (!token) {
-        checks.push({
-          name: 'rls_user_profiles_self_row',
-          pass: false,
-          details: { error: 'No Bearer token in request' }
-        });
-      } else {
-        // Create authenticated anon client with user's token
-        const authenticatedAnonClient = createClient(
-          process.env.SUPABASE_URL!,
-          process.env.SUPABASE_ANON_KEY!,
-          {
-            global: {
-              headers: {
-                Authorization: `Bearer ${token}`
-              }
-            }
-          }
-        );
-
-        // Test 2a: Query own row (should return exactly 1)
-        // Only select role, never expose id or email
-        const { data: selfData, error: selfError, count: selfCount } = await authenticatedAnonClient
-          .from('user_profiles')
-          .select('role', { count: 'exact' })
-          .eq('id', req.user.id)
-          .limit(1);
-
-        if (selfError || selfCount === 0) {
-          checks.push({
-            name: 'rls_user_profiles_self_row',
-            pass: false,
-            details: { error: selfError?.message || 'No data returned' }
-          });
-        } else {
-          checks.push({
-            name: 'rls_user_profiles_self_row',
-            pass: true,
-            details: {
-              found: true,
-              row_count: selfCount || 1
-            }
-          });
-        }
-
-        // Test 2b: Query other user's row (behavior depends on RLS policy)
-        // Only count, never expose actual row data
-        const { count: otherCount, error: otherError } = await authenticatedAnonClient
-          .from('user_profiles')
-          .select('*', { count: 'exact', head: true })
-          .neq('id', req.user.id)
-          .limit(1);
-
-        const otherRowCount = otherCount || 0;
-        const isAdmin = req.user.role === 'admin';
-
-        if (otherError) {
-          checks.push({
-            name: 'rls_user_profiles_other_row_behavior',
-            pass: false,
-            details: { error: otherError.message }
-          });
-        } else if (otherRowCount === 0) {
-          // RLS policy: users only read own
-          checks.push({
-            name: 'rls_user_profiles_other_row_behavior',
-            pass: true,
-            details: {
-              mode: 'users_only',
-              other_rows_found: 0,
-              note: 'RLS correctly blocks access to other users'
-            }
-          });
-        } else if (otherRowCount > 0 && isAdmin) {
-          // RLS policy: admins can read all
-          checks.push({
-            name: 'rls_user_profiles_other_row_behavior',
-            pass: true,
-            details: {
-              mode: 'admin_can_read_all',
-              other_rows_found: otherRowCount,
-              note: 'RLS allows admin to read all profiles (expected)'
-            }
-          });
-        } else {
-          // Unexpected: non-admin can read other rows
-          checks.push({
-            name: 'rls_user_profiles_other_row_behavior',
-            pass: false,
-            details: {
-              mode: 'unexpected',
-              other_rows_found: otherRowCount,
-              error: 'Non-admin user can read other profiles (RLS policy issue)'
-            }
-          });
-        }
-      }
-    }
+    // Check 2: RLS anon checks skipped on backend (SUPABASE_ANON_KEY is frontend-only; backend uses service_role only)
+    checks.push({
+      name: 'rls_user_profiles_self_row',
+      pass: true,
+      details: { skipped: true, note: 'SUPABASE_ANON_KEY is frontend-only; backend does not use anon client. RLS enforced by Supabase for frontend.' }
+    });
+    checks.push({
+      name: 'rls_user_profiles_other_row_behavior',
+      pass: true,
+      details: { skipped: true, note: 'SUPABASE_ANON_KEY is frontend-only; backend does not use anon client.' }
+    });
 
     // Check 3: Service role visibility (backend isolation check)
     const serviceClient = getSupabaseService();

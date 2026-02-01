@@ -37,45 +37,58 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Validate required environment variables
+// Required backend environment variables (Railway). No values logged.
 const FRONTEND_URL = process.env.FRONTEND_URL || (process.env.NODE_ENV === 'development' ? 'http://localhost:5173' : undefined);
-if (!FRONTEND_URL) {
-  console.error('FATAL: FRONTEND_URL environment variable is required');
-  console.error('For local development, create backend-skeleton/.env with:');
-  console.error('  FRONTEND_URL=http://localhost:5173');
-  console.error('  SUPABASE_URL=https://oyfeadnxwuazidfbjjfo.supabase.co');
-  console.error('  SUPABASE_SERVICE_ROLE_KEY=your-service-role-key');
+const runnerEnabled = process.env.ENABLE_STRATEGY_RUNNER === 'true';
+const REQUIRED: Record<string, boolean> = {
+  SUPABASE_URL: !!process.env.SUPABASE_URL,
+  SUPABASE_SERVICE_ROLE_KEY: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
+  ENCRYPTION_KEY: !!process.env.ENCRYPTION_KEY,
+  FRONTEND_URL: !!FRONTEND_URL,
+  NODE_ENV: !!process.env.NODE_ENV,
+  ADMIN_EMAILS: !!process.env.ADMIN_EMAILS,
+  ENABLE_MANUAL_PAYMENTS: !!process.env.ENABLE_MANUAL_PAYMENTS,
+  ENABLE_STRATEGY_RUNNER: !!process.env.ENABLE_STRATEGY_RUNNER,
+};
+if (runnerEnabled) {
+  REQUIRED.RUNNER_CRON_SECRET = !!process.env.RUNNER_CRON_SECRET;
+}
+
+const missing = Object.entries(REQUIRED).filter(([, v]) => !v).map(([k]) => k);
+if (missing.length > 0) {
+  console.error('FATAL: Missing required environment variables:', missing.join(', '));
+  console.error('Required (Railway): SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, ENCRYPTION_KEY, FRONTEND_URL, NODE_ENV, ADMIN_EMAILS, ENABLE_MANUAL_PAYMENTS, ENABLE_STRATEGY_RUNNER');
+  if (runnerEnabled) {
+    console.error('When ENABLE_STRATEGY_RUNNER=true also required: RUNNER_CRON_SECRET');
+  }
   process.exit(1);
 }
 
-// Log environment variable status (development only)
-if (process.env.NODE_ENV !== 'production') {
-  console.log('[Config] Environment variables loaded:');
-  console.log(`  SUPABASE_URL: ${process.env.SUPABASE_URL ? '✓' : '✗'}`);
-  console.log(`  SUPABASE_SERVICE_ROLE_KEY: ${process.env.SUPABASE_SERVICE_ROLE_KEY ? '✓' : '✗'}`);
-  console.log(`  SUPABASE_ANON_KEY: ${process.env.SUPABASE_ANON_KEY ? '✓' : '✗'}`);
-  if (!process.env.SUPABASE_ANON_KEY) {
-    console.warn('[Config] WARNING: SUPABASE_ANON_KEY not set - RLS self-test endpoint will fail');
-    console.warn('[Config] Add SUPABASE_ANON_KEY to backend-skeleton/.env for RLS testing');
-  }
-  console.log(`  ENCRYPTION_KEY: ${process.env.ENCRYPTION_KEY ? '✓' : '✗'}`);
-  if (!process.env.ENCRYPTION_KEY) {
-    console.warn('[Config] WARNING: ENCRYPTION_KEY not set - Exchange connections will fail');
-    console.warn('[Config] Generate a 32-byte key: openssl rand -hex 32');
-  }
+// FRONTEND_URL is defined here (startup exits above if missing)
+const frontendUrl: string = FRONTEND_URL!;
+
+// Safe startup checklist (no secrets, no values)
+console.log('[Config] Startup checklist (safe):');
+console.log('  SUPABASE_URL: present');
+console.log('  SUPABASE_SERVICE_ROLE_KEY: present');
+console.log('  ENCRYPTION_KEY: present');
+console.log('  FRONTEND_URL: present');
+console.log('  NODE_ENV: present');
+console.log('  ADMIN_EMAILS: present');
+console.log('  ENABLE_MANUAL_PAYMENTS: present');
+console.log('  ENABLE_STRATEGY_RUNNER: present');
+if (runnerEnabled) {
+  console.log('  RUNNER_CRON_SECRET: present');
 }
 
 logRunnerConfig();
 
 // Support both www and non-www domains for CORS
-// If FRONTEND_URL is https://klineo.xyz, also allow https://www.klineo.xyz
-const corsOrigins: string[] = [FRONTEND_URL];
-if (FRONTEND_URL.startsWith('https://') && !FRONTEND_URL.includes('www.')) {
-  // Add www version
-  corsOrigins.push(FRONTEND_URL.replace('https://', 'https://www.'));
-} else if (FRONTEND_URL.startsWith('https://www.')) {
-  // Add non-www version
-  corsOrigins.push(FRONTEND_URL.replace('https://www.', 'https://'));
+const corsOrigins: string[] = [frontendUrl];
+if (frontendUrl.startsWith('https://') && !frontendUrl.includes('www.')) {
+  corsOrigins.push(frontendUrl.replace('https://', 'https://www.'));
+} else if (frontendUrl.startsWith('https://www.')) {
+  corsOrigins.push(frontendUrl.replace('https://www.', 'https://'));
 }
 
 // Request ID middleware (adds X-Request-ID header and includes in logs)
