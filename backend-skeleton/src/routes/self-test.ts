@@ -67,27 +67,45 @@ selfTestRouter.get('/rls', async (req: AuthenticatedRequest, res) => {
       }
     });
 
-    // Check 2: RLS anon checks skipped on backend (SUPABASE_ANON_KEY is frontend-only; backend uses service_role only)
+    // Check 2: RLS checks skipped — backend uses service_role only; RLS is validated from the frontend
     checks.push({
       name: 'rls_user_profiles_self_row',
       pass: true,
-      details: { skipped: true, note: 'SUPABASE_ANON_KEY is frontend-only; backend does not use anon client. RLS enforced by Supabase for frontend.' }
+      details: { skipped: true, note: 'RLS is validated from the frontend; backend does not use anon key by design.' }
     });
     checks.push({
       name: 'rls_user_profiles_other_row_behavior',
       pass: true,
-      details: { skipped: true, note: 'SUPABASE_ANON_KEY is frontend-only; backend does not use anon client.' }
+      details: { skipped: true, note: 'RLS is validated from the frontend; backend does not use anon key by design.' }
     });
 
-    // Check 3: Service role visibility (backend isolation check)
+    // Check 3: DB connectivity (service role, safe query, no PII)
     const serviceClient = getSupabaseService();
     if (!serviceClient) {
+      checks.push({
+        name: 'db_connectivity',
+        pass: false,
+        details: { error: 'Service role client not configured' }
+      });
       checks.push({
         name: 'service_role_visibility_expected',
         pass: false,
         details: { error: 'Service role client not configured' }
       });
     } else {
+      const { error: dbError } = await serviceClient
+        .from('user_profiles')
+        .select('id', { count: 'exact', head: true })
+        .limit(1);
+      checks.push({
+        name: 'db_connectivity',
+        pass: !dbError,
+        details: dbError ? { error: dbError.message } : { note: 'DB reachable with service role.' }
+      });
+    }
+
+    // Check 4: Service role visibility (backend isolation check)
+    if (serviceClient) {
       // Service role bypasses RLS, so it can see all rows
       // Only count, never expose actual row data
       const { count: serviceCount, error: serviceError } = await serviceClient
