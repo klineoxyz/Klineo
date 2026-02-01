@@ -71,7 +71,7 @@ function getCached<T>(key: string, fn: () => Promise<T>): Promise<T> {
   });
 }
 
-export const financialRatiosRouter = Router();
+export const financialRatiosRouter: Router = Router();
 
 /**
  * GET /api/admin/financial-ratios?window=7d|30d|90d|mtd|prev_month
