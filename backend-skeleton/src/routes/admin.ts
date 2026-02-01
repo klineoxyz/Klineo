@@ -3,6 +3,7 @@ import { verifySupabaseJWT, requireAdmin, AuthenticatedRequest } from '../middle
 import { validate, uuidParam, statusBody, optionalString, pageQuery, limitQuery, searchQuery } from '../middleware/validation.js';
 import { body } from 'express-validator';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { financialRatiosRouter, getMarketingSpend, postMarketingSpend } from './admin-financial-ratios.js';
 
 let supabase: SupabaseClient | null = null;
 
@@ -23,6 +24,19 @@ export const adminRouter: Router = Router();
 // All admin routes require authentication + admin role
 adminRouter.use(verifySupabaseJWT);
 adminRouter.use(requireAdmin);
+
+// Admin Financial Ratios (KPIs, timeseries, top payers, refunds/fails)
+adminRouter.use('/financial-ratios', financialRatiosRouter);
+adminRouter.get('/marketing-spend', getMarketingSpend);
+adminRouter.post('/marketing-spend',
+  validate([
+    body('period_start').matches(/^\d{4}-\d{2}-\d{2}$/).withMessage('period_start must be YYYY-MM-DD'),
+    body('period_end').matches(/^\d{4}-\d{2}-\d{2}$/).withMessage('period_end must be YYYY-MM-DD'),
+    body('spend_usdt').isFloat({ min: 0 }).withMessage('spend_usdt must be >= 0'),
+    body('notes').optional().isString(),
+  ]),
+  postMarketingSpend
+);
 
 /**
  * GET /api/admin/stats

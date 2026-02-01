@@ -14,6 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { toast } from "@/app/lib/toast";
 import { copyToClipboard } from "@/app/lib/clipboard";
 import { Search, Shield, ChevronLeft, ChevronRight, Download, Filter, Settings2, Percent, Calendar, Save, Copy, Link2, Trash2, RefreshCw, Ticket, Banknote, CheckCircle } from "lucide-react";
+import { AdminFinancialRatios } from "@/app/components/screens/AdminFinancialRatios";
 
 /** Download array of objects as CSV (client-side). */
 function downloadCSV(rows: Record<string, unknown>[], columns: { key: string; header: string }[], filename: string) {
@@ -608,6 +609,7 @@ export function Admin() {
           <TabsTrigger value="platform-settings">Platform Settings</TabsTrigger>
           <TabsTrigger value="payments">Payments</TabsTrigger>
           <TabsTrigger value="discounts">Discount Coupons</TabsTrigger>
+          <TabsTrigger value="financial-ratios">Financial Ratios</TabsTrigger>
           <TabsTrigger value="runner">Runner</TabsTrigger>
           <TabsTrigger value="audit">Audit Logs</TabsTrigger>
         </TabsList>
@@ -1865,6 +1867,10 @@ export function Admin() {
               </div>
             </div>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="financial-ratios" className="space-y-4">
+          <AdminFinancialRatios />
         </TabsContent>
 
         <TabsContent value="runner" className="space-y-4" onFocus={() => { loadRunnerStatus(); loadTickRuns(); }}>
