@@ -140,6 +140,48 @@ financialRatiosRouter.get('/', async (req: Request, res: Response) => {
       notes.push('Active users from strategy_tick_runs skipped');
     }
 
+    // --- DAU / MAU / WAU (always computed: last 24h, 7d, 30d) ---
+    try {
+      const now = new Date();
+      const dayAgo = new Date(now); dayAgo.setHours(dayAgo.getHours() - 24);
+      const weekAgo = new Date(now); weekAgo.setDate(weekAgo.getDate() - 7);
+      const monthAgo = new Date(now); monthAgo.setDate(monthAgo.getDate() - 30);
+      const dayIso = dayAgo.toISOString();
+      const weekIso = weekAgo.toISOString();
+      const monthIso = monthAgo.toISOString();
+
+      const [dauRes, wauRes, mauRes] = await Promise.all([
+        client.from('strategy_tick_runs').select('user_id').gte('scheduled_at', dayIso).lte('scheduled_at', toIso),
+        client.from('strategy_tick_runs').select('user_id').gte('scheduled_at', weekIso).lte('scheduled_at', toIso),
+        client.from('strategy_tick_runs').select('user_id').gte('scheduled_at', monthIso).lte('scheduled_at', toIso),
+      ]);
+      const dauSet = new Set((dauRes.data || []).map((r: { user_id: string }) => r.user_id));
+      const wauSet = new Set((wauRes.data || []).map((r: { user_id: string }) => r.user_id));
+      const mauSet = new Set((mauRes.data || []).map((r: { user_id: string }) => r.user_id));
+      kpis.dau = dauSet.size;
+      kpis.wau = wauSet.size;
+      kpis.mau = mauSet.size;
+    } catch {
+      kpis.dau = 0;
+      kpis.wau = 0;
+      kpis.mau = 0;
+      notes.push('DAU/WAU/MAU skipped');
+    }
+
+    // --- New users 7d / 30d (for growth context) ---
+    try {
+      const now = new Date();
+      const weekAgo = new Date(now); weekAgo.setDate(weekAgo.getDate() - 7);
+      const monthAgo = new Date(now); monthAgo.setDate(monthAgo.getDate() - 30);
+      const { count: new7 } = await client.from('user_profiles').select('*', { count: 'exact', head: true }).gte('created_at', weekAgo.toISOString());
+      const { count: new30 } = await client.from('user_profiles').select('*', { count: 'exact', head: true }).gte('created_at', monthAgo.toISOString());
+      kpis.new_users_7d = new7 ?? 0;
+      kpis.new_users_30d = new30 ?? 0;
+    } catch {
+      kpis.new_users_7d = 0;
+      kpis.new_users_30d = 0;
+    }
+
     const payingUsersCount = kpis.paying_users as number ?? 0;
     const newUsersCount = kpis.new_users as number ?? 0;
     const activeUsersCount = kpis.active_users as number ?? 0;
@@ -163,6 +205,8 @@ financialRatiosRouter.get('/', async (req: Request, res: Response) => {
       ratios.connections_health_rate = totalConn > 0 ? Math.round((okConn / totalConn) * 10000) / 10000 : 0;
       ratios.futures_enabled_rate = totalConn > 0 ? Math.round((futuresEnabled / totalConn) * 10000) / 10000 : 0;
       ratios.kill_switch_rate = totalConn > 0 ? Math.round((killSwitchOn / totalConn) * 10000) / 10000 : 0;
+      kpis.total_connections = totalConn;
+      kpis.connections_ok = okConn;
     } catch {
       notes.push('Connection metrics skipped');
     }
@@ -175,6 +219,9 @@ financialRatiosRouter.get('/', async (req: Request, res: Response) => {
       const pausedRuns = runList.filter((r: { status: string }) => r.status === 'paused').length;
       ratios.strategy_activation_rate = totalRuns > 0 ? Math.round((activeRuns / totalRuns) * 10000) / 10000 : 0;
       ratios.auto_pause_rate = totalRuns > 0 ? Math.round((pausedRuns / totalRuns) * 10000) / 10000 : 0;
+      kpis.total_strategy_runs = totalRuns;
+      kpis.active_strategies = activeRuns;
+      kpis.paused_strategies = pausedRuns;
     } catch {
       notes.push('Strategy runs metrics skipped');
     }
@@ -240,6 +287,9 @@ financialRatiosRouter.get('/timeseries', async (req: Request, res: Response) => 
     } else if (metric === 'paying_users') {
       const { data, error } = await client.from('admin_kpi_users_daily').select('date, paying_users').gte('date', fromIso.slice(0, 10)).lte('date', toIso.slice(0, 10)).order('date', { ascending: true });
       if (!error && data) for (const row of data as { date: string; paying_users: number }[]) points.push({ date: row.date, value: Number(row.paying_users ?? 0) });
+    } else if (metric === 'active_users') {
+      const { data, error } = await client.from('admin_kpi_users_daily').select('date, active_users').gte('date', fromIso.slice(0, 10)).lte('date', toIso.slice(0, 10)).order('date', { ascending: true });
+      if (!error && data) for (const row of data as { date: string; active_users: number }[]) points.push({ date: row.date, value: Number(row.active_users ?? 0) });
     } else if (metric === 'active_strategies') {
       const { data: runs } = await client.from('strategy_runs').select('created_at, status');
       const byDay = new Map<string, number>();

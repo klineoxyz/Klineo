@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/app/components/ui/table";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { toast } from "@/app/lib/toast";
-import { Download, DollarSign, Users, Activity, Loader2, BarChart3, RefreshCw } from "lucide-react";
+import { Download, DollarSign, Users, Activity, Loader2, BarChart3, RefreshCw, TrendingUp, UserPlus, Zap, Link2 } from "lucide-react";
 
 const WINDOWS = [
   { value: "24h", label: "Last 24h" },
@@ -95,6 +95,7 @@ export function AdminFinancialRatios() {
   const [timeseriesRevenue, setTimeseriesRevenue] = useState<TimeseriesResponse | null>(null);
   const [timeseriesPayingUsers, setTimeseriesPayingUsers] = useState<TimeseriesResponse | null>(null);
   const [timeseriesTickSuccess, setTimeseriesTickSuccess] = useState<TimeseriesResponse | null>(null);
+  const [timeseriesActiveUsers, setTimeseriesActiveUsers] = useState<TimeseriesResponse | null>(null);
   const [topPayers, setTopPayers] = useState<TopPayerRow[]>([]);
   const [refundsFails, setRefundsFails] = useState<RefundFailRow[]>([]);
   const [marketingSpend, setMarketingSpend] = useState<MarketingSpendRow[]>([]);
@@ -119,18 +120,21 @@ export function AdminFinancialRatios() {
   const loadTimeseries = async () => {
     setTsLoading(true);
     try {
-      const [rev, pay, tick] = await Promise.all([
+      const [rev, pay, tick, active] = await Promise.all([
         api.get<TimeseriesResponse>("/api/admin/financial-ratios/timeseries?metric=revenue&days=90"),
         api.get<TimeseriesResponse>("/api/admin/financial-ratios/timeseries?metric=paying_users&days=90"),
         api.get<TimeseriesResponse>("/api/admin/financial-ratios/timeseries?metric=tick_success&days=90"),
+        api.get<TimeseriesResponse>("/api/admin/financial-ratios/timeseries?metric=active_users&days=90"),
       ]);
       setTimeseriesRevenue(rev);
       setTimeseriesPayingUsers(pay);
       setTimeseriesTickSuccess(tick);
+      setTimeseriesActiveUsers(active);
     } catch {
       setTimeseriesRevenue(null);
       setTimeseriesPayingUsers(null);
       setTimeseriesTickSuccess(null);
+      setTimeseriesActiveUsers(null);
     } finally {
       setTsLoading(false);
     }
@@ -308,6 +312,56 @@ export function AdminFinancialRatios() {
             </Card>
           </div>
 
+          {/* Activity & traders: DAU, WAU, MAU, new users, connections, strategies */}
+          <div>
+            <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
+              <TrendingUp className="size-4 text-primary" />
+              Activity & traders
+            </h3>
+            <p className="text-xs text-muted-foreground mb-3">Daily / weekly / monthly active users (strategy tick activity). New signups and platform connections.</p>
+            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
+              <Card className="p-4 space-y-1">
+                <div className="text-xs text-muted-foreground uppercase tracking-wide">DAU</div>
+                <div className="text-xl font-semibold text-primary">{Number(kpis.dau ?? 0)}</div>
+                <div className="text-[10px] text-muted-foreground">Daily active (24h)</div>
+              </Card>
+              <Card className="p-4 space-y-1">
+                <div className="text-xs text-muted-foreground uppercase tracking-wide">WAU</div>
+                <div className="text-xl font-semibold">{Number(kpis.wau ?? 0)}</div>
+                <div className="text-[10px] text-muted-foreground">Weekly active (7d)</div>
+              </Card>
+              <Card className="p-4 space-y-1">
+                <div className="text-xs text-muted-foreground uppercase tracking-wide">MAU</div>
+                <div className="text-xl font-semibold">{Number(kpis.mau ?? 0)}</div>
+                <div className="text-[10px] text-muted-foreground">Monthly active (30d)</div>
+              </Card>
+              <Card className="p-4 space-y-1">
+                <div className="text-xs text-muted-foreground uppercase tracking-wide flex items-center gap-1">
+                  <UserPlus className="size-3.5" /> New users (7d)
+                </div>
+                <div className="text-xl font-semibold">{Number(kpis.new_users_7d ?? 0)}</div>
+              </Card>
+              <Card className="p-4 space-y-1">
+                <div className="text-xs text-muted-foreground uppercase tracking-wide">New users (30d)</div>
+                <div className="text-xl font-semibold">{Number(kpis.new_users_30d ?? 0)}</div>
+              </Card>
+              <Card className="p-4 space-y-1">
+                <div className="text-xs text-muted-foreground uppercase tracking-wide flex items-center gap-1">
+                  <Link2 className="size-3.5" /> Connections
+                </div>
+                <div className="text-xl font-semibold">{Number(kpis.total_connections ?? 0)}</div>
+                <div className="text-[10px] text-muted-foreground">{Number(kpis.connections_ok ?? 0)} OK</div>
+              </Card>
+              <Card className="p-4 space-y-1">
+                <div className="text-xs text-muted-foreground uppercase tracking-wide flex items-center gap-1">
+                  <Zap className="size-3.5" /> Active strategies
+                </div>
+                <div className="text-xl font-semibold">{Number(kpis.active_strategies ?? 0)}</div>
+                <div className="text-[10px] text-muted-foreground">{Number(kpis.total_strategy_runs ?? 0)} total</div>
+              </Card>
+            </div>
+          </div>
+
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <Card className="p-4">
               <h3 className="text-sm font-semibold mb-3">Revenue trend (90 days)</h3>
@@ -347,6 +401,26 @@ export function AdminFinancialRatios() {
                 </ResponsiveContainer>
               ) : (
                 <div className="h-48 flex items-center justify-center text-muted-foreground text-sm">No data</div>
+              )}
+            </Card>
+            <Card className="p-4">
+              <h3 className="text-sm font-semibold mb-3">Daily active users (90 days)</h3>
+              {tsLoading ? (
+                <div className="h-48 flex items-center justify-center">
+                  <Loader2 className="size-6 animate-spin text-muted-foreground" />
+                </div>
+              ) : timeseriesActiveUsers?.timeseries?.length ? (
+                <ResponsiveContainer width="100%" height={220}>
+                  <LineChart data={timeseriesActiveUsers.timeseries}>
+                    <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                    <XAxis dataKey="date" tick={{ fontSize: 10 }} tickFormatter={(v) => v.slice(5)} />
+                    <YAxis tick={{ fontSize: 10 }} />
+                    <Tooltip formatter={(v: number) => [v, "Active users"]} />
+                    <Line type="monotone" dataKey="value" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} name="DAU" />
+                  </LineChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="h-48 flex items-center justify-center text-muted-foreground text-sm">No activity data</div>
               )}
             </Card>
           </div>

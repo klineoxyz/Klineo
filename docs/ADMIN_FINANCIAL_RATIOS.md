@@ -45,10 +45,16 @@ Config constants (backend env): `REFERRAL_POOL_PCT`, `PLATFORM_PCT`, `MARKETING_
 | Name | Formula | Notes |
 |------|---------|--------|
 | **New Users** | Count of `user_profiles` created in period | |
+| **New Users (7d / 30d)** | New signups in last 7 or 30 days | Always computed |
 | **Active Users** | Distinct users in `strategy_tick_runs` in period | Proxy for session activity |
+| **DAU** | Distinct users with `strategy_tick_runs` in last 24h | Daily active (always computed) |
+| **WAU** | Distinct users with `strategy_tick_runs` in last 7d | Weekly active (always computed) |
+| **MAU** | Distinct users with `strategy_tick_runs` in last 30d | Monthly active (always computed) |
 | **Paying Users** | Distinct users with completed `eligible_purchases` in period | |
 | **Conversion Rate** | paying_users / new_users (or 0) | |
 | **Conversion (active)** | paying_users / active_users (or 0) | |
+| **Total connections** | Count of `user_exchange_connections`; OK = last_test_status = 'ok' | |
+| **Active strategies** | Count of `strategy_runs` with status = 'active' | Paused count also exposed |
 
 Retention (D1/D7/D30) requires event timestamps; not implemented. Optional: “Repeat Active Rate” (users active in current and previous period) can be added later.
 
@@ -83,7 +89,7 @@ All routes require `verifySupabaseJWT` + `requireAdmin`. No PII in responses.
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/api/admin/financial-ratios?window=24h\|7d\|30d\|90d\|mtd\|prev_month` | KPI snapshot + ratios for window |
-| GET | `/api/admin/financial-ratios/timeseries?metric=revenue\|paying_users\|active_strategies\|tick_success&days=90` | Time series for charts |
+| GET | `/api/admin/financial-ratios/timeseries?metric=revenue\|paying_users\|active_users\|active_strategies\|tick_success&days=90` | Time series for charts |
 | GET | `/api/admin/financial-ratios/top-payers?window=7d&limit=20` | Top payers (masked user_id, total, last payment) |
 | GET | `/api/admin/financial-ratios/refunds-fails?window=7d&limit=50` | Refunded/failed payments (masked) |
 | GET | `/api/admin/marketing-spend` | List marketing spend entries |
