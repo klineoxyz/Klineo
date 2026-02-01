@@ -51,6 +51,202 @@ async function getPendingApprovedTotal(client: SupabaseClient, userId: string): 
 export const referralsRouter: Router = Router();
 referralsRouter.use(verifySupabaseJWT);
 
+/** Mask email for display: u***@***.com */
+function maskEmail(email: string | null | undefined): string {
+  if (!email || typeof email !== 'string') return '—';
+  const at = email.indexOf('@');
+  if (at <= 0) return '***@***';
+  const local = email.slice(0, at);
+  const domain = email.slice(at + 1);
+  const showLocal = local.length <= 2 ? local[0] + '***' : local[0] + '***' + (local[local.length - 1] || '');
+  const showDomain = domain.length <= 2 ? '***' : (domain[0] || '') + '***.' + (domain.split('.').pop() || '');
+  return showLocal + '@' + showDomain;
+}
+
+/** Mask username: first 2 chars + *** */
+function maskUsername(username: string | null | undefined): string {
+  if (!username || typeof username !== 'string') return '';
+  if (username.length <= 2) return username + '***';
+  return username.slice(0, 2) + '***';
+}
+
+type Timeframe = '7d' | '30d' | '90d' | 'all';
+
+function parseTimeframe(q: unknown): { from: Date | null; to: Date; label: string } {
+  const to = new Date();
+  let from: Date | null = null;
+  let label = 'All time';
+  const s = String(q || 'all').toLowerCase();
+  if (s === '7d') {
+    from = new Date(to);
+    from.setDate(from.getDate() - 7);
+    label = 'Last 7 days';
+  } else if (s === '30d') {
+    from = new Date(to);
+    from.setDate(from.getDate() - 30);
+    label = 'Last 30 days';
+  } else if (s === '90d') {
+    from = new Date(to);
+    from.setDate(from.getDate() - 90);
+    label = 'Last 90 days';
+  }
+  return { from, to, label };
+}
+
+/**
+ * GET /api/referrals/my-referrals?timeframe=7d|30d|90d|all
+ * Returns list of users the current user referred, with spend and earnings per referred user (in timeframe).
+ */
+referralsRouter.get('/my-referrals', async (req: AuthenticatedRequest, res: Response) => {
+  const client = getSupabase();
+  if (!client) return res.status(503).json({ error: 'Database unavailable' });
+
+  const userId = req.user!.id;
+  const { from: fromDate, to: toDate, label: timeframeLabel } = parseTimeframe(req.query.timeframe);
+  const fromIso = fromDate ? fromDate.toISOString() : null;
+  const toIso = toDate.toISOString();
+
+  try {
+    // 1) All referrals where current user is referrer
+    const { data: referralRows, error: refErr } = await client
+      .from('referrals')
+      .select('id, referred_id, created_at')
+      .eq('referrer_id', userId)
+      .order('created_at', { ascending: false });
+
+    if (refErr) {
+      return res.status(500).json({ error: 'Failed to load referrals' });
+    }
+
+    const refs = referralRows || [];
+    if (refs.length === 0) {
+      return res.json({
+        totalReferrals: 0,
+        timeframe: timeframeLabel,
+        fromDate: fromIso,
+        toDate: toIso,
+        referrals: [],
+        summary: { totalVolumeUsd: 0, totalEarningsUsd: 0 },
+      });
+    }
+
+    const referredIds = refs.map((r) => r.referred_id);
+
+    // 2) Profiles for referred users (masked display)
+    const { data: profiles } = await client
+      .from('user_profiles')
+      .select('id, email, full_name, username')
+      .in('id', referredIds);
+
+    const profileMap = new Map(
+      (profiles || []).map((p) => [
+        p.id,
+        {
+          display: maskUsername((p as { username?: string }).username) || maskEmail((p as { email?: string }).email),
+          email: (p as { email?: string }).email,
+        },
+      ])
+    );
+
+    // 3) Purchases by referred users (for spend + earnings link)
+    let purchasesQuery = client
+      .from('eligible_purchases')
+      .select('id, user_id, amount, created_at')
+      .eq('status', 'completed')
+      .in('user_id', referredIds);
+
+    if (fromIso) {
+      purchasesQuery = purchasesQuery.gte('created_at', fromIso).lte('created_at', toIso);
+    }
+
+    const { data: purchases } = await purchasesQuery;
+
+    const purchaseByUser = new Map<string, { id: string; amount: number; created_at: string }[]>();
+    for (const p of purchases || []) {
+      const uid = p.user_id as string;
+      if (!purchaseByUser.has(uid)) purchaseByUser.set(uid, []);
+      purchaseByUser.get(uid)!.push({
+        id: p.id,
+        amount: Number(p.amount ?? 0),
+        created_at: (p as { created_at?: string }).created_at || '',
+      });
+    }
+
+    // 4) Your earnings from each purchase (current user as earner)
+    const purchaseIds = (purchases || []).map((p) => p.id);
+    let earningsByPurchase = new Map<string, number>();
+    if (purchaseIds.length > 0) {
+      let earningsQuery = client
+        .from('purchase_referral_earnings')
+        .select('purchase_id, amount')
+        .eq('user_id', userId)
+        .in('purchase_id', purchaseIds);
+
+      if (fromIso) {
+        earningsQuery = earningsQuery.gte('created_at', fromIso).lte('created_at', toIso);
+      }
+
+      const { data: earnings } = await earningsQuery;
+      for (const e of earnings || []) {
+        const pid = e.purchase_id as string;
+        const amt = Number(e.amount ?? 0);
+        earningsByPurchase.set(pid, (earningsByPurchase.get(pid) || 0) + amt);
+      }
+    }
+
+    // 5) Build per-referred stats
+    const referrals: Array<{
+      referredId: string;
+      referredDisplay: string;
+      joinedAt: string;
+      totalSpendUsd: number;
+      yourEarningsFromThemUsd: number;
+    }> = [];
+
+    let totalVolumeUsd = 0;
+    let totalEarningsUsd = 0;
+
+    for (const r of refs) {
+      const referredId = r.referred_id as string;
+      const joinedAt = (r as { created_at?: string }).created_at || '';
+      const display = profileMap.get(referredId)?.display ?? referredId.slice(0, 8) + '***';
+
+      const userPurchases = purchaseByUser.get(referredId) || [];
+      const totalSpendUsd = userPurchases.reduce((s, p) => s + p.amount, 0);
+      let yourEarningsFromThemUsd = 0;
+      for (const p of userPurchases) {
+        yourEarningsFromThemUsd += earningsByPurchase.get(p.id) || 0;
+      }
+
+      totalVolumeUsd += totalSpendUsd;
+      totalEarningsUsd += yourEarningsFromThemUsd;
+
+      referrals.push({
+        referredId,
+        referredDisplay: display,
+        joinedAt,
+        totalSpendUsd: Math.round(totalSpendUsd * 100) / 100,
+        yourEarningsFromThemUsd: Math.round(yourEarningsFromThemUsd * 100) / 100,
+      });
+    }
+
+    return res.json({
+      totalReferrals: refs.length,
+      timeframe: timeframeLabel,
+      fromDate: fromIso,
+      toDate: toIso,
+      referrals,
+      summary: {
+        totalVolumeUsd: Math.round(totalVolumeUsd * 100) / 100,
+        totalEarningsUsd: Math.round(totalEarningsUsd * 100) / 100,
+      },
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Unknown error';
+    return res.status(500).json({ error: msg });
+  }
+});
+
 /**
  * GET /api/referrals/purchases/:id/explanation
  * Human-readable explanation of referral earnings for a purchase.

@@ -25,6 +25,8 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/app/compo
 import { ChevronDown, ChevronRight, CheckSquare } from "lucide-react";
 import { ConnectExchangeWizard } from "@/app/components/screens/ConnectExchangeWizard";
 import { FuturesEnableModal } from "@/app/components/screens/FuturesEnableModal";
+import { Users, DollarSign } from "lucide-react";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/app/components/ui/table";
 
 interface SettingsProps {
   onNavigate?: (view: string) => void;
@@ -70,6 +72,23 @@ export function Settings({ onNavigate }: SettingsProps) {
   const [updateCredsForm, setUpdateCredsForm] = useState({ apiKey: "", apiSecret: "", environment: "production" as "production" | "testnet" });
   const [updateCredsLoading, setUpdateCredsLoading] = useState(false);
   const [manageFuturesConn, setManageFuturesConn] = useState<ExchangeConnection | null>(null);
+
+  // My Referrals (profile)
+  type MyReferralsTimeframe = "7d" | "30d" | "90d" | "all";
+  const [myReferralsTimeframe, setMyReferralsTimeframe] = useState<MyReferralsTimeframe>("all");
+  const [myReferralsLoading, setMyReferralsLoading] = useState(false);
+  const [myReferralsData, setMyReferralsData] = useState<{
+    totalReferrals: number;
+    timeframe: string;
+    referrals: Array<{
+      referredId: string;
+      referredDisplay: string;
+      joinedAt: string;
+      totalSpendUsd: number;
+      yourEarningsFromThemUsd: number;
+    }>;
+    summary: { totalVolumeUsd: number; totalEarningsUsd: number };
+  } | null>(null);
 
   useEffect(() => {
     if (!user?.id) {
@@ -226,6 +245,31 @@ export function Settings({ onNavigate }: SettingsProps) {
       .then((d) => setEntitlement({ remainingUsd: d.remainingUsd ?? 0, status: d.status ?? "inactive" }))
       .catch(() => setEntitlement(null));
   }, [user?.id, isDemoMode]);
+
+  // My Referrals: fetch when user or timeframe changes
+  useEffect(() => {
+    if (!user?.id) {
+      setMyReferralsData(null);
+      return;
+    }
+    setMyReferralsLoading(true);
+    api
+      .get<{
+        totalReferrals: number;
+        timeframe: string;
+        referrals: Array<{
+          referredId: string;
+          referredDisplay: string;
+          joinedAt: string;
+          totalSpendUsd: number;
+          yourEarningsFromThemUsd: number;
+        }>;
+        summary: { totalVolumeUsd: number; totalEarningsUsd: number };
+      }>(`/api/referrals/my-referrals?timeframe=${myReferralsTimeframe}`)
+      .then((data) => setMyReferralsData(data))
+      .catch(() => setMyReferralsData(null))
+      .finally(() => setMyReferralsLoading(false));
+  }, [user?.id, myReferralsTimeframe]);
 
   const handleTestBeforeSave = async () => {
     if (!formData.apiKey?.trim() || !formData.apiSecret?.trim()) {
@@ -514,6 +558,96 @@ export function Settings({ onNavigate }: SettingsProps) {
             >
               Update Wallet
             </Button>
+          </Card>
+
+          {/* My Referrals: count, time frame, per-referral spend & earnings */}
+          <Card className="p-6 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <h3 className="text-lg font-semibold flex items-center gap-2">
+                <Users className="size-5 text-primary" />
+                My Referrals
+              </h3>
+              <Select
+                value={myReferralsTimeframe}
+                onValueChange={(v: MyReferralsTimeframe) => setMyReferralsTimeframe(v)}
+              >
+                <SelectTrigger className="w-full sm:w-[180px]">
+                  <SelectValue placeholder="Time frame" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All time</SelectItem>
+                  <SelectItem value="7d">Last 7 days</SelectItem>
+                  <SelectItem value="30d">Last 30 days</SelectItem>
+                  <SelectItem value="90d">Last 90 days</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Users you invited to the platform, how much they spent in the selected period, and your earnings from each.
+            </p>
+            {myReferralsLoading ? (
+              <div className="flex items-center gap-2 py-6">
+                <Loader2 className="size-4 animate-spin" />
+                <span>Loading referrals...</span>
+              </div>
+            ) : myReferralsData ? (
+              <>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div className="p-3 rounded-lg bg-secondary/30">
+                    <div className="text-xs text-muted-foreground uppercase tracking-wide">Users referred</div>
+                    <div className="text-xl font-semibold text-primary">{myReferralsData.totalReferrals}</div>
+                  </div>
+                  <div className="p-3 rounded-lg bg-secondary/30">
+                    <div className="text-xs text-muted-foreground uppercase tracking-wide">Period</div>
+                    <div className="text-sm font-medium">{myReferralsData.timeframe}</div>
+                  </div>
+                  <div className="p-3 rounded-lg bg-secondary/30">
+                    <div className="text-xs text-muted-foreground uppercase tracking-wide">Volume (period)</div>
+                    <div className="text-xl font-semibold">${myReferralsData.summary.totalVolumeUsd.toFixed(2)}</div>
+                  </div>
+                  <div className="p-3 rounded-lg bg-secondary/30">
+                    <div className="text-xs text-muted-foreground uppercase tracking-wide flex items-center gap-1">
+                      <DollarSign className="size-3.5" /> Your earnings (period)
+                    </div>
+                    <div className="text-xl font-semibold text-primary">${myReferralsData.summary.totalEarningsUsd.toFixed(2)}</div>
+                  </div>
+                </div>
+                {myReferralsData.referrals.length === 0 ? (
+                  <p className="text-sm text-muted-foreground py-4">
+                    {myReferralsData.totalReferrals === 0
+                      ? "You haven't referred anyone yet. Share your referral link from Community Rewards to invite users."
+                      : `No purchases from your referrals in ${myReferralsData.timeframe.toLowerCase()}.`}
+                  </p>
+                ) : (
+                  <div className="rounded-md border border-border overflow-hidden">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Referred user</TableHead>
+                          <TableHead>Joined</TableHead>
+                          <TableHead className="text-right">Spend (period)</TableHead>
+                          <TableHead className="text-right">Your earnings</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {myReferralsData.referrals.map((r) => (
+                          <TableRow key={r.referredId}>
+                            <TableCell className="font-mono text-sm">{r.referredDisplay}</TableCell>
+                            <TableCell className="text-muted-foreground text-sm">
+                              {r.joinedAt ? new Date(r.joinedAt).toLocaleDateString() : "—"}
+                            </TableCell>
+                            <TableCell className="text-right font-mono">${r.totalSpendUsd.toFixed(2)}</TableCell>
+                            <TableCell className="text-right font-mono font-semibold text-primary">${r.yourEarningsFromThemUsd.toFixed(2)}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </>
+            ) : (
+              <p className="text-sm text-muted-foreground py-4">Unable to load referral data. Check your connection and try again.</p>
+            )}
           </Card>
 
           <Card className="p-6 space-y-4">
