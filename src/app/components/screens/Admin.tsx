@@ -1718,7 +1718,33 @@ export function Admin() {
                           </Badge>
                         </TableCell>
                         <TableCell className="text-right">
-                          <div className="flex gap-2 justify-end">
+                          <div className="flex flex-wrap gap-2 justify-end">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                const summary = d.scope === "onboarding"
+                                  ? `Onboarding: ${d.onboardingDiscountPercent != null ? `${d.onboardingDiscountPercent}% off` : ""}${d.onboardingDiscountFixedUsd != null ? (d.onboardingDiscountPercent != null ? ` or $${d.onboardingDiscountFixedUsd} off` : `$${d.onboardingDiscountFixedUsd} off`) : ""}`
+                                  : `Trading: ${d.tradingDiscountPercent != null ? `${d.tradingDiscountPercent}% off` : ""} — ${d.tradingPackageIds?.length ? d.tradingPackageIds.join(", ") : "All"} / max ${d.tradingMaxPackages ?? "—"} (used ${d.tradingUsedCount ?? 0})`;
+                                navigator.clipboard.writeText(summary).then(() => toast.success("Discount summary copied")).catch(() => toast.error("Copy failed"));
+                              }}
+                              title="Copy discount summary"
+                            >
+                              <Copy className="size-4 mr-1" />
+                              Copy summary
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                const link = `${typeof window !== "undefined" ? window.location.origin : ""}/payments`;
+                                navigator.clipboard.writeText(link).then(() => toast.success("Payments link copied")).catch(() => toast.error("Copy failed"));
+                              }}
+                              title="Copy Payments page link to send to user"
+                            >
+                              <Link2 className="size-4 mr-1" />
+                              Copy link
+                            </Button>
                             {d.status === "active" && (
                               <Button variant="outline" size="sm" onClick={() => handleUserDiscountStatus(d.id, "paused")} title="Pause">
                                 Pause

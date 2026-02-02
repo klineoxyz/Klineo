@@ -1016,7 +1016,7 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
                             stroke="#EF4444" 
                             strokeDasharray="3 3"
                             opacity={0.5}
-                            label={{ value: `${backtestChartData[Math.floor(backtestChartData.length / 2)]?.close.toFixed(2)}`, position: "right" }}
+                            label={{ value: `${(backtestChartData[Math.floor(backtestChartData.length / 2)]?.close ?? 0).toFixed(2)}`, position: "right" }}
                           />
                           
                           {/* Brush for zooming */}

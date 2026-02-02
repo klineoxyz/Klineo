@@ -25,7 +25,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/app/compo
 import { ChevronDown, ChevronRight, CheckSquare } from "lucide-react";
 import { ConnectExchangeWizard } from "@/app/components/screens/ConnectExchangeWizard";
 import { FuturesEnableModal } from "@/app/components/screens/FuturesEnableModal";
-import { Users, DollarSign } from "lucide-react";
+import { Users, DollarSign, Ticket } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/app/components/ui/table";
 
 interface SettingsProps {
@@ -72,6 +72,22 @@ export function Settings({ onNavigate }: SettingsProps) {
   const [updateCredsForm, setUpdateCredsForm] = useState({ apiKey: "", apiSecret: "", environment: "production" as "production" | "testnet" });
   const [updateCredsLoading, setUpdateCredsLoading] = useState(false);
   const [manageFuturesConn, setManageFuturesConn] = useState<ExchangeConnection | null>(null);
+
+  // My discounts (assigned by admin)
+  type MyDiscount = {
+    id: string;
+    scope: string;
+    onboardingDiscountPercent: number | null;
+    onboardingDiscountFixedUsd: number | null;
+    tradingDiscountPercent: number | null;
+    tradingPackageIds: string[];
+    tradingMaxPackages: number | null;
+    tradingUsedCount: number;
+    status: string;
+    createdAt: string | null;
+  };
+  const [myDiscountsLoading, setMyDiscountsLoading] = useState(false);
+  const [myDiscounts, setMyDiscounts] = useState<MyDiscount[]>([]);
 
   // My Referrals (profile)
   type MyReferralsTimeframe = "7d" | "30d" | "90d" | "all";
@@ -270,6 +286,19 @@ export function Settings({ onNavigate }: SettingsProps) {
       .catch(() => setMyReferralsData(null))
       .finally(() => setMyReferralsLoading(false));
   }, [user?.id, myReferralsTimeframe]);
+
+  useEffect(() => {
+    if (!user?.id) {
+      setMyDiscounts([]);
+      return;
+    }
+    setMyDiscountsLoading(true);
+    api
+      .get<{ discounts: MyDiscount[] }>("/api/me/discounts")
+      .then((data) => setMyDiscounts(data.discounts ?? []))
+      .catch(() => setMyDiscounts([]))
+      .finally(() => setMyDiscountsLoading(false));
+  }, [user?.id]);
 
   const handleTestBeforeSave = async () => {
     if (!formData.apiKey?.trim() || !formData.apiSecret?.trim()) {
@@ -558,6 +587,60 @@ export function Settings({ onNavigate }: SettingsProps) {
             >
               Update Wallet
             </Button>
+          </Card>
+
+          {/* Your discounts: assigned by admin (onboarding / trading packages) */}
+          <Card className="p-6 space-y-4">
+            <h3 className="text-lg font-semibold flex items-center gap-2">
+              <Ticket className="size-5 text-primary" />
+              Your Assigned Discounts
+            </h3>
+            <p className="text-sm text-muted-foreground">
+              Discounts assigned to you by the team. They apply automatically when you pay for onboarding or trading packages.
+            </p>
+            {myDiscountsLoading ? (
+              <div className="flex items-center gap-2 py-6">
+                <Loader2 className="size-4 animate-spin" />
+                <span>Loading discounts...</span>
+              </div>
+            ) : myDiscounts.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-4">No discounts assigned. If you were promised one, ask support.</p>
+            ) : (
+              <div className="rounded-md border border-border overflow-hidden">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Type</TableHead>
+                      <TableHead>Discount</TableHead>
+                      <TableHead>Packages / Max</TableHead>
+                      <TableHead>Status</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {myDiscounts.map((d) => (
+                      <TableRow key={d.id}>
+                        <TableCell className="capitalize font-medium">{d.scope?.replace("_", " ")}</TableCell>
+                        <TableCell>
+                          {d.scope === "onboarding"
+                            ? (d.onboardingDiscountPercent != null ? `${d.onboardingDiscountPercent}%` : "") + (d.onboardingDiscountFixedUsd != null ? ` or $${d.onboardingDiscountFixedUsd}` : "")
+                            : d.tradingDiscountPercent != null ? `${d.tradingDiscountPercent}%` : "—"}
+                        </TableCell>
+                        <TableCell>
+                          {d.scope === "trading_packages"
+                            ? (d.tradingPackageIds?.length ? d.tradingPackageIds.join(", ") : "All") + " / max " + (d.tradingMaxPackages ?? "—") + " (used " + (d.tradingUsedCount ?? 0) + ")"
+                            : "—"}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={d.status === "active" ? "default" : "secondary"} className={d.status === "active" ? "bg-[#10B981]/10 text-[#10B981]" : ""}>
+                            {d.status}
+                          </Badge>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
           </Card>
 
           {/* My Referrals: count, time frame, per-referral spend & earnings */}

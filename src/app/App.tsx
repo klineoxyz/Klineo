@@ -45,6 +45,7 @@ import { TerminalLoader } from "@/app/components/ui/spinner";
 import { toast } from "sonner";
 import { useIsMobile } from "@/app/components/ui/use-mobile";
 import { MobileNavSheet } from "@/app/components/layout/MobileNavSheet";
+import { ErrorBoundary } from "@/app/components/ui/error-boundary";
 
 export default function App() {
   const { isAuthenticated, isAdmin, loading, logout } = useAuth();
@@ -127,7 +128,11 @@ export default function App() {
       case "trading-terminal":
         return <TradingTerminalNew onNavigate={handleNavigate} />;
       case "strategy-backtest":
-        return <StrategyBacktest onNavigate={handleNavigate} />;
+        return (
+          <ErrorBoundary onRetry={() => window.location.reload()}>
+            <StrategyBacktest onNavigate={handleNavigate} />
+          </ErrorBoundary>
+        );
       case "marketplace":
         return <Marketplace onNavigate={handleNavigate} />;
       case "trader-profile":

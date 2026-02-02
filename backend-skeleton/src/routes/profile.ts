@@ -113,6 +113,49 @@ profileRouter.get('/profile', async (req: AuthenticatedRequest, res) => {
 });
 
 /**
+ * GET /api/me/discounts
+ * Get current user's assigned discounts (onboarding / trading packages)
+ */
+profileRouter.get('/discounts', async (req: AuthenticatedRequest, res) => {
+  const client = getSupabase();
+  if (!client) {
+    return res.status(503).json({ error: 'Database unavailable' });
+  }
+
+  try {
+    const { data: discounts, error } = await client
+      .from('user_discounts')
+      .select('id, scope, onboarding_discount_percent, onboarding_discount_fixed_usd, trading_discount_percent, trading_package_ids, trading_max_packages, trading_used_count, status, created_at')
+      .eq('user_id', req.user!.id)
+      .in('status', ['active', 'paused'])
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching my discounts:', error);
+      return res.status(500).json({ error: 'Failed to fetch your discounts' });
+    }
+
+    const formatted = (discounts || []).map((d: any) => ({
+      id: d.id,
+      scope: d.scope,
+      onboardingDiscountPercent: d.onboarding_discount_percent != null ? parseFloat(d.onboarding_discount_percent) : null,
+      onboardingDiscountFixedUsd: d.onboarding_discount_fixed_usd != null ? parseFloat(d.onboarding_discount_fixed_usd) : null,
+      tradingDiscountPercent: d.trading_discount_percent != null ? parseFloat(d.trading_discount_percent) : null,
+      tradingPackageIds: d.trading_package_ids || [],
+      tradingMaxPackages: d.trading_max_packages,
+      tradingUsedCount: d.trading_used_count || 0,
+      status: d.status,
+      createdAt: d.created_at ? new Date(d.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : null,
+    }));
+
+    res.json({ discounts: formatted });
+  } catch (err) {
+    console.error('My discounts get error:', err);
+    res.status(500).json({ error: 'Failed to fetch your discounts' });
+  }
+});
+
+/**
  * PUT /api/me/profile
  * Update current user's profile
  */
