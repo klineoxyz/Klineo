@@ -27,7 +27,7 @@ import { ChevronDown, ChevronRight, CheckSquare } from "lucide-react";
 import { ConnectExchangeWizard } from "@/app/components/screens/ConnectExchangeWizard";
 import { ROUTES } from "@/app/config/routes";
 import { FuturesEnableModal } from "@/app/components/screens/FuturesEnableModal";
-import { Users, DollarSign, Ticket, LayoutDashboard, Package, CreditCard, UserPlus } from "lucide-react";
+import { Users, DollarSign, Ticket, Package } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/app/components/ui/table";
 
 interface SettingsProps {
@@ -1352,7 +1352,7 @@ export function Settings({ onNavigate }: SettingsProps) {
                 <Shield className="size-4 text-[#10B981]" />
               </div>
               <div className="flex items-center justify-between p-3 bg-secondary/30 rounded">
-                <span className="text-sm">Enable Spot & Margin Trading</span>
+                <span className="text-sm">Trading (Spot & Futures)</span>
                 <Shield className="size-4 text-[#10B981]" />
               </div>
               <div className="flex items-center justify-between p-3 bg-secondary/30 rounded">
@@ -1362,9 +1362,64 @@ export function Settings({ onNavigate }: SettingsProps) {
               </div>
             </div>
             <p className="text-xs text-muted-foreground">
-              When creating your Binance API key, only enable the permissions shown with green checkmarks.
+              When creating your exchange API key (Binance or Bybit), only enable the permissions shown with green checkmarks.
               KLINEO will never request withdrawal permissions.
             </p>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="packages" className="space-y-6">
+          <Card className="p-6 space-y-4">
+            <h3 className="text-lg font-semibold flex items-center gap-2">
+              <Package className="size-5 text-primary" />
+              Your packages & credits
+            </h3>
+            <p className="text-sm text-muted-foreground">
+              Your bought packages and remaining profit allowance (credits). Buy more from Packages to top up.
+            </p>
+            {entitlement ? (
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="p-4 rounded-lg border border-border bg-card">
+                    <div className="text-xs text-muted-foreground uppercase tracking-wide">Active package</div>
+                    <div className="font-semibold mt-1">
+                      {entitlement.activePackageId ? (
+                        <span className="text-primary">{entitlement.activePackageId}</span>
+                      ) : (
+                        <span className="text-muted-foreground">None</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="p-4 rounded-lg border border-border bg-card">
+                    <div className="text-xs text-muted-foreground uppercase tracking-wide">Status</div>
+                    <div className="font-semibold mt-1 capitalize">{entitlement.status}</div>
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div className="p-4 rounded-lg border border-border bg-card">
+                    <div className="text-xs text-muted-foreground uppercase tracking-wide">Profit allowance</div>
+                    <div className="text-xl font-semibold mt-1">${entitlement.profitAllowanceUsd.toFixed(2)}</div>
+                  </div>
+                  <div className="p-4 rounded-lg border border-border bg-card">
+                    <div className="text-xs text-muted-foreground uppercase tracking-wide">Used</div>
+                    <div className="text-xl font-semibold mt-1">${entitlement.profitUsedUsd.toFixed(2)}</div>
+                  </div>
+                  <div className="p-4 rounded-lg border border-primary/30 bg-primary/5">
+                    <div className="text-xs text-muted-foreground uppercase tracking-wide">Credits left</div>
+                    <div className="text-xl font-semibold mt-1 text-primary">${entitlement.remainingUsd.toFixed(2)}</div>
+                  </div>
+                </div>
+                <Link to={ROUTES.packages} className="inline-flex items-center gap-2 text-sm text-primary hover:underline">
+                  <Package className="size-4" />
+                  View packages & buy more
+                </Link>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 py-6">
+                <Loader2 className="size-4 animate-spin" />
+                <span className="text-sm text-muted-foreground">Loading…</span>
+              </div>
+            )}
           </Card>
         </TabsContent>
 
