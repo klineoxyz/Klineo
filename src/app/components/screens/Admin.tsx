@@ -35,6 +35,12 @@ function downloadCSV(rows: Record<string, unknown>[], columns: { key: string; he
   URL.revokeObjectURL(url);
 }
 
+/**
+ * Platform Admin Panel — for users with role=admin only.
+ * Contains all admin-only sections: Users, Traders, Subscriptions, Revenue & Payments,
+ * Referrals, Platform Settings, Payments (intents), Discount Coupons, Financial Ratios,
+ * Runner, Audit Logs. User-facing "my overview" and profile stats are in Settings.
+ */
 export function Admin() {
   // Data state
   const [stats, setStats] = useState({

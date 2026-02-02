@@ -514,6 +514,7 @@ export function Settings({ onNavigate }: SettingsProps) {
               </Badge>
             )}
           </TabsTrigger>
+          <TabsTrigger value="packages">Packages</TabsTrigger>
           <TabsTrigger value="notifications">Notifications</TabsTrigger>
         </TabsList>
 
@@ -524,68 +525,6 @@ export function Settings({ onNavigate }: SettingsProps) {
               <AlertDescription>{profileError}</AlertDescription>
             </Alert>
           )}
-
-          {/* My overview: subscription & stats (same info as admin panel, for the user) */}
-          <Card className="p-6 space-y-4 border-primary/20 bg-primary/5">
-            <h3 className="text-lg font-semibold flex items-center gap-2">
-              <LayoutDashboard className="size-5 text-primary" />
-              My overview
-            </h3>
-            <p className="text-sm text-muted-foreground">
-              Your subscription and profit allowance. Use the links below to pay joining fee, buy packages, or check referral earnings.
-            </p>
-            {entitlement ? (
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div className="p-3 rounded-lg bg-background border border-border">
-                  <div className="text-xs text-muted-foreground uppercase tracking-wide">Joining fee</div>
-                  <div className="font-semibold mt-0.5">
-                    {entitlement.joiningFeePaid ? (
-                      <span className="text-[#10B981] flex items-center gap-1"><CheckCircle2 className="size-4" /> Paid</span>
-                    ) : (
-                      <span className="text-amber-600">Not paid</span>
-                    )}
-                  </div>
-                  {!entitlement.joiningFeePaid && (
-                    <Link to={ROUTES.payments} className="text-xs text-primary hover:underline mt-1 inline-block">Pay now →</Link>
-                  )}
-                </div>
-                <div className="p-3 rounded-lg bg-background border border-border">
-                  <div className="text-xs text-muted-foreground uppercase tracking-wide">Package</div>
-                  <div className="font-semibold mt-0.5">
-                    {entitlement.activePackageId ? (
-                      <span className="text-primary">{entitlement.activePackageId}</span>
-                    ) : (
-                      <span className="text-muted-foreground">None</span>
-                    )}
-                  </div>
-                  <Link to={ROUTES.packages} className="text-xs text-primary hover:underline mt-1 inline-block">View packages →</Link>
-                </div>
-                <div className="p-3 rounded-lg bg-background border border-border">
-                  <div className="text-xs text-muted-foreground uppercase tracking-wide">Profit allowance</div>
-                  <div className="font-semibold mt-0.5 text-primary">
-                    ${entitlement.remainingUsd.toFixed(2)} remaining
-                  </div>
-                  <Link to={ROUTES.referrals} className="text-xs text-primary hover:underline mt-1 inline-block">Referrals →</Link>
-                </div>
-              </div>
-            ) : (
-              <div className="flex items-center gap-2 py-2">
-                <Loader2 className="size-4 animate-spin" />
-                <span className="text-sm text-muted-foreground">Loading overview…</span>
-              </div>
-            )}
-            <div className="flex flex-wrap gap-2 pt-2 border-t border-border">
-              <Link to={ROUTES.packages} className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline">
-                <Package className="size-4" /> Packages
-              </Link>
-              <Link to={ROUTES.payments} className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline">
-                <CreditCard className="size-4" /> Payments
-              </Link>
-              <Link to={ROUTES.referrals} className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline">
-                <UserPlus className="size-4" /> Referrals
-              </Link>
-            </div>
-          </Card>
 
           {/* Backend Connection Status */}
           <Card className="p-4 border-primary/20">
@@ -988,7 +927,7 @@ export function Settings({ onNavigate }: SettingsProps) {
             <AlertDescription className="text-sm">
               Your API keys are encrypted and stored securely. KLINEO never has withdrawal permissions.
               <br />
-              <strong>Required permissions:</strong> Spot trading, Read balances, Read orders. <strong>Withdraw permission must NOT be required.</strong>
+              One API per exchange (Binance or Bybit) for Spot and Futures. <strong>Required:</strong> Trading, Read balances, Read orders. <strong>Withdraw must NOT be enabled.</strong>
             </AlertDescription>
           </Alert>
 
@@ -1005,11 +944,11 @@ export function Settings({ onNavigate }: SettingsProps) {
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-2">
                     <div className="font-medium text-sm flex items-center gap-2">
-                      <CheckSquare className="size-4 text-primary" /> Binance (Spot)
+                      <CheckSquare className="size-4 text-primary" /> Binance
                     </div>
                     <ul className="text-xs text-muted-foreground space-y-1 list-disc list-inside">
                       <li>Enable Reading</li>
-                      <li>Enable Spot & Margin Trading</li>
+                      <li>Enable Spot & Margin (and Futures if you use futures)</li>
                       <li>Do NOT enable Withdrawals</li>
                     </ul>
                     <div className="flex flex-wrap gap-2">
@@ -1023,10 +962,10 @@ export function Settings({ onNavigate }: SettingsProps) {
                   </div>
                   <div className="space-y-2">
                     <div className="font-medium text-sm flex items-center gap-2">
-                      <CheckSquare className="size-4 text-primary" /> Bybit (Spot)
+                      <CheckSquare className="size-4 text-primary" /> Bybit
                     </div>
                     <ul className="text-xs text-muted-foreground space-y-1 list-disc list-inside">
-                      <li>Read-Write (Spot trading, Read balances, Read orders)</li>
+                      <li>Read-Write (Trading, Read balances, Read orders)</li>
                       <li>Do NOT enable Withdrawals</li>
                     </ul>
                     <div className="flex flex-wrap gap-2">
@@ -1045,7 +984,7 @@ export function Settings({ onNavigate }: SettingsProps) {
 
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div>
-              <h3 className="text-lg font-semibold">Exchange Connections (Binance & Bybit)</h3>
+              <h3 className="text-lg font-semibold">Exchange connections (Binance & Bybit)</h3>
               {!isDemoMode && entitlement && (
                 <p className="text-xs text-muted-foreground mt-0.5">
                   Profit allowance applies to all connected exchanges.
@@ -1101,8 +1040,8 @@ export function Settings({ onNavigate }: SettingsProps) {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="binance">Binance (Spot)</SelectItem>
-                      <SelectItem value="bybit">Bybit (Spot)</SelectItem>
+                      <SelectItem value="binance">Binance</SelectItem>
+                      <SelectItem value="bybit">Bybit</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -1123,7 +1062,7 @@ export function Settings({ onNavigate }: SettingsProps) {
                   <p className="text-xs text-muted-foreground">
                     Use Testnet for testing with fake funds. Get testnet keys from{" "}
                     {formData.exchange === 'binance' ? (
-                      <a href="https://testnet.binance.vision/" target="_blank" rel="noopener noreferrer" className="text-primary underline">Binance Spot Testnet</a>
+                      <a href="https://testnet.binance.vision/" target="_blank" rel="noopener noreferrer" className="text-primary underline">Binance Testnet</a>
                     ) : (
                       <a href="https://testnet.bybit.com/app/user/api-management" target="_blank" rel="noopener noreferrer" className="text-primary underline">Bybit Testnet</a>
                     )}
