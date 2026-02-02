@@ -105,7 +105,7 @@ export async function validateCoupon(
     const pc = packageCode || 'ENTRY_100';
     originalAmountUsdt = AMOUNTS[pc] ?? AMOUNTS.ENTRY_100 ?? 100;
   }
-  const amountUsdt = Math.max(0.01, Math.round((originalAmountUsdt * (1 - discountPercent / 100)) * 100) / 100);
+  const amountUsdt = Math.max(0, Math.round((originalAmountUsdt * (1 - discountPercent / 100)) * 100) / 100);
 
   return {
     valid: true,
@@ -151,7 +151,7 @@ export async function validateUserDiscountByCode(
       : 0;
     const originalAmountUsdt = AMOUNTS.joining_fee ?? 100;
     const afterPercent = pct > 0 ? originalAmountUsdt * (1 - pct / 100) : originalAmountUsdt;
-    const amountUsdt = Math.max(0.01, Math.round((afterPercent - fixed) * 100) / 100);
+    const amountUsdt = Math.max(0, Math.round((afterPercent - fixed) * 100) / 100);
     return {
       valid: true,
       discountPercent: pct,
@@ -174,7 +174,7 @@ export async function validateUserDiscountByCode(
     }
   }
   const originalAmountUsdt = AMOUNTS[packageCode || 'ENTRY_100'] ?? AMOUNTS.ENTRY_100 ?? 100;
-  const amountUsdt = Math.max(0.01, Math.round((originalAmountUsdt * (1 - pct / 100)) * 100) / 100);
+  const amountUsdt = Math.max(0, Math.round((originalAmountUsdt * (1 - pct / 100)) * 100) / 100);
   return {
     valid: true,
     discountPercent: pct,
@@ -233,19 +233,24 @@ paymentIntentsRouter.post(
       }
     }
 
+    const insertPayload: Record<string, unknown> = {
+      user_id: userId,
+      kind: kind as string,
+      package_code: pkgCode,
+      amount_usdt: amountUsdt,
+      chain: 'bsc',
+      environment: 'production',
+      treasury_address: TREASURY_SAFE_BSC,
+      status: 'draft',
+      updated_at: new Date().toISOString(),
+    };
+    if (couponApplied) {
+      insertPayload.coupon_code = couponApplied.code;
+      insertPayload.discount_percent = couponApplied.discountPercent;
+    }
     const { data: intent, error } = await client
       .from('payment_intents')
-      .insert({
-        user_id: userId,
-        kind: kind as string,
-        package_code: pkgCode,
-        amount_usdt: amountUsdt,
-        chain: 'bsc',
-        environment: 'production',
-        treasury_address: TREASURY_SAFE_BSC,
-        status: 'draft',
-        updated_at: new Date().toISOString(),
-      })
+      .insert(insertPayload)
       .select('id, user_id, kind, package_code, amount_usdt, chain, treasury_address, status, created_at')
       .single();
 
@@ -362,7 +367,7 @@ paymentIntentsRouter.post(
   '/:id/submit',
   validate([
     param('id').isUUID().withMessage('Intent ID must be a valid UUID'),
-    body('tx_hash').trim().notEmpty().withMessage('tx_hash is required'),
+    body('tx_hash').optional().trim().isString(),
     body('from_wallet').optional().trim().isString(),
   ]),
   async (req: AuthenticatedRequest, res: Response) => {
@@ -374,11 +379,12 @@ paymentIntentsRouter.post(
 
     const userId = req.user!.id;
     const intentId = req.params.id;
-    const { tx_hash, from_wallet } = req.body;
+    const txHashRaw = (req.body.tx_hash as string)?.trim() || '';
+    const from_wallet = req.body.from_wallet;
 
     const { data: intent, error: findErr } = await client
       .from('payment_intents')
-      .select('id, user_id, status')
+      .select('id, user_id, status, amount_usdt')
       .eq('id', intentId)
       .single();
 
@@ -389,23 +395,35 @@ paymentIntentsRouter.post(
       return res.status(400).json({ error: 'Intent already submitted' });
     }
 
-    const { data: profile } = await client
-      .from('user_profiles')
-      .select('payment_wallet_bsc')
-      .eq('id', userId)
-      .single();
+    const amountUsdt = Number(intent.amount_usdt ?? 0);
+    const isZeroAmount = amountUsdt <= 0;
+    if (!isZeroAmount && !txHashRaw) {
+      return res.status(400).json({ error: 'tx_hash is required when amount is greater than 0' });
+    }
 
     const declaredFrom = (from_wallet as string)?.trim() || null;
-    const savedWallet = (profile as { payment_wallet_bsc?: string } | null)?.payment_wallet_bsc?.trim().toLowerCase() || null;
-    const declaredNorm = declaredFrom?.toLowerCase() || null;
-    const mismatch = savedWallet && declaredNorm && savedWallet !== declaredNorm;
-    const status = mismatch ? 'flagged' : 'pending_review';
-    const mismatchReason = mismatch ? 'Declared from_wallet does not match saved payment_wallet_bsc' : null;
+    let status: string;
+    let mismatchReason: string | null = null;
+
+    if (isZeroAmount && !txHashRaw) {
+      status = 'pending_review';
+    } else {
+      const { data: profile } = await client
+        .from('user_profiles')
+        .select('payment_wallet_bsc')
+        .eq('id', userId)
+        .single();
+      const savedWallet = (profile as { payment_wallet_bsc?: string } | null)?.payment_wallet_bsc?.trim().toLowerCase() || null;
+      const declaredNorm = declaredFrom?.toLowerCase() || null;
+      const mismatch = savedWallet && declaredNorm && savedWallet !== declaredNorm;
+      status = mismatch ? 'flagged' : 'pending_review';
+      mismatchReason = mismatch ? 'Declared from_wallet does not match saved payment_wallet_bsc' : null;
+    }
 
     const { error: updateErr } = await client
       .from('payment_intents')
       .update({
-        tx_hash: (tx_hash as string).trim(),
+        tx_hash: txHashRaw || null,
         declared_from_wallet: declaredFrom,
         status,
         mismatch_reason: mismatchReason,
@@ -420,7 +438,7 @@ paymentIntentsRouter.post(
     const { error: evErr } = await client.from('payment_events').insert({
       intent_id: intentId,
       event_type: 'submitted',
-      details: { tx_hash: (tx_hash as string).trim(), from_wallet: declaredFrom, status, mismatch_reason: mismatchReason },
+      details: { tx_hash: txHashRaw || null, from_wallet: declaredFrom, status, mismatch_reason: mismatchReason, zero_amount: isZeroAmount },
     });
     if (evErr) {
       // non-fatal
@@ -430,7 +448,7 @@ paymentIntentsRouter.post(
       id: intentId,
       status,
       mismatch_reason: mismatchReason,
-      message: mismatch ? 'Submitted but wallet mismatch; admin will review.' : 'Submitted for review.',
+      message: mismatchReason ? 'Submitted but wallet mismatch; admin will review.' : (isZeroAmount ? 'Request submitted for admin approval.' : 'Submitted for review.'),
     });
   }
 );

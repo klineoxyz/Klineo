@@ -2021,7 +2021,7 @@ export function Admin() {
               <div>
                 <h3 className="text-lg font-semibold">Payment Intents (Manual Safe)</h3>
                 <p className="text-sm text-muted-foreground mt-0.5">
-                  Approve/Reject appear only for <strong>Pending review</strong> or <strong>Flagged</strong>. Draft = user must send USDT and submit tx hash on their Payments page first.
+                  <strong>Reject</strong> is available for Draft (user never paid), Pending review, or Flagged. <strong>Approve</strong> only for Pending review or Flagged. For 100% discount, user can request approval without TX hash.
                 </p>
               </div>
               <div className="flex items-center gap-2">
@@ -2057,6 +2057,8 @@ export function Admin() {
                     <TableHead>User ID</TableHead>
                     <TableHead>Kind</TableHead>
                     <TableHead>Amount</TableHead>
+                    <TableHead>Discount %</TableHead>
+                    <TableHead>Coupon code</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Tx hash</TableHead>
                     <TableHead>From wallet</TableHead>
@@ -2067,7 +2069,7 @@ export function Admin() {
                 <TableBody>
                   {paymentIntents.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={9} className="text-center text-muted-foreground py-8">
+                      <TableCell colSpan={11} className="text-center text-muted-foreground py-8">
                         {paymentIntentsFeatureDisabled ? (
                           <span>Payment intents are disabled. Set <code className="text-xs bg-muted px-1 rounded">ENABLE_MANUAL_PAYMENTS=true</code> on the backend to enable.</span>
                         ) : (
@@ -2081,7 +2083,9 @@ export function Admin() {
                         <TableCell className="text-sm text-muted-foreground">{pi.created_at ? new Date(pi.created_at).toLocaleString() : ''}</TableCell>
                         <TableCell className="font-mono text-xs">{pi.user_id?.slice(0, 8)}...</TableCell>
                         <TableCell>{pi.kind === 'joining_fee' ? 'Joining fee' : pi.package_code || 'Package'}</TableCell>
-                        <TableCell className="font-mono">{pi.amount_usdt} USDT</TableCell>
+                        <TableCell className="font-mono">{Number(pi.amount_usdt ?? 0) === 0 ? '0 (100% off)' : `${pi.amount_usdt} USDT`}</TableCell>
+                        <TableCell className="text-sm">{pi.discount_percent != null ? `${pi.discount_percent}%` : '—'}</TableCell>
+                        <TableCell className="font-mono text-xs">{pi.coupon_code || '—'}</TableCell>
                         <TableCell>
                           <Badge variant="outline">{pi.status}</Badge>
                         </TableCell>
@@ -2090,12 +2094,14 @@ export function Admin() {
                             <a href={`https://bscscan.com/tx/${pi.tx_hash}`} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
                               {pi.tx_hash.slice(0, 10)}...
                             </a>
+                          ) : Number(pi.amount_usdt ?? 0) === 0 ? (
+                            <span className="text-muted-foreground">Not required</span>
                           ) : '—'}
                         </TableCell>
                         <TableCell className="font-mono text-xs max-w-[120px] truncate" title={pi.declared_from_wallet || ''}>{pi.declared_from_wallet || '—'}</TableCell>
                         <TableCell className="text-xs text-orange-600">{pi.mismatch_reason || '—'}</TableCell>
                         <TableCell className="text-right">
-                          {pi.status === 'pending_review' || pi.status === 'flagged' ? (
+                          {(pi.status === 'pending_review' || pi.status === 'flagged') ? (
                             <div className="flex gap-1 justify-end">
                               <Button size="sm" variant="default" onClick={() => handleApproveIntent(pi.id)} disabled={paymentIntentActionLoading}>
                                 Approve
@@ -2105,7 +2111,9 @@ export function Admin() {
                               </Button>
                             </div>
                           ) : pi.status === 'draft' ? (
-                            <span className="text-xs text-muted-foreground">User must submit tx hash first</span>
+                            <Button size="sm" variant="outline" className="text-destructive" onClick={() => handleRejectIntent(pi.id)} disabled={paymentIntentActionLoading}>
+                              Reject
+                            </Button>
                           ) : (
                             <span className="text-xs text-muted-foreground">—</span>
                           )}

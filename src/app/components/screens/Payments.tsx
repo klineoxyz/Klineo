@@ -252,17 +252,19 @@ export function Payments({ onNavigate, viewData }: PaymentsProps) {
   };
 
   const handleSubmitTx = async () => {
-    if (!currentIntent || !txHash.trim()) {
+    if (!currentIntent) return;
+    const isZeroAmount = Number(currentIntent.amount_usdt) === 0;
+    if (!isZeroAmount && !txHash.trim()) {
       toast.error("Enter transaction hash");
       return;
     }
     setSubmitting(currentIntent.id);
     try {
       await api.post(`/api/payments/intents/${currentIntent.id}/submit`, {
-        tx_hash: txHash.trim(),
+        tx_hash: txHash.trim() || undefined,
         from_wallet: fromWallet.trim() || undefined,
       });
-      toast.success("Submitted for review");
+      toast.success(isZeroAmount ? "Request submitted for admin approval" : "Submitted for review");
       setCurrentIntent((c) => (c ? { ...c, status: "pending_review" } : null));
       await loadIntents();
     } catch (e: unknown) {
@@ -420,58 +422,73 @@ export function Payments({ onNavigate, viewData }: PaymentsProps) {
 
           {currentIntent && currentIntent.status === "draft" && (
             <Card className="p-6 space-y-4">
-              <h3 className="text-lg font-semibold">Deposit instructions</h3>
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-muted-foreground">Amount:</span>
-                <span className="font-mono font-semibold">{currentIntent.amount_usdt} USDT</span>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    copyToClipboard(String(currentIntent.amount_usdt));
-                    toast.success("Copied");
-                  }}
-                >
-                  <Copy className="size-4" />
-                </Button>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-muted-foreground">Treasury Safe:</span>
-                <span className="font-mono text-sm break-all">{currentIntent.treasury_address}</span>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    copyToClipboard(currentIntent.treasury_address);
-                    toast.success("Copied");
-                  }}
-                >
-                  <Copy className="size-4" />
-                </Button>
-                <a href={currentIntent.safe_link} target="_blank" rel="noopener noreferrer" className="text-primary inline-flex items-center gap-1 text-sm">
-                  Open Safe <ExternalLink className="size-3" />
-                </a>
-              </div>
-              <div className="pt-4 border-t space-y-3">
-                <Label>Transaction hash (after you send USDT)</Label>
-                <Input
-                  placeholder="0x..."
-                  className="font-mono"
-                  value={txHash}
-                  onChange={(e) => setTxHash(e.target.value)}
-                />
-                <Label className="text-muted-foreground">From wallet (optional)</Label>
-                <Input
-                  placeholder="0x... (BEP20)"
-                  className="font-mono"
-                  value={fromWallet}
-                  onChange={(e) => setFromWallet(e.target.value)}
-                />
-                <Button onClick={handleSubmitTx} disabled={!txHash.trim() || submitting !== null}>
-                  {submitting ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
-                  Submit for review
-                </Button>
-              </div>
+              {Number(currentIntent.amount_usdt) === 0 ? (
+                <>
+                  <h3 className="text-lg font-semibold">100% discount — no payment required</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Your coupon covers the full amount. Request admin approval to complete; no transaction hash is required.
+                  </p>
+                  <Button onClick={handleSubmitTx} disabled={submitting !== null}>
+                    {submitting ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
+                    Request approval
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <h3 className="text-lg font-semibold">Deposit instructions</h3>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-muted-foreground">Amount:</span>
+                    <span className="font-mono font-semibold">{currentIntent.amount_usdt} USDT</span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        copyToClipboard(String(currentIntent.amount_usdt));
+                        toast.success("Copied");
+                      }}
+                    >
+                      <Copy className="size-4" />
+                    </Button>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-muted-foreground">Treasury Safe:</span>
+                    <span className="font-mono text-sm break-all">{currentIntent.treasury_address}</span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        copyToClipboard(currentIntent.treasury_address);
+                        toast.success("Copied");
+                      }}
+                    >
+                      <Copy className="size-4" />
+                    </Button>
+                    <a href={currentIntent.safe_link} target="_blank" rel="noopener noreferrer" className="text-primary inline-flex items-center gap-1 text-sm">
+                      Open Safe <ExternalLink className="size-3" />
+                    </a>
+                  </div>
+                  <div className="pt-4 border-t space-y-3">
+                    <Label>Transaction hash (after you send USDT)</Label>
+                    <Input
+                      placeholder="0x..."
+                      className="font-mono"
+                      value={txHash}
+                      onChange={(e) => setTxHash(e.target.value)}
+                    />
+                    <Label className="text-muted-foreground">From wallet (optional)</Label>
+                    <Input
+                      placeholder="0x... (BEP20)"
+                      className="font-mono"
+                      value={fromWallet}
+                      onChange={(e) => setFromWallet(e.target.value)}
+                    />
+                    <Button onClick={handleSubmitTx} disabled={!txHash.trim() || submitting !== null}>
+                      {submitting ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
+                      Submit for review
+                    </Button>
+                  </div>
+                </>
+              )}
             </Card>
           )}
 

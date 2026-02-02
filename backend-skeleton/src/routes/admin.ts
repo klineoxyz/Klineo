@@ -1400,7 +1400,7 @@ adminRouter.get('/payments/intents', async (req: AuthenticatedRequest, res) => {
     const status = req.query.status as string | undefined;
     let q = client
       .from('payment_intents')
-      .select('id, user_id, kind, package_code, amount_usdt, status, tx_hash, declared_from_wallet, mismatch_reason, reviewed_by, reviewed_at, review_note, created_at, updated_at')
+      .select('id, user_id, kind, package_code, amount_usdt, coupon_code, discount_percent, status, tx_hash, declared_from_wallet, mismatch_reason, reviewed_by, reviewed_at, review_note, created_at, updated_at')
       .order('created_at', { ascending: false });
     if (status && status.trim()) {
       q = q.eq('status', status.trim());
@@ -1516,8 +1516,9 @@ adminRouter.post('/payments/intents/:id/reject',
       .single();
 
     if (findErr || !intent) return res.status(404).json({ error: 'Intent not found' });
-    if ((intent.status as string) !== 'pending_review' && (intent.status as string) !== 'flagged') {
-      return res.status(400).json({ error: 'Intent not in pending_review or flagged' });
+    const statusStr = intent.status as string;
+    if (statusStr !== 'pending_review' && statusStr !== 'flagged' && statusStr !== 'draft') {
+      return res.status(400).json({ error: 'Intent can only be rejected when draft, pending_review, or flagged' });
     }
 
     const { error: updateErr } = await client
