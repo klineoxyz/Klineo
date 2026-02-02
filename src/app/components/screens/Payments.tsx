@@ -22,6 +22,8 @@ interface PaymentIntent {
   kind: string;
   package_code: string | null;
   amount_usdt: number;
+  coupon_code: string | null;
+  discount_percent: number | null;
   status: IntentStatus;
   tx_hash: string | null;
   declared_from_wallet: string | null;
@@ -53,6 +55,8 @@ export function Payments({ onNavigate, viewData }: PaymentsProps) {
     treasury_address: string;
     safe_link: string;
     status: string;
+    coupon_code?: string;
+    discount_percent?: number;
   } | null>(null);
   const [txHash, setTxHash] = useState("");
   const [fromWallet, setFromWallet] = useState("");
@@ -208,10 +212,12 @@ export function Payments({ onNavigate, viewData }: PaymentsProps) {
       treasury_address: TREASURY_ADDRESS,
       safe_link: SAFE_LINK,
       status: i.status,
+      coupon_code: i.coupon_code ?? undefined,
+      discount_percent: i.discount_percent ?? undefined,
     });
     setTxHash("");
     setFromWallet("");
-    toast.info("Fill in your tx hash above and submit");
+    toast.info(Number(i.amount_usdt) === 0 ? "Request approval above (no tx hash needed)" : "Fill in your tx hash above and submit");
   };
 
   const handleCreateIntent = async () => {
@@ -229,13 +235,17 @@ export function Payments({ onNavigate, viewData }: PaymentsProps) {
         treasury_address: string;
         amount_usdt: number;
         safe_link: string;
+        coupon_applied?: { code: string; discount_percent: number };
       }>("/api/payments/intents", body);
+      const couponAppliedResp = (data as any).coupon_applied;
       setCurrentIntent({
         id: data.intent.id,
         amount_usdt: data.amount_usdt,
         treasury_address: data.treasury_address,
         safe_link: data.safe_link,
         status: data.intent.status,
+        coupon_code: couponAppliedResp?.code,
+        discount_percent: couponAppliedResp?.discount_percent,
       });
       setTxHash("");
       setFromWallet("");
@@ -318,7 +328,7 @@ export function Payments({ onNavigate, viewData }: PaymentsProps) {
     <div className="p-6 space-y-6">
       <div>
         <h1 className="text-2xl font-semibold mb-1">Payments</h1>
-        <p className="text-sm text-muted-foreground">Manual USDT (BEP20) payments to Safe. Admin verifies via Safe and BscScan.</p>
+        <p className="text-sm text-muted-foreground">Manual USDT (BEP20) payments to Safe. Admin verifies via Safe and BscScan. You only see your own payment intents.</p>
       </div>
 
       {!hasPaymentWallet && (
@@ -406,9 +416,12 @@ export function Payments({ onNavigate, viewData }: PaymentsProps) {
                 )}
               </div>
               {couponApplied && (
-                <p className="text-sm text-[#10B981] font-medium">
-                  {couponApplied.discountPercent}% off — Pay ${couponApplied.amountUsdt} instead of ${couponApplied.originalAmountUsdt}
-                </p>
+                <div className="space-y-1">
+                  <p className="text-sm text-[#10B981] font-medium">
+                    {couponApplied.discountPercent}% off — Pay ${couponApplied.amountUsdt} instead of ${couponApplied.originalAmountUsdt}
+                  </p>
+                  <p className="text-xs text-muted-foreground font-mono">Coupon code: {couponApplied.code}</p>
+                </div>
               )}
             </div>
             <div className="flex flex-wrap items-center gap-2 pt-1">
@@ -426,16 +439,38 @@ export function Payments({ onNavigate, viewData }: PaymentsProps) {
                 <>
                   <h3 className="text-lg font-semibold">100% discount — no payment required</h3>
                   <p className="text-sm text-muted-foreground">
-                    Your coupon covers the full amount. Request admin approval to complete; no transaction hash is required.
+                    Your coupon covers the full amount. Request admin approval to complete; no transaction hash or wallet is required.
                   </p>
-                  <Button onClick={handleSubmitTx} disabled={submitting !== null}>
-                    {submitting ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
-                    Request approval
-                  </Button>
+                  {(currentIntent.coupon_code ?? currentIntent.discount_percent != null) && (
+                    <p className="text-sm font-medium">
+                      {currentIntent.discount_percent != null && `${currentIntent.discount_percent}% off`}
+                      {currentIntent.coupon_code && (
+                        <span className="font-mono text-muted-foreground ml-1">· Code: {currentIntent.coupon_code}</span>
+                      )}
+                    </p>
+                  )}
+                  <div className="flex gap-2">
+                    <Button onClick={handleSubmitTx} disabled={submitting !== null}>
+                      {submitting ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
+                      Request approval
+                    </Button>
+                    <Button variant="outline" onClick={() => handleCancelIntent(currentIntent.id)} disabled={cancellingIntentId === currentIntent.id}>
+                      {cancellingIntentId === currentIntent.id ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
+                      Delete
+                    </Button>
+                  </div>
                 </>
               ) : (
                 <>
                   <h3 className="text-lg font-semibold">Deposit instructions</h3>
+                  {(currentIntent.coupon_code ?? currentIntent.discount_percent != null) && (
+                    <p className="text-sm font-medium">
+                      {currentIntent.discount_percent != null && `${currentIntent.discount_percent}% off`}
+                      {currentIntent.coupon_code && (
+                        <span className="font-mono text-muted-foreground ml-1">· Coupon code: {currentIntent.coupon_code}</span>
+                      )}
+                    </p>
+                  )}
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="text-muted-foreground">Amount:</span>
                     <span className="font-mono font-semibold">{currentIntent.amount_usdt} USDT</span>
@@ -482,10 +517,16 @@ export function Payments({ onNavigate, viewData }: PaymentsProps) {
                       value={fromWallet}
                       onChange={(e) => setFromWallet(e.target.value)}
                     />
-                    <Button onClick={handleSubmitTx} disabled={!txHash.trim() || submitting !== null}>
-                      {submitting ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
-                      Submit for review
-                    </Button>
+                    <div className="flex gap-2">
+                      <Button onClick={handleSubmitTx} disabled={!txHash.trim() || submitting !== null}>
+                        {submitting ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
+                        Submit for review
+                      </Button>
+                      <Button variant="outline" onClick={() => handleCancelIntent(currentIntent.id)} disabled={cancellingIntentId === currentIntent.id}>
+                        {cancellingIntentId === currentIntent.id ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
+                        Delete
+                      </Button>
+                    </div>
                   </div>
                 </>
               )}
@@ -506,7 +547,7 @@ export function Payments({ onNavigate, viewData }: PaymentsProps) {
           <div>
             <h3 className="text-lg font-semibold">Your payment intents</h3>
             <p className="text-sm text-muted-foreground mt-0.5">
-              Each row is a payment you started. <strong>Draft</strong> = created but not yet paid (send USDT to the Safe, then submit your tx hash above). After you submit, status becomes Pending review → Approved or Rejected.
+              Only your own intents are listed. <strong>Draft</strong> = created but not yet submitted (send USDT and submit tx hash, or for 100% discount use Request approval). Submit for review → Admin approves or rejects with a reason.
             </p>
           </div>
           <Button variant="outline" size="sm" onClick={loadIntents} disabled={intentsLoading} className="shrink-0">
@@ -518,6 +559,8 @@ export function Payments({ onNavigate, viewData }: PaymentsProps) {
             <TableRow>
               <TableHead>Kind</TableHead>
               <TableHead>Amount</TableHead>
+              <TableHead>Discount %</TableHead>
+              <TableHead>Coupon code</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Tx hash</TableHead>
               <TableHead>Created</TableHead>
@@ -527,19 +570,23 @@ export function Payments({ onNavigate, viewData }: PaymentsProps) {
           <TableBody>
             {intents.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="text-muted-foreground text-center py-8">No payment intents yet</TableCell>
+                <TableCell colSpan={8} className="text-muted-foreground text-center py-8">No payment intents yet. Only your own intents are shown.</TableCell>
               </TableRow>
             ) : (
               intents.map((i) => (
                 <TableRow key={i.id}>
                   <TableCell>{i.kind === "joining_fee" ? "Joining fee" : i.package_code || "Package"}</TableCell>
-                  <TableCell className="font-mono">{i.amount_usdt} USDT</TableCell>
+                  <TableCell className="font-mono">{Number(i.amount_usdt) === 0 ? "0 (100% off)" : `${i.amount_usdt} USDT`}</TableCell>
+                  <TableCell className="text-sm">{i.discount_percent != null ? `${i.discount_percent}%` : "—"}</TableCell>
+                  <TableCell className="font-mono text-xs">{i.coupon_code || "—"}</TableCell>
                   <TableCell>{statusBadge(i.status)}</TableCell>
                   <TableCell className="font-mono text-sm">
                     {i.tx_hash ? (
                       <a href={BSCSCAN_TX(i.tx_hash)} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
                         {i.tx_hash.slice(0, 10)}...
                       </a>
+                    ) : Number(i.amount_usdt) === 0 ? (
+                      <span className="text-muted-foreground">Not required</span>
                     ) : "—"}
                   </TableCell>
                   <TableCell className="text-muted-foreground text-sm">{new Date(i.created_at).toLocaleDateString()}</TableCell>
@@ -552,7 +599,7 @@ export function Payments({ onNavigate, viewData }: PaymentsProps) {
                           onClick={() => handleUseDraftIntent(i)}
                           disabled={cancellingIntentId === i.id}
                         >
-                          Submit tx
+                          {Number(i.amount_usdt) === 0 ? "Request approval" : "Submit tx"}
                         </Button>
                         <Button
                           variant="outline"
@@ -566,7 +613,7 @@ export function Payments({ onNavigate, viewData }: PaymentsProps) {
                           ) : (
                             <>
                               <Trash2 className="size-4 mr-1" />
-                              Cancel
+                              Delete
                             </>
                           )}
                         </Button>

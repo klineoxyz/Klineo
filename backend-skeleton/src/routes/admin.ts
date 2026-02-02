@@ -1462,6 +1462,11 @@ adminRouter.post('/payments/intents/:id/approve',
     const profileUpdates: Record<string, unknown> = { updated_at: new Date().toISOString() };
     if (kind === 'joining_fee') {
       profileUpdates.member_active = true;
+      const now = new Date().toISOString();
+      await client.from('user_entitlements').upsert(
+        { user_id: userId, joining_fee_paid: true, joining_fee_paid_at: now, updated_at: now },
+        { onConflict: 'user_id' }
+      );
     } else if (kind === 'package' && packageCode) {
       profileUpdates.active_package_code = packageCode;
       profileUpdates.package_started_at = new Date().toISOString();

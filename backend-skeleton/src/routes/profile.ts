@@ -34,18 +34,27 @@ profileRouter.get('/entitlement', async (req: AuthenticatedRequest, res) => {
   }
 
   try {
-    const { data: ent, error } = await client
-      .from('user_entitlements')
-      .select('joining_fee_paid, status, active_package_id, profit_allowance_usd, profit_used_usd')
-      .eq('user_id', req.user!.id)
-      .maybeSingle();
+    const userId = req.user!.id;
+    const [{ data: ent, error }, { data: profile }] = await Promise.all([
+      client
+        .from('user_entitlements')
+        .select('joining_fee_paid, status, active_package_id, profit_allowance_usd, profit_used_usd')
+        .eq('user_id', userId)
+        .maybeSingle(),
+      client
+        .from('user_profiles')
+        .select('member_active')
+        .eq('id', userId)
+        .single(),
+    ]);
 
     if (error) {
       console.error('Error fetching entitlement:', error);
       return res.status(500).json({ error: 'Failed to fetch entitlement' });
     }
 
-    const joiningFeePaid = !!ent?.joining_fee_paid;
+    const memberActive = !!(profile as { member_active?: boolean } | null)?.member_active;
+    const joiningFeePaid = !!ent?.joining_fee_paid || memberActive;
     const status = (ent?.status as 'inactive' | 'active' | 'exhausted') || 'inactive';
     const activePackageId = ent?.active_package_id ?? null;
     const profitAllowanceUsd = parseFloat(String(ent?.profit_allowance_usd ?? 0));

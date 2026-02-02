@@ -351,7 +351,7 @@ paymentIntentsRouter.get('/', async (req: AuthenticatedRequest, res: Response) =
   const userId = req.user!.id;
   const { data, error } = await client
     .from('payment_intents')
-    .select('id, kind, package_code, amount_usdt, status, tx_hash, declared_from_wallet, mismatch_reason, created_at, updated_at')
+    .select('id, kind, package_code, amount_usdt, coupon_code, discount_percent, status, tx_hash, declared_from_wallet, mismatch_reason, created_at, updated_at')
     .eq('user_id', userId)
     .order('created_at', { ascending: false });
 

@@ -262,33 +262,41 @@ function SubscriptionContent({
 
   return (
     <>
-      {/* Joining Fee */}
-      <Card className="p-4 sm:p-6 border-primary/30 bg-primary/5">
+      {/* Joining Fee — one-time; once paid, show Paid and only packages */}
+      <Card className={`p-4 sm:p-6 ${joiningFeePaid ? "border-[#10B981]/30 bg-[#10B981]/5" : "border-primary/30 bg-primary/5"}`}>
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
             <div className="flex items-center gap-2 mb-1">
               <h3 className="text-lg sm:text-xl font-semibold">Joining Fee</h3>
-              <Badge variant="secondary">Required</Badge>
+              {joiningFeePaid ? (
+                <Badge className="bg-[#10B981]/20 text-[#10B981] border-[#10B981]/40">Paid</Badge>
+              ) : (
+                <Badge variant="secondary">Required</Badge>
+              )}
             </div>
             <p className="text-sm text-muted-foreground mb-2">
-              Enables profile creation and CEX API connection before you can copy trade.
+              {joiningFeePaid
+                ? "One-time joining fee already paid. You can now buy packages below."
+                : "Enables profile creation and CEX API connection before you can copy trade."}
             </p>
             <div className="text-2xl font-semibold">
               ${joiningFee.priceUsd}
               <span className="text-base font-normal text-muted-foreground"> one-time</span>
             </div>
           </div>
-          <Button
-            className="w-full sm:w-auto shrink-0"
-            onClick={onJoiningFeeCheckout}
-            disabled={joiningFeeLoading}
-          >
-            {joiningFeeLoading ? (
-              <Loader2 className="size-4 animate-spin" />
-            ) : (
-              "Pay joining fee"
-            )}
-          </Button>
+          {!joiningFeePaid && (
+            <Button
+              className="w-full sm:w-auto shrink-0"
+              onClick={onJoiningFeeCheckout}
+              disabled={joiningFeeLoading}
+            >
+              {joiningFeeLoading ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                "Pay joining fee"
+              )}
+            </Button>
+          )}
         </div>
       </Card>
 

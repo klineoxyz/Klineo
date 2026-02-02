@@ -2021,7 +2021,7 @@ export function Admin() {
               <div>
                 <h3 className="text-lg font-semibold">Payment Intents (Manual Safe)</h3>
                 <p className="text-sm text-muted-foreground mt-0.5">
-                  <strong>Reject</strong> is available for Draft (user never paid), Pending review, or Flagged. <strong>Approve</strong> only for Pending review or Flagged. For 100% discount, user can request approval without TX hash.
+                  Submitted payments from all users appear here. Each user sees only their own intents on the Payments page. <strong>Reject</strong> (with optional reason in Note) or <strong>Approve</strong> for Pending review / Flagged; Reject only for Draft. For 100% discount, TX hash is not required.
                 </p>
               </div>
               <div className="flex items-center gap-2">
@@ -2063,13 +2063,14 @@ export function Admin() {
                     <TableHead>Tx hash</TableHead>
                     <TableHead>From wallet</TableHead>
                     <TableHead>Mismatch</TableHead>
+                    <TableHead>Rejection / note</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {paymentIntents.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={11} className="text-center text-muted-foreground py-8">
+                      <TableCell colSpan={12} className="text-center text-muted-foreground py-8">
                         {paymentIntentsFeatureDisabled ? (
                           <span>Payment intents are disabled. Set <code className="text-xs bg-muted px-1 rounded">ENABLE_MANUAL_PAYMENTS=true</code> on the backend to enable.</span>
                         ) : (
@@ -2100,6 +2101,13 @@ export function Admin() {
                         </TableCell>
                         <TableCell className="font-mono text-xs max-w-[120px] truncate" title={pi.declared_from_wallet || ''}>{pi.declared_from_wallet || '—'}</TableCell>
                         <TableCell className="text-xs text-orange-600">{pi.mismatch_reason || '—'}</TableCell>
+                        <TableCell className="text-xs max-w-[160px]" title={pi.review_note || ''}>
+                          {pi.status === 'rejected' && pi.review_note ? (
+                            <span className="text-destructive">{pi.review_note}</span>
+                          ) : pi.review_note ? (
+                            <span className="text-muted-foreground">{pi.review_note}</span>
+                          ) : '—'}
+                        </TableCell>
                         <TableCell className="text-right">
                           {(pi.status === 'pending_review' || pi.status === 'flagged') ? (
                             <div className="flex gap-1 justify-end">
