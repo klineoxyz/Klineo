@@ -72,8 +72,9 @@ import {
   ListOrdered,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useAuth } from "@/app/contexts/AuthContext";
 import { useDemo } from "@/app/contexts/DemoContext";
-import { exchangeConnections, strategies, type ExchangeConnection } from "@/lib/api";
+import { api, exchangeConnections, strategies, type ExchangeConnection } from "@/lib/api";
 import {
   Dialog,
   DialogContent,
@@ -270,7 +271,14 @@ interface StrategyBacktestProps {
 }
 
 export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
+  const { user } = useAuth();
   const { addDemoFromBacktest } = useDemo();
+  const [entitlement, setEntitlement] = useState<{
+    joiningFeePaid: boolean;
+    status: string;
+    activePackageId: string | null;
+    remainingUsd: number;
+  } | null>(null);
   const [configCollapsed, setConfigCollapsed] = useState(false);
   const [launchDialogOpen, setLaunchDialogOpen] = useState(false);
   const [isBacktesting, setIsBacktesting] = useState(false);
@@ -363,6 +371,28 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
       })
       .catch(() => setConnectionsLoaded(true));
   }, []);
+
+  useEffect(() => {
+    if (!user?.id) {
+      setEntitlement(null);
+      return;
+    }
+    api
+      .get<{ joiningFeePaid: boolean; status: string; activePackageId: string | null; remainingUsd: number }>("/api/me/entitlement")
+      .then((data) =>
+        setEntitlement({
+          joiningFeePaid: data.joiningFeePaid ?? false,
+          status: data.status ?? "inactive",
+          activePackageId: data.activePackageId ?? null,
+          remainingUsd: data.remainingUsd ?? 0,
+        })
+      )
+      .catch(() => setEntitlement(null));
+  }, [user?.id]);
+
+  const showUnlockAllowanceCard =
+    entitlement == null ||
+    !(entitlement.joiningFeePaid && (entitlement.activePackageId || entitlement.status === "active"));
 
   const openGoLiveFutures = async () => {
     setGoLiveFuturesOpen(true);
@@ -1372,26 +1402,28 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
             </Button>
           </div>
 
-          {/* Packages / Allowance CTA */}
-          <Card className="p-4 bg-primary/10 border-primary/20">
-            <div className="flex items-start gap-3">
-              <TrendingUp className="h-5 w-5 text-primary shrink-0 mt-0.5" />
-              <div className="space-y-2">
-                <div className="font-medium text-sm">Unlock trading allowance</div>
-                <p className="text-xs text-muted-foreground">
-                  Buy a package in Packages to unlock your profit allowance and start copying
-                </p>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="w-full border-primary text-primary hover:bg-primary/10"
-                  onClick={() => onNavigate("subscription")}
-                >
-                  View Packages
-                </Button>
+          {/* Packages / Allowance CTA — hide when user has paid onboarding and has an active package */}
+          {showUnlockAllowanceCard && (
+            <Card className="p-4 bg-primary/10 border-primary/20">
+              <div className="flex items-start gap-3">
+                <TrendingUp className="h-5 w-5 text-primary shrink-0 mt-0.5" />
+                <div className="space-y-2">
+                  <div className="font-medium text-sm">Unlock trading allowance</div>
+                  <p className="text-xs text-muted-foreground">
+                    Buy a package in Packages to unlock your profit allowance and start copying
+                  </p>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="w-full border-primary text-primary hover:bg-primary/10"
+                    onClick={() => onNavigate("subscription")}
+                  >
+                    View Packages
+                  </Button>
+                </div>
               </div>
-            </div>
-          </Card>
+            </Card>
+          )}
         </div>
       </div>
 

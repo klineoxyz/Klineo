@@ -38,7 +38,9 @@ export async function fetchEntitlement(client: SupabaseClient, userId: string): 
 
 /**
  * Require joining fee paid. Use after verifySupabaseJWT.
- * Returns 402 with JOINING_FEE_REQUIRED or 403 if DB unavailable.
+ * Joining fee is considered paid if user_entitlements.joining_fee_paid OR user_profiles.member_active
+ * (aligned with GET /api/me/entitlement and admin approval flow).
+ * Returns 402 with JOINING_FEE_REQUIRED or 503 if DB unavailable.
  */
 export async function requireJoiningFee(
   req: AuthenticatedRequest,
@@ -56,16 +58,16 @@ export async function requireJoiningFee(
     });
   }
 
-  const ent = await fetchEntitlement(client, req.user!.id);
-  if (!ent) {
-    return res.status(402).json({
-      error: 'JOINING_FEE_REQUIRED',
-      message: 'Joining fee is required before you can connect an exchange or buy packages.',
-      requestId,
-    });
-  }
+  const userId = req.user!.id;
+  const [ent, profileResult] = await Promise.all([
+    fetchEntitlement(client, userId),
+    client.from('user_profiles').select('member_active').eq('id', userId).maybeSingle(),
+  ]);
 
-  if (!ent.joining_fee_paid) {
+  const memberActive = !!(profileResult?.data as { member_active?: boolean } | null)?.member_active;
+  const joiningFeePaid = !!ent?.joining_fee_paid || memberActive;
+
+  if (!joiningFeePaid) {
     return res.status(402).json({
       error: 'JOINING_FEE_REQUIRED',
       message: 'Joining fee is required before you can connect an exchange or buy packages.',

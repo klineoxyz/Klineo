@@ -105,16 +105,17 @@ entitlementsRouter.post(
     }
 
     try {
-      const { data: existing, error: fetchErr } = await client
-        .from('user_entitlements')
-        .select('joining_fee_paid')
-        .eq('user_id', targetUserId)
-        .maybeSingle();
+      const [{ data: existing, error: fetchErr }, { data: profile }] = await Promise.all([
+        client.from('user_entitlements').select('joining_fee_paid').eq('user_id', targetUserId).maybeSingle(),
+        client.from('user_profiles').select('member_active').eq('id', targetUserId).maybeSingle(),
+      ]);
 
       if (fetchErr) {
         return res.status(500).json({ error: 'Failed to fetch entitlement', requestId });
       }
-      if (!existing || !existing.joining_fee_paid) {
+      const memberActive = !!(profile as { member_active?: boolean } | null)?.member_active;
+      const joiningFeePaid = !!existing?.joining_fee_paid || memberActive;
+      if (!joiningFeePaid) {
         return res.status(402).json({
           error: 'JOINING_FEE_REQUIRED',
           message: 'User must have joining fee paid before activating a package.',
