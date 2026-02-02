@@ -80,6 +80,19 @@ Marketing spend: manual table `admin_marketing_spend` (period_start, period_end,
 | **Auto-Pause Rate** | paused_runs / total_runs | status = 'paused' |
 | **Kill Switch Rate** | kill_switch_enabled_connections / total_connections | |
 
+### E) By exchange
+
+| Metric | Source | Notes |
+|--------|--------|--------|
+| **Connections** | `user_exchange_connections` grouped by exchange | Count and OK (last_test_status = 'ok') |
+| **Strategy runs** | `strategy_runs` grouped by exchange | Total and active |
+| **Ticks (window)** | `strategy_tick_runs` via strategy_runs.exchange, in window | ok/error counts |
+| **Orders placed (window)** | `strategy_events` (event_type = 'order_submit') via strategy_runs.exchange, in window | |
+| **Trades (window)** | `trades` where exchange is set, in window | Requires `trades.exchange` to be set on insert |
+| **Volume USD (window)** | Sum of trades.amount × trades.price per exchange, in window | Requires `trades.exchange` set on insert |
+
+The `orders` and `trades` tables have an optional `exchange` column (binance/bybit). When the app or strategy runner sets it on insert, admin by-exchange will show trade count and volume per exchange. Until then, trades/volume per exchange may be 0.
+
 ---
 
 ## API (admin-only)
@@ -92,6 +105,7 @@ All routes require `verifySupabaseJWT` + `requireAdmin`. No PII in responses.
 | GET | `/api/admin/financial-ratios/timeseries?metric=revenue\|paying_users\|active_users\|active_strategies\|tick_success&days=90` | Time series for charts |
 | GET | `/api/admin/financial-ratios/top-payers?window=7d&limit=20` | Top payers (masked user_id, total, last payment) |
 | GET | `/api/admin/financial-ratios/refunds-fails?window=7d&limit=50` | Refunded/failed payments (masked) |
+| GET | `/api/admin/financial-ratios/by-exchange?window=7d` | Per-exchange: connections, strategy runs, ticks, orders placed, trades count, volume USD |
 | GET | `/api/admin/marketing-spend` | List marketing spend entries |
 | POST | `/api/admin/marketing-spend` | Create/upsert (body: period_start, period_end, spend_usdt, notes?) |
 

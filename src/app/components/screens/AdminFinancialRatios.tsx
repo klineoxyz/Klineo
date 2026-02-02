@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/app/components/ui/table";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { toast } from "@/app/lib/toast";
-import { Download, DollarSign, Users, Activity, Loader2, BarChart3, RefreshCw, TrendingUp, UserPlus, Zap, Link2 } from "lucide-react";
+import { Download, DollarSign, Users, Activity, Loader2, BarChart3, RefreshCw, TrendingUp, UserPlus, Zap, Link2, Building2 } from "lucide-react";
 
 const WINDOWS = [
   { value: "24h", label: "Last 24h" },
@@ -61,6 +61,20 @@ interface MarketingSpendRow {
   created_at: string;
 }
 
+interface ByExchangeRow {
+  exchange: string;
+  connections: number;
+  connections_ok: number;
+  strategy_runs_total: number;
+  strategy_runs_active: number;
+  ticks_in_window: number;
+  ticks_ok: number;
+  ticks_error: number;
+  orders_placed_in_window: number;
+  trades_count_in_window: number;
+  volume_usd_in_window: number;
+}
+
 function downloadJSON(data: unknown, filename: string) {
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
@@ -99,6 +113,7 @@ export function AdminFinancialRatios() {
   const [topPayers, setTopPayers] = useState<TopPayerRow[]>([]);
   const [refundsFails, setRefundsFails] = useState<RefundFailRow[]>([]);
   const [marketingSpend, setMarketingSpend] = useState<MarketingSpendRow[]>([]);
+  const [byExchange, setByExchange] = useState<ByExchangeRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [tsLoading, setTsLoading] = useState(false);
   const [marketingForm, setMarketingForm] = useState({ period_start: "", period_end: "", spend_usdt: "", notes: "" });
@@ -158,6 +173,15 @@ export function AdminFinancialRatios() {
     }
   };
 
+  const loadByExchange = async () => {
+    try {
+      const data = await api.get<{ byExchange: ByExchangeRow[] }>(`/api/admin/financial-ratios/by-exchange?window=${windowKey}`);
+      setByExchange(data.byExchange || []);
+    } catch {
+      setByExchange([]);
+    }
+  };
+
   const loadMarketingSpend = async () => {
     try {
       const data = await api.get<{ marketingSpend: MarketingSpendRow[] }>("/api/admin/marketing-spend");
@@ -171,6 +195,7 @@ export function AdminFinancialRatios() {
     loadRatios();
     loadTopPayers();
     loadRefundsFails();
+    loadByExchange();
   }, [windowKey]);
 
   useEffect(() => {
@@ -251,7 +276,7 @@ export function AdminFinancialRatios() {
               ))}
             </SelectContent>
           </Select>
-          <Button variant="outline" size="sm" onClick={() => { loadRatios(); loadTopPayers(); loadRefundsFails(); }}>
+          <Button variant="outline" size="sm" onClick={() => { loadRatios(); loadTopPayers(); loadRefundsFails(); loadByExchange(); }}>
             <RefreshCw className="size-4 mr-2" />
             Refresh
           </Button>
@@ -360,6 +385,53 @@ export function AdminFinancialRatios() {
                 <div className="text-[10px] text-muted-foreground">{Number(kpis.total_strategy_runs ?? 0)} total</div>
               </Card>
             </div>
+          </div>
+
+          {/* By exchange: connections, strategy runs, ticks, orders, trades, volume */}
+          <div>
+            <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
+              <Building2 className="size-4 text-primary" />
+              By exchange
+            </h3>
+            <p className="text-xs text-muted-foreground mb-3">Per-exchange connections, strategy runs, ticks, orders placed, trades executed, and volume (window: {ratios?.label ?? windowKey}). Trades/volume use the exchange column when set.</p>
+            <Card className="overflow-hidden">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Exchange</TableHead>
+                    <TableHead className="text-right">Connections</TableHead>
+                    <TableHead className="text-right">OK</TableHead>
+                    <TableHead className="text-right">Strategy runs</TableHead>
+                    <TableHead className="text-right">Active</TableHead>
+                    <TableHead className="text-right">Ticks (window)</TableHead>
+                    <TableHead className="text-right">Orders placed</TableHead>
+                    <TableHead className="text-right">Trades</TableHead>
+                    <TableHead className="text-right">Volume USD</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {byExchange.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={9} className="text-center text-muted-foreground text-sm py-4">No exchange data</TableCell>
+                    </TableRow>
+                  ) : (
+                    byExchange.map((r) => (
+                      <TableRow key={r.exchange}>
+                        <TableCell className="font-medium capitalize">{r.exchange}</TableCell>
+                        <TableCell className="text-right font-mono">{r.connections}</TableCell>
+                        <TableCell className="text-right font-mono text-primary">{r.connections_ok}</TableCell>
+                        <TableCell className="text-right font-mono">{r.strategy_runs_total}</TableCell>
+                        <TableCell className="text-right font-mono">{r.strategy_runs_active}</TableCell>
+                        <TableCell className="text-right font-mono">{r.ticks_in_window}</TableCell>
+                        <TableCell className="text-right font-mono">{r.orders_placed_in_window}</TableCell>
+                        <TableCell className="text-right font-mono">{r.trades_count_in_window}</TableCell>
+                        <TableCell className="text-right font-mono font-semibold">${r.volume_usd_in_window.toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </Card>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

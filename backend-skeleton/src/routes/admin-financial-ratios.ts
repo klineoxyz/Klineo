@@ -313,6 +313,112 @@ financialRatiosRouter.get('/timeseries', async (req: Request, res: Response) => 
 });
 
 /**
+ * GET /api/admin/financial-ratios/by-exchange?window=7d
+ * Per-exchange metrics: connections, strategy runs, ticks, orders placed, trades count and volume.
+ */
+financialRatiosRouter.get('/by-exchange', async (req: Request, res: Response) => {
+  const client = getSupabase();
+  if (!client) return res.status(503).json({ error: 'Database unavailable' });
+
+  const windowParam = (req.query.window as string) || '30d';
+  const { from, to } = parseWindow(windowParam);
+  const fromIso = from.toISOString();
+  const toIso = to.toISOString();
+
+  const cacheKey = `by-exchange:${windowParam}:${Math.floor(from.getTime() / 60000)}`;
+  const result = await getCached(cacheKey, async () => {
+    const exchanges = ['binance', 'bybit'] as const;
+    const byExchange: Array<{
+      exchange: string;
+      connections: number;
+      connections_ok: number;
+      strategy_runs_total: number;
+      strategy_runs_active: number;
+      ticks_in_window: number;
+      ticks_ok: number;
+      ticks_error: number;
+      orders_placed_in_window: number;
+      trades_count_in_window: number;
+      volume_usd_in_window: number;
+    }> = [];
+
+    for (const exchange of exchanges) {
+      const row = {
+        exchange,
+        connections: 0,
+        connections_ok: 0,
+        strategy_runs_total: 0,
+        strategy_runs_active: 0,
+        ticks_in_window: 0,
+        ticks_ok: 0,
+        ticks_error: 0,
+        orders_placed_in_window: 0,
+        trades_count_in_window: 0,
+        volume_usd_in_window: 0,
+      };
+
+      try {
+        const { data: conns } = await client.from('user_exchange_connections').select('id, last_test_status').eq('exchange', exchange);
+        const connList = conns || [];
+        row.connections = connList.length;
+        row.connections_ok = connList.filter((c: { last_test_status?: string }) => c.last_test_status === 'ok').length;
+      } catch {
+        /* skip */
+      }
+
+      try {
+        const { data: runs } = await client.from('strategy_runs').select('id, status').eq('exchange', exchange);
+        const runList = runs || [];
+        row.strategy_runs_total = runList.length;
+        row.strategy_runs_active = runList.filter((r: { status: string }) => r.status === 'active').length;
+      } catch {
+        /* skip */
+      }
+
+      try {
+        const { data: runIds } = await client.from('strategy_runs').select('id').eq('exchange', exchange);
+        const ids = (runIds || []).map((r: { id: string }) => r.id);
+        if (ids.length > 0) {
+          const { data: ticks } = await client.from('strategy_tick_runs').select('status').in('strategy_run_id', ids).gte('scheduled_at', fromIso).lte('scheduled_at', toIso);
+          const tickList = ticks || [];
+          row.ticks_in_window = tickList.length;
+          row.ticks_ok = tickList.filter((t: { status: string }) => t.status === 'ok').length;
+          row.ticks_error = tickList.filter((t: { status: string }) => t.status === 'error').length;
+        }
+      } catch {
+        /* skip */
+      }
+
+      try {
+        const { data: runIds } = await client.from('strategy_runs').select('id').eq('exchange', exchange);
+        const ids = (runIds || []).map((r: { id: string }) => r.id);
+        if (ids.length > 0) {
+          const { data: events } = await client.from('strategy_events').select('id').in('strategy_run_id', ids).eq('event_type', 'order_submit').gte('created_at', fromIso).lte('created_at', toIso);
+          row.orders_placed_in_window = (events || []).length;
+        }
+      } catch {
+        /* skip */
+      }
+
+      try {
+        const { data: trades } = await client.from('trades').select('amount, price').eq('exchange', exchange).gte('executed_at', fromIso).lte('executed_at', toIso);
+        const tradeList = (trades || []) as { amount: number; price: number }[];
+        row.trades_count_in_window = tradeList.length;
+        row.volume_usd_in_window = Math.round(tradeList.reduce((s, t) => s + Number(t.amount ?? 0) * Number(t.price ?? 0), 0) * 100) / 100;
+      } catch {
+        /* skip */
+      }
+
+      byExchange.push(row);
+    }
+
+    return { window: windowParam, from: fromIso, to: toIso, byExchange };
+  });
+
+  res.json(result);
+});
+
+/**
  * GET /api/admin/financial-ratios/top-payers?window=7d&limit=20
  * Top payers by revenue (masked user_id, no PII).
  */
