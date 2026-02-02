@@ -256,7 +256,7 @@ const backtestTrades = Array.from({ length: 15 }, (_, i) => ({
   takeProfit: (46000 + Math.random() * 1000).toFixed(2),
 }));
 
-const strategies = [
+const strategyOptions = [
   { id: "rsi-oversold", name: "RSI Oversold/Overbought", description: "Buy when RSI < 30, Sell when RSI > 70" },
   { id: "ma-crossover", name: "MA Crossover", description: "Golden/Death cross strategy" },
   { id: "breakout", name: "Breakout Strategy", description: "Trade channel breakouts" },
@@ -430,7 +430,7 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
   const marginRequired = (parseFloat(launchCapital) / parseFloat(leverage)).toFixed(2);
   const isHighRisk = parseFloat(leverage) > 3;
 
-  const selectedStrategy = strategies.find((s) => s.id === strategy);
+  const selectedStrategy = strategyOptions.find((s) => s.id === strategy);
 
   return (
     <div className="min-h-screen lg:h-screen flex flex-col lg:flex-row bg-background overflow-y-auto lg:overflow-hidden">
@@ -494,7 +494,7 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {strategies.map((strat) => (
+                  {strategyOptions.map((strat) => (
                     <SelectItem key={strat.id} value={strat.id}>
                       {strat.name}
                     </SelectItem>
