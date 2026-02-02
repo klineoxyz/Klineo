@@ -18,12 +18,18 @@ export function ContactPage({ onNavigate }: ContactPageProps) {
   });
 
   const [submitted, setSubmitted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (submitting) return;
+    setSubmitting(true);
     // In production, this would send to backend
     setSubmitted(true);
-    setTimeout(() => setSubmitted(false), 5000);
+    setTimeout(() => {
+      setSubmitting(false);
+      setSubmitted(false);
+    }, 5000);
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
@@ -246,14 +252,16 @@ export function ContactPage({ onNavigate }: ContactPageProps) {
                     type="submit"
                     size="lg"
                     className="bg-primary hover:bg-primary/90 flex-1"
+                    disabled={submitting}
                   >
-                    Send Message
+                    {submitting ? "Sending…" : "Send Message"}
                   </Button>
                   <Button
                     type="button"
                     variant="outline"
                     size="lg"
                     onClick={() => setFormData({ name: "", email: "", subject: "", category: "general", message: "" })}
+                    disabled={submitting}
                   >
                     Clear
                   </Button>

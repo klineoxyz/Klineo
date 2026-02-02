@@ -196,5 +196,6 @@ Set in Vercel → Project → Settings → Environment Variables.
 ## Summary
 
 - **LAUNCH_READINESS_FINAL.md** = this document (checklist + runbook + failure handling + Go/No-Go).  
+- **docs/LAUNCH_UI_SANITY_CHECKLIST.md** = UI sanity checklist (navigation, backtest, payout flow, coupon link, key CTAs, build/secrets). Use before release.  
 - **Runbook** = Part 1 (Day 0 onboarding) + Part 2 (Admin) + Part 3 (Smoke Test Launch preset); ~30 min end-to-end.  
 - **Code/API:** Critical flows (Terminal, Settings, Backtest, Admin, Smoke Test, launch status) verified; production hardening and sanitization in place; no feature creep.

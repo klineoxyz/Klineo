@@ -13,7 +13,8 @@ import {
   Trash2,
   Filter,
   X,
-  Loader2
+  Loader2,
+  Tag
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { toast } from "@/app/lib/toast";
@@ -26,7 +27,7 @@ interface NotificationsCenterProps {
   onNavigate: (view: string) => void;
 }
 
-type NotificationType = "trade" | "risk" | "system" | "account";
+type NotificationType = "trade" | "risk" | "system" | "account" | "discount_assigned";
 type NotificationPriority = "high" | "medium" | "low";
 
 interface Notification {
@@ -159,6 +160,7 @@ export function NotificationsCenter({ onNavigate }: NotificationsCenterProps) {
     if (type === "risk") return <AlertTriangle className="size-5" />;
     if (type === "system") return <Info className="size-5" />;
     if (type === "account") return <CheckCircle className="size-5" />;
+    if (type === "discount_assigned") return <Tag className="size-5" />;
     return <Bell className="size-5" />;
   };
 
@@ -172,6 +174,7 @@ export function NotificationsCenter({ onNavigate }: NotificationsCenterProps) {
     if (type === "trade") return "bg-[#10B981]/10 border-[#10B981]/20 text-[#10B981]";
     if (type === "risk") return "bg-[#EF4444]/10 border-[#EF4444]/20 text-[#EF4444]";
     if (type === "account") return "bg-accent/10 border-accent/20 text-accent";
+    if (type === "discount_assigned") return "bg-[#10B981]/10 border-[#10B981]/20 text-[#10B981]";
     return "bg-secondary border-border text-muted-foreground";
   };
 
@@ -183,6 +186,7 @@ export function NotificationsCenter({ onNavigate }: NotificationsCenterProps) {
       case "risk": return "Risk alert";
       case "system": return "System message";
       case "account": return "Account update";
+      case "discount_assigned": return "You have a new discount";
       default: return "Notification";
     }
   };
@@ -190,6 +194,19 @@ export function NotificationsCenter({ onNavigate }: NotificationsCenterProps) {
   const getDisplayBody = (n: Notification): string | null => {
     const b = (n.body || "").trim();
     return b || null;
+  };
+
+  /** For discount_assigned: parse body as { scope, summary } for Claim action */
+  const getDiscountPayload = (n: Notification): { scope: string; summary: string } | null => {
+    if (n.type !== "discount_assigned" || !n.body?.trim()) return null;
+    try {
+      const parsed = JSON.parse(n.body) as { scope?: string; summary?: string };
+      if (parsed?.scope && parsed?.summary) return { scope: parsed.scope, summary: parsed.summary };
+    } catch {
+      /* body not JSON, use as summary */
+      return { scope: "onboarding", summary: n.body.trim() };
+    }
+    return null;
   };
 
   return (
@@ -294,6 +311,13 @@ export function NotificationsCenter({ onNavigate }: NotificationsCenterProps) {
             >
               Account
             </Button>
+            <Button
+              variant={filter === "discount_assigned" ? "default" : "outline"}
+              size="sm"
+              onClick={() => setFilter("discount_assigned")}
+            >
+              Discount
+            </Button>
           </div>
           <div className="flex items-center gap-2 ml-auto">
             <input
@@ -324,7 +348,10 @@ export function NotificationsCenter({ onNavigate }: NotificationsCenterProps) {
       ) : (
         <div className="space-y-3">
           {filteredNotifications.map((notification) => {
-            const displayBody = getDisplayBody(notification);
+            const displayBody = notification.type === "discount_assigned"
+              ? getDiscountPayload(notification)?.summary ?? getDisplayBody(notification)
+              : getDisplayBody(notification);
+            const discountPayload = getDiscountPayload(notification);
             return (
             <Card 
               key={notification.id} 
@@ -346,24 +373,39 @@ export function NotificationsCenter({ onNavigate }: NotificationsCenterProps) {
                       <div className="size-2 rounded-full bg-accent ml-2" />
                     )}
                   </div>
-                  <div className="flex items-center justify-between mt-2">
+                  <div className="flex items-center justify-between mt-2 flex-wrap gap-2">
                     <span className="text-xs text-muted-foreground">
                       {formatDistanceToNow(new Date(notification.createdAt), { addSuffix: true })}
                     </span>
-                    {!notification.read && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => markAsRead(notification.id)}
-                        disabled={markingRead === notification.id}
-                      >
-                        {markingRead === notification.id ? (
-                          <Loader2 className="size-3 animate-spin" />
-                        ) : (
-                          "Mark as read"
-                        )}
-                      </Button>
-                    )}
+                    <div className="flex items-center gap-2">
+                      {notification.type === "discount_assigned" && discountPayload && (
+                        <Button
+                          size="sm"
+                          className="bg-primary text-primary-foreground"
+                          onClick={() => {
+                            onNavigate(
+                              discountPayload.scope === "onboarding" ? "payments" : "subscription"
+                            );
+                          }}
+                        >
+                          Claim
+                        </Button>
+                      )}
+                      {!notification.read && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => markAsRead(notification.id)}
+                          disabled={markingRead === notification.id}
+                        >
+                          {markingRead === notification.id ? (
+                            <Loader2 className="size-3 animate-spin" />
+                          ) : (
+                            "Mark as read"
+                          )}
+                        </Button>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>

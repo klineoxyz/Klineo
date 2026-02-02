@@ -11,11 +11,17 @@ interface FooterProps {
 export function Footer({ onNavigate }: FooterProps) {
   const [email, setEmail] = useState("");
   const [subscribed, setSubscribed] = useState(false);
+  const [subscribing, setSubscribing] = useState(false);
 
   const handleSubscribe = (e: React.FormEvent) => {
     e.preventDefault();
+    if (subscribing) return;
+    setSubscribing(true);
     setSubscribed(true);
-    setTimeout(() => setSubscribed(false), 3000);
+    setTimeout(() => {
+      setSubscribing(false);
+      setSubscribed(false);
+    }, 3000);
   };
 
   return (
@@ -220,10 +226,11 @@ export function Footer({ onNavigate }: FooterProps) {
                 onChange={(e) => setEmail(e.target.value)}
                 required
                 className="flex-1"
+                disabled={subscribing}
               />
-              <Button type="submit" className="bg-primary hover:bg-primary/90">
+              <Button type="submit" className="bg-primary hover:bg-primary/90" disabled={subscribing}>
                 <Mail className="size-4 mr-2" />
-                Subscribe
+                {subscribing ? "Subscribing…" : "Subscribe"}
               </Button>
             </form>
             {subscribed && (

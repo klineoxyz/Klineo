@@ -1207,6 +1207,29 @@ adminRouter.post('/user-discounts',
         return res.status(500).json({ error: 'Failed to create user discount', details: error.message });
       }
 
+      // Notify the user about their new discount (Claim → Payments or Packages)
+      const summary =
+        scope === 'onboarding'
+          ? [
+              data.onboarding_discount_percent != null ? `${data.onboarding_discount_percent}% off` : null,
+              data.onboarding_discount_fixed_usd != null ? `$${data.onboarding_discount_fixed_usd} off` : null,
+            ]
+              .filter(Boolean)
+              .join(' + ') || 'Onboarding discount'
+          : [
+              data.trading_discount_percent != null ? `${data.trading_discount_percent}% off` : null,
+              data.trading_max_packages != null ? `up to ${data.trading_max_packages} package(s)` : null,
+            ]
+              .filter(Boolean)
+              .join(' ') || 'Trading package discount';
+      const notifBody = JSON.stringify({ scope: data.scope, summary });
+      await client.from('notifications').insert({
+        user_id: data.user_id,
+        type: 'discount_assigned',
+        title: 'You have a new discount',
+        body: notifBody,
+      });
+
       res.json({ userDiscount: data });
     } catch (err) {
       console.error('Admin create user discount error:', err);
