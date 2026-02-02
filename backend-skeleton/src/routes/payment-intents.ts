@@ -116,6 +116,74 @@ export async function validateCoupon(
   };
 }
 
+/**
+ * Validate a user-specific discount by code (system-generated code from user_discounts).
+ * Code must belong to the given user and apply to the requested kind/package.
+ */
+export async function validateUserDiscountByCode(
+  client: SupabaseClient,
+  code: string,
+  userId: string,
+  kind: 'joining_fee' | 'package',
+  packageCode: string | null
+): Promise<ValidateCouponResult> {
+  const raw = (code || '').trim().toUpperCase();
+  if (!raw) return { valid: false, error: 'Coupon code is required' };
+
+  const { data: ud, error } = await client
+    .from('user_discounts')
+    .select('id, user_id, scope, onboarding_discount_percent, onboarding_discount_fixed_usd, trading_discount_percent, trading_package_ids, trading_max_packages, trading_used_count, status')
+    .eq('code', raw)
+    .eq('user_id', userId)
+    .in('status', ['active', 'paused'])
+    .single();
+
+  if (error || !ud) return { valid: false, error: 'Invalid or expired code' };
+
+  const scope = (ud as { scope?: string }).scope;
+  if (kind === 'joining_fee') {
+    if (scope !== 'onboarding') return { valid: false, error: 'This code does not apply to the joining fee' };
+    const pct = (ud as { onboarding_discount_percent?: number }).onboarding_discount_percent != null
+      ? parseFloat((ud as { onboarding_discount_percent?: number }).onboarding_discount_percent!.toString())
+      : 0;
+    const fixed = (ud as { onboarding_discount_fixed_usd?: number }).onboarding_discount_fixed_usd != null
+      ? parseFloat((ud as { onboarding_discount_fixed_usd?: number }).onboarding_discount_fixed_usd!.toString())
+      : 0;
+    const originalAmountUsdt = AMOUNTS.joining_fee ?? 100;
+    const afterPercent = pct > 0 ? originalAmountUsdt * (1 - pct / 100) : originalAmountUsdt;
+    const amountUsdt = Math.max(0.01, Math.round((afterPercent - fixed) * 100) / 100);
+    return {
+      valid: true,
+      discountPercent: pct,
+      originalAmountUsdt,
+      amountUsdt,
+      description: `User discount: ${pct}% off${fixed > 0 ? ` + $${fixed} off` : ''}`,
+    };
+  }
+
+  if (scope !== 'trading_packages') return { valid: false, error: 'This code does not apply to packages' };
+  const pct = (ud as { trading_discount_percent?: number }).trading_discount_percent != null
+    ? parseFloat((ud as { trading_discount_percent?: number }).trading_discount_percent!.toString())
+    : 0;
+  if (pct <= 0 || pct > 100) return { valid: false, error: 'Invalid discount' };
+  const packageIds = (ud as { trading_package_ids?: string[] }).trading_package_ids;
+  if (Array.isArray(packageIds) && packageIds.length > 0 && packageCode) {
+    const pkgId = PACKAGE_CODE_TO_ID[packageCode] || packageCode.toLowerCase();
+    if (!packageIds.includes(pkgId)) {
+      return { valid: false, error: 'This code does not apply to the selected package' };
+    }
+  }
+  const originalAmountUsdt = AMOUNTS[packageCode || 'ENTRY_100'] ?? AMOUNTS.ENTRY_100 ?? 100;
+  const amountUsdt = Math.max(0.01, Math.round((originalAmountUsdt * (1 - pct / 100)) * 100) / 100);
+  return {
+    valid: true,
+    discountPercent: pct,
+    originalAmountUsdt,
+    amountUsdt,
+    description: `User discount: ${pct}% off`,
+  };
+}
+
 export const paymentIntentsRouter: Router = Router();
 
 paymentIntentsRouter.use(verifySupabaseJWT);
@@ -146,12 +214,16 @@ paymentIntentsRouter.post(
     let couponApplied: { code: string; discountPercent: number } | null = null;
 
     if ((coupon_code as string)?.trim()) {
-      const result = await validateCoupon(client, coupon_code as string, kind as 'joining_fee' | 'package', pkgCode);
+      const codeUpper = (coupon_code as string).trim().toUpperCase();
+      let result = await validateCoupon(client, coupon_code as string, kind as 'joining_fee' | 'package', pkgCode);
+      if (!result.valid) {
+        result = await validateUserDiscountByCode(client, codeUpper, userId, kind as 'joining_fee' | 'package', pkgCode);
+      }
       if (!result.valid) {
         return res.status(400).json({ error: result.error });
       }
       amountUsdt = result.amountUsdt;
-      couponApplied = { code: (coupon_code as string).trim().toUpperCase(), discountPercent: result.discountPercent };
+      couponApplied = { code: codeUpper, discountPercent: result.discountPercent };
     } else {
       if (kind === 'joining_fee') {
         amountUsdt = AMOUNTS.joining_fee ?? 100;
@@ -232,7 +304,7 @@ export const validateCouponHandler = [
     query('kind').isIn(['joining_fee', 'package']).withMessage('kind must be joining_fee or package'),
     query('package_code').optional().trim().isString(),
   ]),
-  async (req: Request, res: Response) => {
+  async (req: AuthenticatedRequest, res: Response) => {
     if (!manualPaymentsEnabled()) {
       return res.status(200).json({ valid: false, error: 'Manual payments are disabled' });
     }
@@ -243,7 +315,10 @@ export const validateCouponHandler = [
     const kind = (req.query.kind as 'joining_fee' | 'package') || 'joining_fee';
     const packageCode = kind === 'package' ? ((req.query.package_code as string) || 'ENTRY_100') : null;
 
-    const result = await validateCoupon(client, code, kind, packageCode);
+    let result = await validateCoupon(client, code, kind, packageCode);
+    if (!result.valid && req.user?.id) {
+      result = await validateUserDiscountByCode(client, code.toUpperCase(), req.user.id, kind, packageCode);
+    }
     if (result.valid) {
       return res.json({
         valid: true,

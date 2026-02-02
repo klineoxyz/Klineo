@@ -469,16 +469,16 @@ export function Admin() {
   };
 
   const handleCreateCoupon = async () => {
-    if (!couponCode || !discountPercent || !durationMonths) {
+    if (!discountPercent || !durationMonths) {
       toast.error("Missing required fields", {
-        description: "Please fill in code, discount, and duration",
+        description: "Please fill in discount and duration (code is optional and will be auto-generated if empty)",
       });
       return;
     }
 
     try {
-      await api.post('/api/admin/coupons', {
-        code: couponCode,
+      const res = await api.post<{ coupon: { code: string } }>('/api/admin/coupons', {
+        code: couponCode.trim() || undefined,
         discount: parseFloat(discountPercent),
         appliesTo: couponAppliesTo,
         packageIds: (couponAppliesTo === "trading_packages" || couponAppliesTo === "both") && couponPackageIds.length > 0 ? couponPackageIds : undefined,
@@ -487,8 +487,9 @@ export function Admin() {
         expiresAt: couponExpiry || undefined,
         description: couponDescription || '',
       });
+      const createdCode = (res as any)?.coupon?.code ?? couponCode;
       toast.success("Coupon created successfully", {
-        description: `${couponCode} - ${discountPercent}% off (${couponAppliesTo}) for ${durationMonths} months`,
+        description: createdCode ? `${createdCode} — ${discountPercent}% off (${couponAppliesTo}) for ${durationMonths} months` : `${discountPercent}% off for ${durationMonths} months`,
       });
       setCouponCode("");
       setDiscountPercent("");
@@ -540,7 +541,7 @@ export function Admin() {
       return;
     }
     try {
-      await api.post("/api/admin/user-discounts", {
+      const res = await api.post<{ userDiscount: { code: string; scope: string } }>("/api/admin/user-discounts", {
         userId: userDiscountUserId,
         scope: userDiscountScope,
         onboardingDiscountPercent: userDiscountScope === "onboarding" && userDiscountOnboardingPercent ? parseFloat(userDiscountOnboardingPercent) : undefined,
@@ -549,7 +550,17 @@ export function Admin() {
         tradingPackageIds: userDiscountScope === "trading_packages" && userDiscountTradingPackages.length > 0 ? userDiscountTradingPackages : undefined,
         tradingMaxPackages: userDiscountScope === "trading_packages" && userDiscountTradingMax ? parseInt(userDiscountTradingMax, 10) : undefined,
       });
-      toast.success("User discount created");
+      const ud = (res as any)?.userDiscount;
+      const code = ud?.code;
+      const baseUrl = window.location.origin.replace(/\/$/, "");
+      const claimUrl = code
+        ? (ud?.scope === "onboarding" ? `${baseUrl}/payments?coupon=${code}` : `${baseUrl}/packages?coupon=${code}`)
+        : null;
+      toast.success("User discount created", {
+        description: code
+          ? `Code: ${code}. ${claimUrl ? `Claim link: ${claimUrl}` : ""} User will receive a notification with the code and link.`
+          : "User will receive a notification.",
+      });
       setUserDiscountUserId("");
       setUserDiscountScope("onboarding");
       setUserDiscountOnboardingPercent("");
@@ -1535,13 +1546,13 @@ export function Admin() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="coupon-code">Coupon Code *</Label>
+                  <Label htmlFor="coupon-code">Coupon code (system-generated)</Label>
                   <div className="flex gap-2">
                     <Input
                       id="coupon-code"
                       value={couponCode}
                       onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
-                      placeholder="e.g., LAUNCH50"
+                      placeholder="Leave empty to auto-generate"
                       className="font-mono uppercase"
                       maxLength={20}
                     />
@@ -1550,7 +1561,7 @@ export function Admin() {
                       Generate
                     </Button>
                   </div>
-                  <p className="text-xs text-muted-foreground">Enter custom code or auto-generate</p>
+                  <p className="text-xs text-muted-foreground">Leave empty to have a code generated on create, or click Generate to preview. Do not enter manually unless reusing an existing code.</p>
                 </div>
 
                 <div className="space-y-2">
@@ -1802,7 +1813,7 @@ export function Admin() {
               <Settings2 className="size-6 text-primary" />
               <div>
                 <h3 className="text-lg font-semibold">User-Specific Discounts</h3>
-                <p className="text-sm text-muted-foreground">Assign onboarding or trading package discounts to specific users. Change, pause, or revoke anytime.</p>
+                <p className="text-sm text-muted-foreground">Assign onboarding or trading package discounts to specific users. A <strong>system-generated coupon code</strong> is created for each assignment; share the code or claim link with the user. Change, pause, or revoke anytime.</p>
               </div>
             </div>
 
@@ -1893,6 +1904,7 @@ export function Admin() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>User</TableHead>
+                      <TableHead>Code</TableHead>
                       <TableHead>Type</TableHead>
                       <TableHead>Discount</TableHead>
                       <TableHead>Packages / Max</TableHead>
@@ -1904,6 +1916,9 @@ export function Admin() {
                     {userDiscounts.map((d) => (
                       <TableRow key={d.id}>
                         <TableCell className="font-medium">{d.userEmail}</TableCell>
+                        <TableCell className="font-mono text-sm">
+                          {d.code ?? "—"}
+                        </TableCell>
                         <TableCell className="capitalize">{d.scope?.replace("_", " ")}</TableCell>
                         <TableCell>
                           {d.scope === "onboarding"
@@ -1922,6 +1937,34 @@ export function Admin() {
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex flex-wrap gap-2 justify-end">
+                            {d.code && (
+                              <>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => {
+                                    navigator.clipboard.writeText(d.code!).then(() => toast.success("Coupon code copied")).catch(() => toast.error("Copy failed"));
+                                  }}
+                                  title="Copy system-generated coupon code"
+                                >
+                                  <Copy className="size-4 mr-1" />
+                                  Copy code
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => {
+                                    const base = typeof window !== "undefined" ? window.location.origin.replace(/\/$/, "") : "https://www.klineo.xyz";
+                                    const link = d.scope === "onboarding" ? `${base}/payments?coupon=${d.code}` : `${base}/packages?coupon=${d.code}`;
+                                    navigator.clipboard.writeText(link).then(() => toast.success("Claim link copied")).catch(() => toast.error("Copy failed"));
+                                  }}
+                                  title="Copy claim link (user opens this to apply the discount)"
+                                >
+                                  <Link2 className="size-4 mr-1" />
+                                  Copy link
+                                </Button>
+                              </>
+                            )}
                             <Button
                               variant="outline"
                               size="sm"
@@ -1935,18 +1978,6 @@ export function Admin() {
                             >
                               <Copy className="size-4 mr-1" />
                               Copy summary
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => {
-                                const link = `${typeof window !== "undefined" ? window.location.origin : ""}/payments`;
-                                navigator.clipboard.writeText(link).then(() => toast.success("Payments link copied")).catch(() => toast.error("Copy failed"));
-                              }}
-                              title="Copy Payments page link to send to user"
-                            >
-                              <Link2 className="size-4 mr-1" />
-                              Copy link
                             </Button>
                             {d.status === "active" && (
                               <Button variant="outline" size="sm" onClick={() => handleUserDiscountStatus(d.id, "paused")} title="Pause">

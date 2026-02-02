@@ -19,6 +19,16 @@ function getSupabase(): SupabaseClient | null {
   return supabase;
 }
 
+/** Generate a system coupon code (8 chars, A-Z0-9). */
+function generateSystemCouponCode(): string {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let code = '';
+  for (let i = 0; i < 8; i++) {
+    code += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return code;
+}
+
 export const adminRouter: Router = Router();
 
 // All admin routes require authentication + admin role
@@ -845,7 +855,7 @@ adminRouter.get('/coupons', async (req, res) => {
  */
 adminRouter.post('/coupons', 
   validate([
-    body('code').isString().isLength({ min: 3, max: 20 }).matches(/^[A-Z0-9]+$/).withMessage('code must be 3-20 uppercase alphanumeric characters'),
+    body('code').optional().trim().isString().isLength({ min: 0, max: 20 }).matches(/^[A-Z0-9]*$/).withMessage('code must be empty or 3-20 uppercase alphanumeric characters'),
     body('discount').isFloat({ min: 0, max: 100 }).withMessage('discount must be between 0 and 100'),
     body('appliesTo').optional().isIn(['onboarding', 'trading_packages', 'both']).withMessage('appliesTo must be onboarding, trading_packages, or both'),
     body('packageIds').optional().isArray().withMessage('packageIds must be an array'),
@@ -862,12 +872,27 @@ adminRouter.post('/coupons',
     }
 
     try {
-      const { code, discount, appliesTo, packageIds, maxRedemptions, durationMonths, expiresAt, description } = req.body;
+      let { code, discount, appliesTo, packageIds, maxRedemptions, durationMonths, expiresAt, description } = req.body;
+      if (!code || (code as string).trim() === '') {
+        for (let attempt = 0; attempt < 10; attempt++) {
+          code = generateSystemCouponCode();
+          const { data: existing } = await client.from('coupons').select('id').eq('code', code).single();
+          if (!existing) break;
+          if (attempt === 9) {
+            return res.status(500).json({ error: 'Failed to generate unique coupon code. Please try again.' });
+          }
+        }
+      } else {
+        code = (code as string).trim().toUpperCase();
+        if ((code as string).length < 3) {
+          return res.status(400).json({ error: 'code must be at least 3 characters when provided' });
+        }
+      }
 
     const { data, error } = await client
       .from('coupons')
       .insert({
-        code: code.toUpperCase(),
+        code: (code as string).toUpperCase(),
         discount_percent: parseFloat(discount),
         applies_to: appliesTo || 'both',
         package_ids: Array.isArray(packageIds) && packageIds.length > 0 ? packageIds : null,
@@ -1115,7 +1140,7 @@ adminRouter.get('/user-discounts', async (req, res) => {
   try {
     const { data: discounts, error } = await client
       .from('user_discounts')
-      .select('id, user_id, scope, onboarding_discount_percent, onboarding_discount_fixed_usd, trading_discount_percent, trading_package_ids, trading_max_packages, trading_used_count, status, created_by, created_at, updated_at')
+      .select('id, user_id, code, scope, onboarding_discount_percent, onboarding_discount_fixed_usd, trading_discount_percent, trading_package_ids, trading_max_packages, trading_used_count, status, created_by, created_at, updated_at')
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -1137,6 +1162,7 @@ adminRouter.get('/user-discounts', async (req, res) => {
       id: d.id,
       userId: d.user_id,
       userEmail: emailMap[d.user_id] || '—',
+      code: d.code || null,
       scope: d.scope,
       onboardingDiscountPercent: d.onboarding_discount_percent != null ? parseFloat(d.onboarding_discount_percent) : null,
       onboardingDiscountFixedUsd: d.onboarding_discount_fixed_usd != null ? parseFloat(d.onboarding_discount_fixed_usd) : null,
@@ -1180,11 +1206,23 @@ adminRouter.post('/user-discounts',
     try {
       const { userId, scope, onboardingDiscountPercent, onboardingDiscountFixedUsd, tradingDiscountPercent, tradingPackageIds, tradingMaxPackages } = req.body;
 
+      // System-generated coupon code (unique)
+      let code = generateSystemCouponCode();
+      for (let attempt = 0; attempt < 10; attempt++) {
+        const { data: existing } = await client.from('user_discounts').select('id').eq('code', code).single();
+        if (!existing) break;
+        code = generateSystemCouponCode();
+        if (attempt === 9) {
+          return res.status(500).json({ error: 'Failed to generate unique coupon code. Please try again.' });
+        }
+      }
+
       const insert: Record<string, unknown> = {
         user_id: userId,
         scope,
         status: 'active',
         created_by: req.user!.id,
+        code,
       };
 
       if (scope === 'onboarding') {
@@ -1207,7 +1245,6 @@ adminRouter.post('/user-discounts',
         return res.status(500).json({ error: 'Failed to create user discount', details: error.message });
       }
 
-      // Notify the user about their new discount (Claim → Payments or Packages)
       const summary =
         scope === 'onboarding'
           ? [
@@ -1222,7 +1259,18 @@ adminRouter.post('/user-discounts',
             ]
               .filter(Boolean)
               .join(' ') || 'Trading package discount';
-      const notifBody = JSON.stringify({ scope: data.scope, summary });
+
+      const baseUrl = process.env.FRONTEND_URL || 'https://www.klineo.xyz';
+      const claimUrl = data.scope === 'onboarding'
+        ? `${baseUrl.replace(/\/$/, '')}/payments?coupon=${data.code}`
+        : `${baseUrl.replace(/\/$/, '')}/packages?coupon=${data.code}`;
+
+      const notifBody = JSON.stringify({
+        scope: data.scope,
+        summary,
+        code: data.code,
+        claimUrl,
+      });
       await client.from('notifications').insert({
         user_id: data.user_id,
         type: 'discount_assigned',

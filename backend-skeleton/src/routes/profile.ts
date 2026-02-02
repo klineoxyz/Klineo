@@ -125,7 +125,7 @@ profileRouter.get('/discounts', async (req: AuthenticatedRequest, res) => {
   try {
     const { data: discounts, error } = await client
       .from('user_discounts')
-      .select('id, scope, onboarding_discount_percent, onboarding_discount_fixed_usd, trading_discount_percent, trading_package_ids, trading_max_packages, trading_used_count, status, created_at')
+      .select('id, code, scope, onboarding_discount_percent, onboarding_discount_fixed_usd, trading_discount_percent, trading_package_ids, trading_max_packages, trading_used_count, status, created_at')
       .eq('user_id', req.user!.id)
       .in('status', ['active', 'paused'])
       .order('created_at', { ascending: false });
@@ -137,6 +137,7 @@ profileRouter.get('/discounts', async (req: AuthenticatedRequest, res) => {
 
     const formatted = (discounts || []).map((d: any) => ({
       id: d.id,
+      code: d.code || null,
       scope: d.scope,
       onboardingDiscountPercent: d.onboarding_discount_percent != null ? parseFloat(d.onboarding_discount_percent) : null,
       onboardingDiscountFixedUsd: d.onboarding_discount_fixed_usd != null ? parseFloat(d.onboarding_discount_fixed_usd) : null,

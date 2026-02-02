@@ -196,12 +196,12 @@ export function NotificationsCenter({ onNavigate }: NotificationsCenterProps) {
     return b || null;
   };
 
-  /** For discount_assigned: parse body as { scope, summary } for Claim action */
-  const getDiscountPayload = (n: Notification): { scope: string; summary: string } | null => {
+  /** For discount_assigned: parse body as { scope, summary, code?, claimUrl? } for Claim action */
+  const getDiscountPayload = (n: Notification): { scope: string; summary: string; code?: string; claimUrl?: string } | null => {
     if (n.type !== "discount_assigned" || !n.body?.trim()) return null;
     try {
-      const parsed = JSON.parse(n.body) as { scope?: string; summary?: string };
-      if (parsed?.scope && parsed?.summary) return { scope: parsed.scope, summary: parsed.summary };
+      const parsed = JSON.parse(n.body) as { scope?: string; summary?: string; code?: string; claimUrl?: string };
+      if (parsed?.scope && parsed?.summary) return { scope: parsed.scope, summary: parsed.summary, code: parsed.code, claimUrl: parsed.claimUrl };
     } catch {
       /* body not JSON, use as summary */
       return { scope: "onboarding", summary: n.body.trim() };
@@ -348,10 +348,10 @@ export function NotificationsCenter({ onNavigate }: NotificationsCenterProps) {
       ) : (
         <div className="space-y-3">
           {filteredNotifications.map((notification) => {
-            const displayBody = notification.type === "discount_assigned"
-              ? getDiscountPayload(notification)?.summary ?? getDisplayBody(notification)
-              : getDisplayBody(notification);
             const discountPayload = getDiscountPayload(notification);
+            const displayBody = notification.type === "discount_assigned"
+              ? discountPayload?.summary ?? getDisplayBody(notification)
+              : getDisplayBody(notification);
             return (
             <Card 
               key={notification.id} 
@@ -368,6 +368,9 @@ export function NotificationsCenter({ onNavigate }: NotificationsCenterProps) {
                       {displayBody ? (
                         <p className="text-sm text-muted-foreground mt-1">{displayBody}</p>
                       ) : null}
+                      {notification.type === "discount_assigned" && discountPayload?.code && (
+                        <p className="text-sm font-mono mt-1 text-primary">Coupon code: {discountPayload.code}</p>
+                      )}
                     </div>
                     {!notification.read && (
                       <div className="size-2 rounded-full bg-accent ml-2" />
