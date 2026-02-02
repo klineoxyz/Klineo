@@ -604,12 +604,12 @@ export function TradingTerminalNew({ onNavigate }: TradingTerminalProps) {
                     {c.exchange} {c.label ? `(${c.label})` : ""}
                   </span>
                   <Badge variant="outline" className="text-[10px]">
-                    {c.last_test_status === "ok" ? "Connected OK" : "Needs Test"}
+                    {c.last_test_status === "ok" ? "Spot active" : "Spot: needs test"}
                   </Badge>
                   {c.futures_enabled ? (
                     <Badge variant="outline" className="text-[10px] bg-green-500/10 text-green-600 border-green-500/30">Futures ON</Badge>
                   ) : (
-                    <Badge variant="outline" className="text-[10px] text-muted-foreground">Futures OFF</Badge>
+                    <Badge variant="outline" className="text-[10px] text-muted-foreground" title="Futures may be restricted in your region">Futures OFF</Badge>
                   )}
                   {c.disabled_at ? (
                     <Badge variant="secondary" className="text-[10px]">Disabled</Badge>
@@ -985,7 +985,14 @@ export function TradingTerminalNew({ onNavigate }: TradingTerminalProps) {
             </div>
 
             {/* Chart Area */}
-            <div className="flex-1 min-h-0 p-2">
+            <div className="flex-1 min-h-0 p-2 flex flex-col">
+              {!isDemoMode && chartData.length > 0 && !chartError && (
+                <div className="shrink-0 flex items-center justify-end pb-1">
+                  <span className="text-[10px] sm:text-xs text-muted-foreground" title="Chart uses live data from Binance">
+                    Live: Binance
+                  </span>
+                </div>
+              )}
               {chartMode === "lightweight" ? (
                 chartLoading && !chartData.length ? (
                   <div className="h-full flex items-center justify-center bg-[#0a0e13]">

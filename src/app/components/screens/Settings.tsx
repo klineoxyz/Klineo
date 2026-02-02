@@ -1154,30 +1154,24 @@ export function Settings({ onNavigate }: SettingsProps) {
                         <Badge variant={conn.environment === 'production' ? 'default' : 'secondary'}>
                           {conn.environment}
                         </Badge>
-                        {conn.last_test_status === 'ok' && (
-                          <Badge className="bg-[#10B981] text-white">
-                            <CheckCircle2 className="size-3 mr-1" />
-                            Connected
-                          </Badge>
-                        )}
-                        {conn.last_test_status === 'fail' && (
-                          <Badge variant="destructive">
-                            <XCircle className="size-3 mr-1" />
-                            Failed
-                          </Badge>
-                        )}
-                        {!conn.last_test_status && (
-                          <Badge variant="outline">Never tested</Badge>
-                        )}
                         {conn.disabled_at && (
                           <Badge variant="secondary" className="bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30">
                             Disabled (too many errors)
                           </Badge>
                         )}
                         {(conn.exchange === "binance" || conn.exchange === "bybit") && (
-                          <Badge variant="outline" className={conn.futures_enabled ? "bg-green-500/10 text-green-600 border-green-500/30" : "text-muted-foreground"}>
-                            Futures {conn.futures_enabled ? "ON" : "OFF"}
-                          </Badge>
+                          <>
+                            <Badge variant="outline" className={conn.last_test_status === "ok" ? "bg-green-500/10 text-green-600 border-green-500/30" : "text-muted-foreground"}>
+                              Spot {conn.last_test_status === "ok" ? "active" : conn.last_test_status === "fail" ? "failed" : "not tested"}
+                            </Badge>
+                            <Badge variant="outline" className={conn.futures_enabled ? "bg-green-500/10 text-green-600 border-green-500/30" : "text-muted-foreground"}>
+                              {conn.futures_enabled
+                                ? "Futures ON"
+                                : conn.last_error_message && /restricted|eligibility|region|unavailable.*location/i.test(conn.last_error_message)
+                                  ? "Futures OFF (not available in your region)"
+                                  : "Futures OFF"}
+                            </Badge>
+                          </>
                         )}
                       </div>
                       <div className="text-sm text-muted-foreground space-y-1">

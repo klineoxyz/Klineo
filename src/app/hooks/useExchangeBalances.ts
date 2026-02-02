@@ -47,6 +47,15 @@ export function useExchangeBalances(): UseExchangeBalancesResult {
     fetchBalance();
   }, [fetchBalance]);
 
+  // Refetch when user returns to the tab (e.g. after connecting in Settings) so Terminal shows real balance
+  useEffect(() => {
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") fetchBalance();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+  }, [fetchBalance]);
+
   // Refetch balance periodically when connected (e.g. after trades)
   useEffect(() => {
     if (!data?.connected) return;
