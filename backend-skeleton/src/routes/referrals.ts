@@ -314,6 +314,40 @@ referralsRouter.get('/payout-summary', async (req: AuthenticatedRequest, res: Re
 });
 
 /**
+ * GET /api/referrals/my-payout-requests
+ * List current user's payout requests (for Payout History on Referrals page).
+ */
+referralsRouter.get('/my-payout-requests', async (req: AuthenticatedRequest, res: Response) => {
+  const client = getSupabase();
+  if (!client) return res.status(503).json({ error: 'Database unavailable' });
+
+  const userId = req.user!.id;
+  const { data: requests, error } = await client
+    .from('payout_requests')
+    .select('id, amount, currency, status, created_at, approved_at, paid_at, rejection_reason, payout_tx_id')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    return res.status(500).json({ error: 'Failed to fetch payout history' });
+  }
+
+  const list = (requests || []).map((r: Record<string, unknown>) => ({
+    id: r.id,
+    amount: parseFloat(String(r.amount ?? 0)),
+    currency: r.currency ?? 'USDT',
+    status: r.status,
+    createdAt: r.created_at,
+    approvedAt: r.approved_at ?? null,
+    paidAt: r.paid_at ?? null,
+    rejectionReason: r.rejection_reason ?? null,
+    payoutTxId: r.payout_tx_id ?? null,
+  }));
+
+  res.json({ payoutRequests: list });
+});
+
+/**
  * POST /api/referrals/payout-request
  * Create a PENDING payout request. Amount >= $50, <= requestable. One PENDING per user.
  */

@@ -5,10 +5,11 @@ import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import { Separator } from "@/app/components/ui/separator";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/app/components/ui/table";
-import { Copy, Check, ExternalLink } from "lucide-react";
-import { useState } from "react";
+import { Copy, Check, ExternalLink, Loader2 } from "lucide-react";
+import { useState, useEffect } from "react";
 import { toast } from "@/app/lib/toast";
 import { copyToClipboard } from "@/app/lib/clipboard";
+import { api } from "@/lib/api";
 
 const referralData = {
   code: "KLINEO-XYZ123",
@@ -31,8 +32,84 @@ interface ReferralsProps {
   onNavigate: (view: string) => void;
 }
 
+type PayoutSummary = {
+  availableRewardsUsd: number;
+  requestableUsd: number;
+  minPayoutUsd: number;
+  payoutWalletAddress: string | null;
+};
+
 export function Referrals({ onNavigate }: ReferralsProps) {
   const [copied, setCopied] = useState<string | null>(null);
+  const [payoutSummary, setPayoutSummary] = useState<PayoutSummary | null>(null);
+  const [payoutSummaryLoading, setPayoutSummaryLoading] = useState(true);
+  const [requestPayoutLoading, setRequestPayoutLoading] = useState(false);
+
+  type PayoutRequestRow = {
+    id: string;
+    amount: number;
+    currency: string;
+    status: string;
+    createdAt: string;
+    paidAt: string | null;
+    rejectionReason: string | null;
+    payoutTxId: string | null;
+  };
+  const [myPayoutRequests, setMyPayoutRequests] = useState<PayoutRequestRow[]>([]);
+  const [myPayoutRequestsLoading, setMyPayoutRequestsLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setPayoutSummaryLoading(true);
+    api
+      .get<PayoutSummary>("/api/referrals/payout-summary")
+      .then((data) => { if (!cancelled) setPayoutSummary(data); })
+      .catch(() => { if (!cancelled) setPayoutSummary(null); })
+      .finally(() => { if (!cancelled) setPayoutSummaryLoading(false); });
+    return () => { cancelled = true; };
+  }, []);
+
+  const refetchPayoutSummary = () => {
+    api
+      .get<PayoutSummary>("/api/referrals/payout-summary")
+      .then(setPayoutSummary)
+      .catch(() => setPayoutSummary(null));
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+    setMyPayoutRequestsLoading(true);
+    api
+      .get<{ payoutRequests: PayoutRequestRow[] }>("/api/referrals/my-payout-requests")
+      .then((data) => { if (!cancelled) setMyPayoutRequests(data.payoutRequests ?? []); })
+      .catch(() => { if (!cancelled) setMyPayoutRequests([]); })
+      .finally(() => { if (!cancelled) setMyPayoutRequestsLoading(false); });
+    return () => { cancelled = true; };
+  }, []);
+
+  const refetchMyPayoutRequests = () => {
+    api
+      .get<{ payoutRequests: PayoutRequestRow[] }>("/api/referrals/my-payout-requests")
+      .then((data) => setMyPayoutRequests(data.payoutRequests ?? []))
+      .catch(() => setMyPayoutRequests([]));
+  };
+
+  const handleRequestPayout = async () => {
+    if (!payoutSummary || payoutSummary.requestableUsd < payoutSummary.minPayoutUsd || !payoutSummary.payoutWalletAddress) return;
+    const amount = Math.round(payoutSummary.requestableUsd * 100) / 100;
+    setRequestPayoutLoading(true);
+    try {
+      await api.post("/api/referrals/payout-request", { amount });
+      toast.success("Payout request submitted. You’ll be notified when it’s processed.");
+      refetchPayoutSummary();
+      refetchMyPayoutRequests();
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Request failed";
+      toast.error(msg);
+    } finally {
+      setRequestPayoutLoading(false);
+    }
+  };
 
   const handleCopy = (text: string, type: string) => {
     copyToClipboard(text);
@@ -262,66 +339,135 @@ export function Referrals({ onNavigate }: ReferralsProps) {
       {/* Payout Section */}
       <Card className="p-6">
         <h3 className="text-lg font-semibold mb-4">Request Payout</h3>
-        <div className="grid grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
           <div className="space-y-4">
             <div>
               <label className="text-sm font-medium mb-2 block">Payout Wallet Address</label>
-              <Input placeholder="Enter USDT (BSC) wallet address" className="font-mono text-sm" />
-              <p className="text-xs text-muted-foreground mt-1">Configure in Settings → Referral Payout Wallet</p>
+              {payoutSummaryLoading ? (
+                <div className="flex items-center gap-2 py-2 text-sm text-muted-foreground">
+                  <Loader2 className="size-4 animate-spin" />
+                  Loading…
+                </div>
+              ) : payoutSummary?.payoutWalletAddress ? (
+                <>
+                  <Input
+                    readOnly
+                    value={payoutSummary.payoutWalletAddress}
+                    className="font-mono text-sm bg-muted/50"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Set in Settings → Profile → Referral Payout Wallet. Update there to change.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <Input readOnly placeholder="Not set" className="font-mono text-sm bg-muted/50" />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Configure in Settings → Profile → Referral Payout Wallet
+                  </p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="mt-2"
+                    onClick={() => onNavigate("settings")}
+                  >
+                    Go to Settings
+                  </Button>
+                </>
+              )}
             </div>
             <div className="p-4 bg-secondary/30 rounded">
               <div className="flex justify-between mb-2">
                 <span className="text-sm text-muted-foreground">Available Balance:</span>
-                <span className="font-mono font-semibold">${referralData.pendingEarnings.toFixed(2)}</span>
+                <span className="font-mono font-semibold">
+                  ${(payoutSummary?.requestableUsd ?? 0).toFixed(2)}
+                </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-sm text-muted-foreground">Minimum Payout:</span>
-                <span className="font-mono">$50.00</span>
+                <span className="font-mono">${(payoutSummary?.minPayoutUsd ?? 50).toFixed(2)}</span>
               </div>
             </div>
           </div>
           <div className="space-y-4">
-            <Button 
-              className="w-full bg-primary text-primary-foreground" 
-              disabled={referralData.pendingEarnings < 50}
+            <Button
+              className="w-full bg-primary text-primary-foreground"
+              disabled={
+                payoutSummaryLoading ||
+                requestPayoutLoading ||
+                !payoutSummary?.payoutWalletAddress ||
+                (payoutSummary?.requestableUsd ?? 0) < (payoutSummary?.minPayoutUsd ?? 50)
+              }
+              onClick={handleRequestPayout}
             >
-              Request Payout
+              {requestPayoutLoading ? (
+                <>
+                  <Loader2 className="size-4 mr-2 animate-spin" />
+                  Submitting…
+                </>
+              ) : (
+                "Request Payout"
+              )}
             </Button>
             <div className="text-xs text-muted-foreground space-y-1">
               <p>• Payouts processed within 24-48 hours</p>
-              <p>• Minimum payout amount: $50.00 USDT</p>
-              <p>• Ensure wallet address is correct before requesting</p>
+              <p>• Minimum payout amount: ${(payoutSummary?.minPayoutUsd ?? 50).toFixed(2)} USDT</p>
+              <p>• Ensure wallet address is correct in Settings before requesting</p>
             </div>
           </div>
         </div>
       </Card>
 
-      {/* Payout History */}
+      {/* Payout History (your payout requests: PENDING → APPROVED → PAID or REJECTED) */}
       <Card className="p-6">
         <h3 className="text-lg font-semibold mb-4">Payout History</h3>
-        <div className="space-y-3">
-          {[
-            { date: "Jan 15, 2026", amount: "$250.00", status: "Completed", txHash: "0xabc...def" },
-            { date: "Dec 10, 2025", amount: "$180.50", status: "Completed", txHash: "0x123...456" },
-            { date: "Nov 05, 2025", amount: "$320.80", status: "Completed", txHash: "0x789...abc" },
-          ].map((payout, i) => (
-            <div key={i} className="flex items-center justify-between p-4 bg-secondary/30 rounded border border-border">
-              <div>
-                <div className="font-mono font-semibold mb-1">{payout.amount}</div>
-                <div className="text-xs text-muted-foreground">{payout.date}</div>
+        <p className="text-sm text-muted-foreground mb-4">
+          Your payout requests. When admin processes and marks one as paid, it will show here with the transaction hash.
+        </p>
+        {myPayoutRequestsLoading ? (
+          <div className="flex items-center gap-2 py-6 text-muted-foreground">
+            <Loader2 className="size-4 animate-spin" />
+            Loading…
+          </div>
+        ) : myPayoutRequests.length === 0 ? (
+          <p className="text-sm text-muted-foreground py-6">No payout requests yet.</p>
+        ) : (
+          <div className="space-y-3">
+            {myPayoutRequests.map((pr) => (
+              <div key={pr.id} className="flex flex-wrap items-center justify-between gap-3 p-4 bg-secondary/30 rounded border border-border">
+                <div>
+                  <div className="font-mono font-semibold mb-1">${pr.amount.toFixed(2)} {pr.currency}</div>
+                  <div className="text-xs text-muted-foreground">
+                    Requested {pr.createdAt ? new Date(pr.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—"}
+                    {pr.paidAt && ` · Paid ${new Date(pr.paidAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`}
+                  </div>
+                  {pr.status === "REJECTED" && pr.rejectionReason && (
+                    <p className="text-xs text-destructive mt-1">Reason: {pr.rejectionReason}</p>
+                  )}
+                </div>
+                <div className="flex items-center gap-3">
+                  <Badge
+                    variant={pr.status === "PAID" ? "default" : pr.status === "REJECTED" ? "destructive" : "secondary"}
+                    className={pr.status === "PAID" ? "bg-[#10B981]/10 text-[#10B981] border-[#10B981]/30" : ""}
+                  >
+                    {pr.status === "PAID" ? "Paid" : pr.status === "REJECTED" ? "Rejected" : pr.status === "APPROVED" ? "Approved" : "Pending"}
+                  </Badge>
+                  {pr.status === "PAID" && pr.payoutTxId && (
+                    <a
+                      href={`https://bscscan.com/tx/${pr.payoutTxId}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-primary hover:underline text-sm font-mono"
+                    >
+                      {pr.payoutTxId.slice(0, 10)}…{pr.payoutTxId.slice(-8)}
+                      <ExternalLink className="size-3" />
+                    </a>
+                  )}
+                </div>
               </div>
-              <div className="flex items-center gap-4">
-                <Badge variant="outline" className="border-[#10B981]/50 text-[#10B981]">
-                  {payout.status}
-                </Badge>
-                <Button variant="ghost" size="sm" className="gap-1">
-                  <span className="font-mono text-xs">{payout.txHash}</span>
-                  <ExternalLink className="size-3" />
-                </Button>
-              </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </Card>
     </div>
   );

@@ -54,6 +54,14 @@ export function Admin() {
   const [feeSummary, setFeeSummary] = useState({ totalFees: 0, referralPayouts: 0, netRevenue: 0 });
   const [referralPayouts, setReferralPayouts] = useState<any[]>([]);
   const [referralStats, setReferralStats] = useState({ totalEarnings: 0, activeReferrers: 0 });
+  const [payoutRequests, setPayoutRequests] = useState<any[]>([]);
+  const [payoutRequestsLoading, setPayoutRequestsLoading] = useState(false);
+  const [payoutRequestMarkPaid, setPayoutRequestMarkPaid] = useState<{ id: string; userEmail: string; amount: number } | null>(null);
+  const [payoutRequestMarkPaidTxId, setPayoutRequestMarkPaidTxId] = useState("");
+  const [payoutRequestMarkPaidLoading, setPayoutRequestMarkPaidLoading] = useState(false);
+  const [payoutRequestReject, setPayoutRequestReject] = useState<{ id: string; userEmail: string; amount: number } | null>(null);
+  const [payoutRequestRejectReason, setPayoutRequestRejectReason] = useState("");
+  const [payoutRequestRejectLoading, setPayoutRequestRejectLoading] = useState(false);
   const [coupons, setCoupons] = useState<any[]>([]);
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
   const [paymentIntents, setPaymentIntents] = useState<any[]>([]);
@@ -193,6 +201,61 @@ export function Admin() {
     } catch (err: any) {
       console.error('Failed to load referrals:', err);
       toast.error('Failed to load referrals');
+    }
+  };
+
+  const loadPayoutRequests = async () => {
+    setPayoutRequestsLoading(true);
+    try {
+      const data = await api.get('/api/admin/payout-requests');
+      setPayoutRequests((data as any).payoutRequests || []);
+    } catch (err: any) {
+      console.error('Failed to load payout requests:', err);
+      toast.error('Failed to load payout requests');
+    } finally {
+      setPayoutRequestsLoading(false);
+    }
+  };
+
+  const handlePayoutRequestApprove = async (id: string) => {
+    try {
+      await api.put(`/api/referrals/payout-requests/${id}/approve`);
+      toast.success('Payout request approved');
+      loadPayoutRequests();
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to approve');
+    }
+  };
+
+  const handlePayoutRequestReject = async () => {
+    if (!payoutRequestReject) return;
+    setPayoutRequestRejectLoading(true);
+    try {
+      await api.put(`/api/referrals/payout-requests/${payoutRequestReject.id}/reject`, { reason: payoutRequestRejectReason || undefined });
+      toast.success('Payout request rejected');
+      setPayoutRequestReject(null);
+      setPayoutRequestRejectReason('');
+      loadPayoutRequests();
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to reject');
+    } finally {
+      setPayoutRequestRejectLoading(false);
+    }
+  };
+
+  const handlePayoutRequestMarkPaid = async () => {
+    if (!payoutRequestMarkPaid) return;
+    setPayoutRequestMarkPaidLoading(true);
+    try {
+      await api.put(`/api/referrals/payout-requests/${payoutRequestMarkPaid.id}/mark-paid`, { payoutTxId: payoutRequestMarkPaidTxId.trim() || undefined });
+      toast.success('Payout marked as paid');
+      setPayoutRequestMarkPaid(null);
+      setPayoutRequestMarkPaidTxId('');
+      loadPayoutRequests();
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to mark paid');
+    } finally {
+      setPayoutRequestMarkPaidLoading(false);
     }
   };
 
@@ -1037,7 +1100,7 @@ export function Admin() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="referrals" className="space-y-4" onFocus={loadReferrals}>
+        <TabsContent value="referrals" className="space-y-4" onFocus={() => { loadReferrals(); loadPayoutRequests(); }}>
           <p className="text-sm text-muted-foreground">
             Community rewards from the 70% referral pool. Allocated automatically when users pay onboarding fees or buy packages (7-level upline: L1 30%, L2 20%, L3 10%, L4 8%, L5 6%, L6 4%, L7 2%). No per-trade fees.
           </p>
@@ -1052,6 +1115,78 @@ export function Admin() {
                 <div className="text-2xl font-semibold">{referralStats.activeReferrers}</div>
               </div>
             </div>
+          </Card>
+
+          {/* Payout Requests (user-requested): process here — Approve → Mark paid with tx hash */}
+          <Card className="p-6">
+            <h3 className="text-lg font-semibold mb-2">Payout Requests (user-requested)</h3>
+            <p className="text-sm text-muted-foreground mb-4">
+              When a user requests a payout on Community Rewards, it appears here. Approve the request, then send USDT to their wallet and mark as paid with the transaction hash.
+            </p>
+            {payoutRequestsLoading ? (
+              <div className="py-8 text-center text-muted-foreground">Loading payout requests…</div>
+            ) : payoutRequests.length === 0 ? (
+              <div className="py-8 text-center text-muted-foreground">No payout requests yet.</div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>User</TableHead>
+                    <TableHead>Amount</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Requested</TableHead>
+                    <TableHead>Payout wallet</TableHead>
+                    <TableHead>Tx hash</TableHead>
+                    <TableHead className="w-[180px]">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {payoutRequests.map((pr: any) => (
+                    <TableRow key={pr.id}>
+                      <TableCell className="font-medium">{pr.userEmail ?? '—'}</TableCell>
+                      <TableCell className="font-mono text-primary">${Number(pr.amount ?? 0).toFixed(2)}</TableCell>
+                      <TableCell>
+                        <Badge
+                          variant={pr.status === 'PAID' ? 'default' : pr.status === 'REJECTED' ? 'destructive' : 'secondary'}
+                          className={pr.status === 'PAID' ? 'bg-[#10B981]/10 text-[#10B981]' : pr.status === 'REJECTED' ? '' : ''}
+                        >
+                          {pr.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-muted-foreground text-sm">
+                        {pr.createdAt ? new Date(pr.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
+                      </TableCell>
+                      <TableCell className="font-mono text-xs max-w-[160px] truncate" title={pr.payoutWalletAddress ?? undefined}>
+                        {pr.payoutWalletAddress ? `${pr.payoutWalletAddress.slice(0, 6)}…${pr.payoutWalletAddress.slice(-4)}` : '—'}
+                      </TableCell>
+                      <TableCell className="font-mono text-xs max-w-[120px] truncate" title={pr.payoutTxId ?? undefined}>
+                        {pr.payoutTxId ?? '—'}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex flex-wrap gap-2">
+                          {pr.status === 'PENDING' && (
+                            <>
+                              <Button variant="outline" size="sm" className="text-[#10B981] border-[#10B981]/50" onClick={() => handlePayoutRequestApprove(pr.id)}>
+                                Approve
+                              </Button>
+                              <Button variant="outline" size="sm" className="text-destructive" onClick={() => { setPayoutRequestReject({ id: pr.id, userEmail: pr.userEmail, amount: pr.amount }); setPayoutRequestRejectReason(''); }}>
+                                Reject
+                              </Button>
+                            </>
+                          )}
+                          {pr.status === 'APPROVED' && (
+                            <Button variant="outline" size="sm" className="text-primary border-primary/50" onClick={() => { setPayoutRequestMarkPaid({ id: pr.id, userEmail: pr.userEmail, amount: pr.amount }); setPayoutRequestMarkPaidTxId(''); }}>
+                              <Banknote className="size-3.5 mr-1" /> Mark paid
+                            </Button>
+                          )}
+                          {(pr.status === 'PAID' || pr.status === 'REJECTED') && '—'}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
           </Card>
 
           <Card className="p-4 flex items-center justify-between">
@@ -1189,6 +1324,74 @@ export function Admin() {
                 </Button>
                 <Button onClick={handleMarkPaid} disabled={markPaidLoading}>
                   {markPaidLoading ? 'Saving…' : 'Mark paid'}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
+          {/* Payout request: Mark paid (with tx hash) */}
+          <Dialog open={!!payoutRequestMarkPaid} onOpenChange={(open) => !open && setPayoutRequestMarkPaid(null)}>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>Mark payout as paid</DialogTitle>
+              </DialogHeader>
+              {payoutRequestMarkPaid && (
+                <>
+                  <p className="text-sm text-muted-foreground">
+                    User <span className="font-medium text-foreground">{payoutRequestMarkPaid.userEmail}</span> — amount <span className="font-mono text-primary">${payoutRequestMarkPaid.amount.toFixed(2)}</span>. After sending USDT to their payout wallet, enter the transaction hash below.
+                  </p>
+                  <div className="space-y-2">
+                    <Label htmlFor="payout-request-tx">Transaction hash (optional)</Label>
+                    <Input
+                      id="payout-request-tx"
+                      placeholder="e.g. BSC tx hash"
+                      value={payoutRequestMarkPaidTxId}
+                      onChange={(e) => setPayoutRequestMarkPaidTxId(e.target.value)}
+                      className="font-mono text-sm"
+                    />
+                  </div>
+                </>
+              )}
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setPayoutRequestMarkPaid(null)} disabled={payoutRequestMarkPaidLoading}>
+                  Cancel
+                </Button>
+                <Button onClick={handlePayoutRequestMarkPaid} disabled={payoutRequestMarkPaidLoading}>
+                  {payoutRequestMarkPaidLoading ? 'Saving…' : 'Mark paid'}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
+          {/* Payout request: Reject */}
+          <Dialog open={!!payoutRequestReject} onOpenChange={(open) => !open && setPayoutRequestReject(null)}>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>Reject payout request</DialogTitle>
+              </DialogHeader>
+              {payoutRequestReject && (
+                <>
+                  <p className="text-sm text-muted-foreground">
+                    User <span className="font-medium text-foreground">{payoutRequestReject.userEmail}</span> — amount <span className="font-mono text-primary">${payoutRequestReject.amount.toFixed(2)}</span>
+                  </p>
+                  <div className="space-y-2">
+                    <Label htmlFor="payout-reject-reason">Reason (optional)</Label>
+                    <Input
+                      id="payout-reject-reason"
+                      placeholder="e.g. Invalid wallet"
+                      value={payoutRequestRejectReason}
+                      onChange={(e) => setPayoutRequestRejectReason(e.target.value)}
+                      className="text-sm"
+                    />
+                  </div>
+                </>
+              )}
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setPayoutRequestReject(null)} disabled={payoutRequestRejectLoading}>
+                  Cancel
+                </Button>
+                <Button variant="destructive" onClick={handlePayoutRequestReject} disabled={payoutRequestRejectLoading}>
+                  {payoutRequestRejectLoading ? 'Rejecting…' : 'Reject'}
                 </Button>
               </DialogFooter>
             </DialogContent>

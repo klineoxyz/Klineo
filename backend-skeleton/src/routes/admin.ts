@@ -686,6 +686,60 @@ adminRouter.get('/referrals', async (req, res) => {
 });
 
 /**
+ * GET /api/admin/payout-requests
+ * List all user-requested referral payouts (PENDING → APPROVED → PAID or REJECTED). Admin processes here.
+ */
+adminRouter.get('/payout-requests', async (req, res) => {
+  const client = getSupabase();
+  if (!client) {
+    return res.status(503).json({ error: 'Database unavailable' });
+  }
+
+  try {
+    const { data: requests, error } = await client
+      .from('payout_requests')
+      .select('id, user_id, amount, currency, status, created_at, updated_at, approved_at, rejected_at, paid_at, rejection_reason, payout_tx_id')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching payout_requests:', error);
+      return res.status(500).json({ error: 'Failed to fetch payout requests' });
+    }
+
+    const userIds = [...new Set((requests || []).map((r: { user_id: string }) => r.user_id))];
+    const { data: profiles } = await client
+      .from('user_profiles')
+      .select('id, email, payout_wallet_address')
+      .in('id', userIds);
+    const profileMap = new Map((profiles || []).map((p: { id: string; email?: string; payout_wallet_address?: string }) => [p.id, p]));
+
+    const list = (requests || []).map((r: Record<string, unknown>) => {
+      const profile = profileMap.get(r.user_id as string);
+      return {
+        id: r.id,
+        userId: r.user_id,
+        userEmail: (profile as { email?: string } | undefined)?.email ?? '—',
+        payoutWalletAddress: (profile as { payout_wallet_address?: string } | undefined)?.payout_wallet_address ?? null,
+        amount: parseFloat(String(r.amount ?? 0)),
+        currency: r.currency ?? 'USDT',
+        status: r.status,
+        createdAt: r.created_at,
+        approvedAt: r.approved_at ?? null,
+        rejectedAt: r.rejected_at ?? null,
+        paidAt: r.paid_at ?? null,
+        rejectionReason: r.rejection_reason ?? null,
+        payoutTxId: r.payout_tx_id ?? null,
+      };
+    });
+
+    res.json({ payoutRequests: list });
+  } catch (err) {
+    console.error('Admin payout-requests error:', err);
+    res.status(500).json({ error: 'Failed to fetch payout requests' });
+  }
+});
+
+/**
  * PATCH /api/admin/referrals/:id/mark-paid
  * Admin marks a referral payout as paid and records transaction (e.g. tx hash).
  */

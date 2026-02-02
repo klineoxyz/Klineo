@@ -184,7 +184,10 @@ profileRouter.put('/profile',
       if (fullName !== undefined) updates.full_name = fullName || null;
       if (username !== undefined) updates.username = username || null;
       if (timezone !== undefined) updates.timezone = timezone || 'UTC';
-      if (referralWallet !== undefined) updates.referral_wallet = referralWallet || null;
+      if (referralWallet !== undefined) {
+        updates.referral_wallet = referralWallet || null;
+        updates.payout_wallet_address = referralWallet || null;
+      }
       if (paymentWalletBsc !== undefined) updates.payment_wallet_bsc = paymentWalletBsc || null;
 
       const { data: profile, error } = await client
