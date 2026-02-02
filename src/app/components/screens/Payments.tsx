@@ -32,8 +32,8 @@ interface PaymentIntent {
 
 interface PaymentsProps {
   onNavigate: (view: string) => void;
-  /** When navigating from Subscription after creating an intent, contains { newIntent } so we show deposit instructions. */
-  viewData?: { newIntent?: { id: string; amount_usdt: number; treasury_address: string; safe_link: string; status: string } };
+  /** When navigating from Subscription after creating an intent, contains { newIntent, couponCode? } so we show deposit instructions and prefill/apply coupon. */
+  viewData?: { newIntent?: { id: string; amount_usdt: number; treasury_address: string; safe_link: string; status: string }; couponCode?: string };
 }
 
 export function Payments({ onNavigate, viewData }: PaymentsProps) {
@@ -68,6 +68,29 @@ export function Payments({ onNavigate, viewData }: PaymentsProps) {
   useEffect(() => {
     if (viewData?.newIntent) setCurrentIntent(viewData.newIntent);
   }, [viewData?.newIntent]);
+
+  useEffect(() => {
+    const code = viewData?.couponCode?.trim()?.toUpperCase();
+    if (!code) return;
+    setCouponCode(code);
+    setCouponValidating(true);
+    const params = new URLSearchParams({ code, kind, package_code: packageCode });
+    api
+      .get<{ valid: boolean; discountPercent?: number; originalAmountUsdt?: number; amountUsdt?: number; error?: string }>(`/api/payments/validate-coupon?${params.toString()}`)
+      .then((data) => {
+        if (data.valid && data.discountPercent != null && data.originalAmountUsdt != null && data.amountUsdt != null) {
+          setCouponApplied({
+            code,
+            discountPercent: data.discountPercent,
+            originalAmountUsdt: data.originalAmountUsdt,
+            amountUsdt: data.amountUsdt,
+          });
+          toast.success(`${data.discountPercent}% off applied — Pay $${data.amountUsdt} instead of $${data.originalAmountUsdt}`);
+        } else if (data.error) toast.error(data.error);
+      })
+      .catch(() => toast.error("Could not validate coupon"))
+      .finally(() => setCouponValidating(false));
+  }, [viewData?.couponCode]);
 
   useEffect(() => {
     const check = async () => {

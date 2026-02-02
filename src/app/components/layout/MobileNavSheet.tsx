@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { Sheet, SheetContent, SheetHeader } from "@/app/components/ui/sheet";
 import { SidebarLogo } from "@/app/components/branding/Logo";
 import {
@@ -6,6 +7,7 @@ import {
   showUIStatesDemo,
   showSmokeTest,
 } from "@/app/config/navigation";
+import { pathForView } from "@/app/config/routes";
 import { Shield, Sparkles, Zap } from "lucide-react";
 import { cn } from "@/app/components/ui/utils";
 
@@ -24,11 +26,6 @@ export function MobileNavSheet({
   onNavigate,
   isAdmin,
 }: MobileNavSheetProps) {
-  const handleNav = (view: string) => {
-    onNavigate(view);
-    onOpenChange(false);
-  };
-
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
@@ -54,9 +51,10 @@ export function MobileNavSheet({
                 const Icon = item.icon;
                 const isActive = activeView === item.id;
                 return (
-                  <button
+                  <Link
                     key={item.id}
-                    onClick={() => handleNav(item.id)}
+                    to={pathForView(item.id)}
+                    onClick={() => onOpenChange(false)}
                     className={cn(
                       "w-full flex items-center gap-3 px-4 py-3 min-h-[44px] text-left text-sm transition-colors hover:bg-secondary/50 relative",
                       isActive && "bg-secondary text-primary"
@@ -74,7 +72,7 @@ export function MobileNavSheet({
                     <span className={cn(isActive && "font-medium")}>
                       {item.label}
                     </span>
-                  </button>
+                  </Link>
                 );
               })}
             </div>
@@ -89,8 +87,9 @@ export function MobileNavSheet({
                   Developer
                 </span>
               </div>
-              <button
-                onClick={() => handleNav("smoke-test")}
+              <Link
+                to={pathForView("smoke-test")}
+                onClick={() => onOpenChange(false)}
                 className={cn(
                   "w-full flex items-center gap-3 px-4 py-3 min-h-[44px] text-left text-sm transition-colors hover:bg-secondary/50 relative",
                   activeView === "smoke-test" && "bg-secondary text-primary"
@@ -108,7 +107,7 @@ export function MobileNavSheet({
                 <span className={cn("flex items-center gap-2", activeView === "smoke-test" && "font-medium")}>
                   Smoke Test
                 </span>
-              </button>
+              </Link>
             </>
           )}
 
@@ -120,8 +119,9 @@ export function MobileNavSheet({
                   Admin
                 </span>
               </div>
-              <button
-                onClick={() => handleNav("admin")}
+              <Link
+                to={pathForView("admin")}
+                onClick={() => onOpenChange(false)}
                 className={cn(
                   "w-full flex items-center gap-3 px-4 py-3 min-h-[44px] text-left text-sm transition-colors hover:bg-secondary/50 relative",
                   activeView === "admin" && "bg-secondary text-primary"
@@ -141,10 +141,11 @@ export function MobileNavSheet({
                 <span className={cn(activeView === "admin" && "font-medium")}>
                   Admin Panel
                 </span>
-              </button>
+              </Link>
               {showUIStatesDemo(!!isAdmin) && (
-                <button
-                  onClick={() => handleNav("ui-states-demo")}
+                <Link
+                  to={pathForView("ui-states-demo")}
+                  onClick={() => onOpenChange(false)}
                   className={cn(
                     "w-full flex items-center gap-3 px-4 py-3 min-h-[44px] text-left text-sm transition-colors hover:bg-secondary/50 relative",
                     activeView === "ui-states-demo" && "bg-secondary text-primary"
@@ -170,11 +171,12 @@ export function MobileNavSheet({
                       {import.meta.env.PROD ? "PROD" : "DEV"}
                     </span>
                   </span>
-                </button>
+                </Link>
               )}
               {showSmokeTest(!!isAdmin) && (
-                <button
-                  onClick={() => handleNav("smoke-test")}
+                <Link
+                  to={pathForView("smoke-test")}
+                  onClick={() => onOpenChange(false)}
                   className={cn(
                     "w-full flex items-center gap-3 px-4 py-3 min-h-[44px] text-left text-sm transition-colors hover:bg-secondary/50 relative",
                     activeView === "smoke-test" && "bg-secondary text-primary"
@@ -204,7 +206,7 @@ export function MobileNavSheet({
                       </span>
                     )}
                   </span>
-                </button>
+                </Link>
               )}
             </>
           )}

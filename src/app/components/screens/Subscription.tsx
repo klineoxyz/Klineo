@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
 import { Badge } from "@/app/components/ui/badge";
@@ -17,6 +18,9 @@ interface SubscriptionProps {
 }
 
 export function Subscription({ onNavigate }: SubscriptionProps) {
+  const [searchParams] = useSearchParams();
+  const couponFromUrl = searchParams.get("coupon")?.trim() ?? null;
+
   const [plans, setPlans] = useState<BillingPlansResponse | null>(null);
   const [entitlement, setEntitlement] = useState<EntitlementResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -86,7 +90,7 @@ export function Subscription({ onNavigate }: SubscriptionProps) {
         safe_link: data.safe_link,
         status: data.intent.status,
       };
-      onNavigate("payments", { newIntent });
+      onNavigate("payments", { newIntent, couponCode: couponFromUrl ?? undefined });
       toast.success("Go to Payments", {
         description: "Send USDT (BEP20) to the Safe address, then submit your transaction hash.",
       });
@@ -94,7 +98,7 @@ export function Subscription({ onNavigate }: SubscriptionProps) {
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Checkout failed";
       if (String(msg).includes("404") || String(msg).includes("503") || String(msg).includes("Not found")) {
-        onNavigate("payments");
+        onNavigate("payments", { couponCode: couponFromUrl ?? undefined });
         toast.info("Manual payments", {
           description: "Go to Payments, add your BSC wallet in Settings, then create a joining fee intent.",
         });
@@ -135,14 +139,14 @@ export function Subscription({ onNavigate }: SubscriptionProps) {
         safe_link: data.safe_link,
         status: data.intent.status,
       };
-      onNavigate("payments", { newIntent });
+      onNavigate("payments", { newIntent, couponCode: couponFromUrl ?? undefined });
       toast.success("Go to Payments", {
         description: "Send USDT (BEP20) to the Safe address, then submit your transaction hash.",
       });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Checkout failed";
       if (String(msg).includes("404") || String(msg).includes("503") || String(msg).includes("Not found")) {
-        onNavigate("payments");
+        onNavigate("payments", { couponCode: couponFromUrl ?? undefined });
         toast.info("Manual payments", {
           description: "Go to Payments, then create a package intent and follow the instructions.",
         });

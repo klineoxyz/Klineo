@@ -1,4 +1,5 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState } from "react";
+import { Routes, Route, useLocation, useNavigate, Navigate } from "react-router-dom";
 import { Toaster } from "@/app/components/ui/sonner";
 import { TopBar } from "@/app/components/layout/TopBar";
 import { Sidebar } from "@/app/components/layout/Sidebar";
@@ -46,85 +47,92 @@ import { toast } from "sonner";
 import { useIsMobile } from "@/app/components/ui/use-mobile";
 import { MobileNavSheet } from "@/app/components/layout/MobileNavSheet";
 import { ErrorBoundary } from "@/app/components/ui/error-boundary";
+import { ROUTES, pathForView, viewForPath, PUBLIC_PATHS } from "@/app/config/routes";
 
 export default function App() {
   const { isAuthenticated, isAdmin, loading, logout } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
   const isMobile = useIsMobile();
-  const [activeView, setActiveView] = useState("landing");
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [viewData, setViewData] = useState<any>(null);
-  const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
-  const publicViews = useMemo(
-    () =>
-      new Set([
-        "landing", "pricing", "how-it-works", "about", "faq", "contact", "blog", "changelog",
-        "terms-of-service", "privacy-policy", "risk-disclosure", "login", "signup",
-      ]),
-    []
-  );
-
-  useEffect(() => {
-    if (isAuthenticated && activeView === "admin" && !isAdmin) {
-      setActiveView("dashboard");
-    }
-  }, [isAuthenticated, activeView, isAdmin]);
-
-  useEffect(() => {
-    if (!loading && !isAuthenticated && !publicViews.has(activeView)) {
-      setActiveView("login");
-    }
-  }, [loading, isAuthenticated, activeView, publicViews]);
+  const pathname = location.pathname;
+  const activeView = viewForPath(pathname);
+  const viewData = location.state;
 
   const handleNavigate = (view: string, data?: any) => {
-    setActiveView(view);
-    setViewData(data);
+    const path = pathForView(view);
+    const state = data != null ? (typeof data === "object" && !Array.isArray(data) ? { ...data, subView: view } : { subView: view }) : undefined;
+    navigate(path, { state, replace: false });
   };
 
   const handleLogout = async () => {
     await logout();
-    setActiveView("landing");
+    navigate(ROUTES.landing, { replace: true });
   };
 
-  const renderPublicContent = () => {
-    switch (activeView) {
-      case "landing":
-        return <LandingPage onNavigate={handleNavigate} />;
-      case "pricing":
-        return <PricingPage onNavigate={handleNavigate} />;
-      case "how-it-works":
-        return <HowItWorksPage onNavigate={handleNavigate} />;
-      case "about":
-        return <AboutPage onNavigate={handleNavigate} />;
-      case "faq":
-        return <FAQPage onNavigate={handleNavigate} />;
-      case "contact":
-        return <ContactPage onNavigate={handleNavigate} />;
-      case "blog":
-        return <BlogPage onNavigate={handleNavigate} />;
-      case "changelog":
-        return <ChangelogPage onNavigate={handleNavigate} />;
-      case "terms-of-service":
-        return <TermsOfService onNavigate={handleNavigate} />;
-      case "privacy-policy":
-        return <PrivacyPolicy onNavigate={handleNavigate} />;
-      case "risk-disclosure":
-        return <RiskDisclosure onNavigate={handleNavigate} />;
-      case "login":
-        return <LoginPage onNavigate={handleNavigate} />;
-      case "signup":
-        return <SignUpPage onNavigate={handleNavigate} />;
-      default:
-        return <LandingPage onNavigate={handleNavigate} />;
+  if (loading) {
+    return (
+      <div className="h-screen w-screen flex items-center justify-center bg-background">
+        <TerminalLoader />
+      </div>
+    );
+  }
+
+  if (!isAuthenticated && !PUBLIC_PATHS.has(pathname)) {
+    return <Navigate to={ROUTES.login} replace />;
+  }
+
+  if (isAuthenticated && pathname === ROUTES.landing) {
+    return <Navigate to={ROUTES.dashboard} replace />;
+  }
+
+  if (isAuthenticated && activeView === "admin" && !isAdmin) {
+    return <Navigate to={ROUTES.dashboard} replace />;
+  }
+
+  if (!isAuthenticated) {
+    const publicRoutes = (
+      <Routes>
+        <Route path={ROUTES.landing} element={<LandingPage onNavigate={handleNavigate} />} />
+        <Route path={ROUTES.pricing} element={<PricingPage onNavigate={handleNavigate} />} />
+        <Route path={ROUTES.howItWorks} element={<HowItWorksPage onNavigate={handleNavigate} />} />
+        <Route path={ROUTES.about} element={<AboutPage onNavigate={handleNavigate} />} />
+        <Route path={ROUTES.faq} element={<FAQPage onNavigate={handleNavigate} />} />
+        <Route path={ROUTES.contact} element={<ContactPage onNavigate={handleNavigate} />} />
+        <Route path={ROUTES.blog} element={<BlogPage onNavigate={handleNavigate} />} />
+        <Route path={ROUTES.changelog} element={<ChangelogPage onNavigate={handleNavigate} />} />
+        <Route path={ROUTES.termsOfService} element={<TermsOfService onNavigate={handleNavigate} />} />
+        <Route path={ROUTES.privacyPolicy} element={<PrivacyPolicy onNavigate={handleNavigate} />} />
+        <Route path={ROUTES.riskDisclosure} element={<RiskDisclosure onNavigate={handleNavigate} />} />
+        <Route path={ROUTES.login} element={<LoginPage onNavigate={handleNavigate} />} />
+        <Route path={ROUTES.signup} element={<SignUpPage onNavigate={handleNavigate} />} />
+        <Route path="*" element={<LandingPage onNavigate={handleNavigate} />} />
+      </Routes>
+    );
+    return (
+      <div className="h-screen w-screen flex flex-col bg-background text-foreground overflow-hidden dark min-w-0">
+        <main className="flex-1 overflow-y-auto overflow-x-hidden min-w-0">
+          {publicRoutes}
+        </main>
+        <Toaster />
+      </div>
+    );
+  }
+
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+
+  function renderContent() {
+    const subView = viewData?.subView;
+    if (pathname === ROUTES.marketplace && subView === "trader-profile") {
+      return <TraderProfile onNavigate={handleNavigate} traderData={viewData} />;
     }
-  };
-
-  const renderContent = () => {
-    if (activeView === "admin" && !isAdmin) return <Dashboard onNavigate={handleNavigate} />;
+    if (pathname === ROUTES.marketplace && subView === "copy-setup") {
+      return <CopySetup onNavigate={handleNavigate} traderData={viewData} />;
+    }
     switch (activeView) {
       case "dashboard":
         return <Dashboard onNavigate={handleNavigate} />;
-      // Terminal: must render TradingTerminalNew (Futures-enabled). Do not switch to TradingTerminal.tsx.
       case "trading-terminal":
         return <TradingTerminalNew onNavigate={handleNavigate} />;
       case "strategy-backtest":
@@ -135,10 +143,6 @@ export default function App() {
         );
       case "marketplace":
         return <Marketplace onNavigate={handleNavigate} />;
-      case "trader-profile":
-        return <TraderProfile onNavigate={handleNavigate} traderData={viewData} />;
-      case "copy-setup":
-        return <CopySetup onNavigate={handleNavigate} traderData={viewData} />;
       case "copy-trading":
         return <CopyTrading onNavigate={handleNavigate} />;
       case "portfolio":
@@ -170,23 +174,15 @@ export default function App() {
       case "notifications-center":
         return <NotificationsCenter onNavigate={handleNavigate} />;
       case "ui-states-demo":
-        // Access control: dev OR (prod + admin)
         if (import.meta.env.PROD && !isAdmin) {
-          setTimeout(() => {
-            toast.error("UI States Demo disabled in production", {
-              description: "This page is only available in development or for admins."
-            });
-          }, 100);
+          setTimeout(() => toast.error("UI States Demo disabled in production", { description: "This page is only available in development or for admins." }), 100);
           return <Dashboard onNavigate={handleNavigate} />;
         }
         return <UIStatesDemo onNavigate={handleNavigate} />;
       case "smoke-test":
-        // Prod: only when VITE_ENABLE_SMOKE_TEST_PAGE=true AND admin
-        if (import.meta.env.PROD) {
-          if (!isAdmin || import.meta.env.VITE_ENABLE_SMOKE_TEST_PAGE !== 'true') {
-            setTimeout(() => toast.error("Not available", { description: "Smoke test is enabled only for admins when VITE_ENABLE_SMOKE_TEST_PAGE=true." }), 100);
-            return <Dashboard onNavigate={handleNavigate} />;
-          }
+        if (import.meta.env.PROD && (!isAdmin || import.meta.env.VITE_ENABLE_SMOKE_TEST_PAGE !== "true")) {
+          setTimeout(() => toast.error("Not available", { description: "Smoke test is enabled only for admins when VITE_ENABLE_SMOKE_TEST_PAGE=true." }), 100);
+          return <Dashboard onNavigate={handleNavigate} />;
         }
         return <SmokeTest />;
       case "onboarding-wizard":
@@ -199,55 +195,40 @@ export default function App() {
       default:
         return <Dashboard onNavigate={handleNavigate} />;
     }
-  };
-
-  if (loading) {
-    return (
-      <div className="h-screen w-screen flex items-center justify-center bg-background">
-        <TerminalLoader />
-      </div>
-    );
   }
 
   return (
     <div className="h-screen w-screen flex flex-col bg-background text-foreground overflow-hidden dark min-w-0">
-      {isAuthenticated ? (
-        <>
-          <TopBar
-            activeView={activeView}
-            onNavigate={handleNavigate}
-            onLogout={handleLogout}
-            sidebarCollapsed={sidebarCollapsed}
-            onOpenMobileNav={() => setMobileNavOpen(true)}
-          />
-          <div className="flex-1 flex overflow-hidden min-w-0">
-            <Sidebar
-              activeView={activeView}
-              onNavigate={handleNavigate}
-              isCollapsed={sidebarCollapsed}
-              onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
-              isAdmin={isAdmin}
-            />
-            <main className="flex-1 overflow-y-auto overflow-x-hidden min-w-0">
-              {renderContent()}
-            </main>
-          </div>
-          {isMobile && (
-            <MobileNavSheet
-              open={mobileNavOpen}
-              onOpenChange={setMobileNavOpen}
-              activeView={activeView}
-              onNavigate={handleNavigate}
-              isAdmin={isAdmin}
-            />
-          )}
-        </>
-      ) : (
+      <TopBar
+        activeView={activeView}
+        onNavigate={handleNavigate}
+        onLogout={handleLogout}
+        sidebarCollapsed={sidebarCollapsed}
+        onOpenMobileNav={() => setMobileNavOpen(true)}
+      />
+      <div className="flex-1 flex overflow-hidden min-w-0">
+        <Sidebar
+          activeView={activeView}
+          onNavigate={handleNavigate}
+          isCollapsed={sidebarCollapsed}
+          onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
+          isAdmin={isAdmin}
+        />
         <main className="flex-1 overflow-y-auto overflow-x-hidden min-w-0">
-          {renderPublicContent()}
+          {renderContent()}
         </main>
+      </div>
+      {isMobile && (
+        <MobileNavSheet
+          open={mobileNavOpen}
+          onOpenChange={setMobileNavOpen}
+          activeView={activeView}
+          onNavigate={handleNavigate}
+          isAdmin={isAdmin}
+        />
       )}
       <Toaster />
     </div>
   );
 }
+

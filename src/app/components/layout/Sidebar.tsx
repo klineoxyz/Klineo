@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { ChevronLeft, ChevronRight, Shield, Sparkles, Zap } from "lucide-react";
 import { Button } from "@/app/components/ui/button";
 import { cn } from "@/app/components/ui/utils";
@@ -8,6 +9,7 @@ import {
   showUIStatesDemo,
   showSmokeTest,
 } from "@/app/config/navigation";
+import { pathForView } from "@/app/config/routes";
 
 interface SidebarProps {
   activeView: string;
@@ -54,11 +56,11 @@ export function Sidebar({ activeView, onNavigate, isCollapsed, onToggleCollapse,
             {section.items.map((item) => {
               const Icon = item.icon;
               const isActive = activeView === item.id;
-              
+              const to = pathForView(item.id);
               return (
-                <button
+                <Link
                   key={item.id}
-                  onClick={() => onNavigate(item.id)}
+                  to={to}
                   className={cn(
                     "w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors hover:bg-secondary/50 relative",
                     isActive && "bg-secondary text-primary",
@@ -76,7 +78,7 @@ export function Sidebar({ activeView, onNavigate, isCollapsed, onToggleCollapse,
                       {item.label}
                     </span>
                   )}
-                </button>
+                </Link>
               );
             })}
           </div>
@@ -93,8 +95,8 @@ export function Sidebar({ activeView, onNavigate, isCollapsed, onToggleCollapse,
                 </span>
               </div>
             )}
-            <button
-              onClick={() => onNavigate("smoke-test")}
+            <Link
+              to={pathForView("smoke-test")}
               className={cn(
                 "w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors hover:bg-secondary/50 relative",
                 activeView === "smoke-test" && "bg-secondary text-primary",
@@ -109,7 +111,7 @@ export function Sidebar({ activeView, onNavigate, isCollapsed, onToggleCollapse,
                   Smoke Test
                 </span>
               )}
-            </button>
+            </Link>
           </>
         )}
 
@@ -124,8 +126,8 @@ export function Sidebar({ activeView, onNavigate, isCollapsed, onToggleCollapse,
                 </span>
               </div>
             )}
-            <button
-              onClick={() => onNavigate("admin")}
+            <Link
+              to={pathForView("admin")}
               className={cn(
                 "w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors hover:bg-secondary/50 relative",
                 activeView === "admin" && "bg-secondary text-primary",
@@ -136,10 +138,10 @@ export function Sidebar({ activeView, onNavigate, isCollapsed, onToggleCollapse,
               {activeView === "admin" && <div className="absolute left-0 top-0 bottom-0 w-1 bg-accent" />}
               <Shield className={cn("size-4 shrink-0", activeView === "admin" ? "text-accent" : "text-muted-foreground")} />
               {!isCollapsed && <span className={cn(activeView === "admin" && "font-medium")}>Admin Panel</span>}
-            </button>
+            </Link>
             {showUIStatesDemo(!!isAdmin) && (
-              <button
-                onClick={() => onNavigate("ui-states-demo")}
+              <Link
+                to={pathForView("ui-states-demo")}
                 className={cn(
                   "w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors hover:bg-secondary/50 relative",
                   activeView === "ui-states-demo" && "bg-secondary text-primary",
@@ -157,11 +159,11 @@ export function Sidebar({ activeView, onNavigate, isCollapsed, onToggleCollapse,
                     </span>
                   </span>
                 )}
-              </button>
+              </Link>
             )}
             {showSmokeTest(!!isAdmin) && (
-              <button
-                onClick={() => onNavigate("smoke-test")}
+              <Link
+                to={pathForView("smoke-test")}
                 className={cn(
                   "w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors hover:bg-secondary/50 relative",
                   activeView === "smoke-test" && "bg-secondary text-primary",
@@ -181,7 +183,7 @@ export function Sidebar({ activeView, onNavigate, isCollapsed, onToggleCollapse,
                     )}
                   </span>
                 )}
-              </button>
+              </Link>
             )}
           </>
         )}
