@@ -43,6 +43,7 @@ import { LoginPage } from "@/app/components/auth/LoginPage";
 import { SignUpPage } from "@/app/components/auth/SignUpPage";
 import { useAuth } from "@/app/contexts/AuthContext";
 import { TerminalLoader } from "@/app/components/ui/spinner";
+import { Button } from "@/app/components/ui/button";
 import { toast } from "sonner";
 import { useIsMobile } from "@/app/components/ui/use-mobile";
 import { MobileNavSheet } from "@/app/components/layout/MobileNavSheet";
@@ -54,6 +55,8 @@ export default function App() {
   const location = useLocation();
   const navigate = useNavigate();
   const isMobile = useIsMobile();
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   const pathname = location.pathname;
   const activeView = viewForPath(pathname);
@@ -118,9 +121,6 @@ export default function App() {
       </div>
     );
   }
-
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   function renderContent() {
     const subView = viewData?.subView;
@@ -214,9 +214,24 @@ export default function App() {
           onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
           isAdmin={isAdmin}
         />
-        <main className="flex-1 overflow-y-auto overflow-x-hidden min-w-0">
-          {renderContent()}
-        </main>
+            <main className="flex-1 overflow-y-auto overflow-x-hidden min-w-0">
+              <ErrorBoundary
+                onRetry={() => navigate(ROUTES.dashboard)}
+                fallback={
+                  <div className="min-h-[320px] flex flex-col items-center justify-center gap-4 p-6 bg-background text-foreground">
+                    <h3 className="text-lg font-semibold">Something went wrong</h3>
+                    <p className="text-sm text-muted-foreground text-center max-w-md">
+                      This page could not be loaded. Try another menu item or go to Dashboard.
+                    </p>
+                    <Button variant="outline" onClick={() => navigate(ROUTES.dashboard)}>
+                      Go to Dashboard
+                    </Button>
+                  </div>
+                }
+              >
+                {renderContent()}
+              </ErrorBoundary>
+            </main>
       </div>
       {isMobile && (
         <MobileNavSheet
