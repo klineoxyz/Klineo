@@ -58,6 +58,13 @@ export function Referrals({ onNavigate }: ReferralsProps) {
   const [myPayoutRequests, setMyPayoutRequests] = useState<PayoutRequestRow[]>([]);
   const [myPayoutRequestsLoading, setMyPayoutRequestsLoading] = useState(true);
 
+  const fetchPayoutSummary = () => {
+    api
+      .get<PayoutSummary>("/api/referrals/payout-summary")
+      .then(setPayoutSummary)
+      .catch(() => setPayoutSummary(null));
+  };
+
   useEffect(() => {
     let cancelled = false;
     setPayoutSummaryLoading(true);
@@ -67,6 +74,14 @@ export function Referrals({ onNavigate }: ReferralsProps) {
       .catch(() => { if (!cancelled) setPayoutSummary(null); })
       .finally(() => { if (!cancelled) setPayoutSummaryLoading(false); });
     return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    const onVisible = () => {
+      fetchPayoutSummary();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
   }, []);
 
   const refetchPayoutSummary = () => {
@@ -391,14 +406,15 @@ export function Referrals({ onNavigate }: ReferralsProps) {
           </div>
           <div className="space-y-4">
             <Button
+              type="button"
               className="w-full bg-primary text-primary-foreground"
               disabled={
                 payoutSummaryLoading ||
                 requestPayoutLoading ||
-                !payoutSummary?.payoutWalletAddress ||
+                !(payoutSummary?.payoutWalletAddress?.trim?.() ?? payoutSummary?.payoutWalletAddress) ||
                 (payoutSummary?.requestableUsd ?? 0) < (payoutSummary?.minPayoutUsd ?? 50)
               }
-              onClick={handleRequestPayout}
+              onClick={() => handleRequestPayout()}
             >
               {requestPayoutLoading ? (
                 <>

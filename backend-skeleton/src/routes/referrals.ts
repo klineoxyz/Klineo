@@ -301,15 +301,18 @@ referralsRouter.get('/payout-summary', async (req: AuthenticatedRequest, res: Re
 
   const { data: profile } = await client
     .from('user_profiles')
-    .select('payout_wallet_address')
+    .select('payout_wallet_address, referral_wallet')
     .eq('id', userId)
     .single();
+
+  const p = profile as { payout_wallet_address?: string | null; referral_wallet?: string | null } | null;
+  const payoutWalletAddress = (p?.payout_wallet_address?.trim() || p?.referral_wallet?.trim() || null) ?? null;
 
   return res.json({
     availableRewardsUsd: Math.round(available * 100) / 100,
     requestableUsd: Math.round(requestable * 100) / 100,
     minPayoutUsd: MIN_PAYOUT_USD,
-    payoutWalletAddress: (profile as { payout_wallet_address?: string } | null)?.payout_wallet_address ?? null,
+    payoutWalletAddress,
   });
 });
 
