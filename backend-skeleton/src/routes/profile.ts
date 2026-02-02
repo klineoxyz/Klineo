@@ -88,7 +88,7 @@ profileRouter.get('/profile', async (req: AuthenticatedRequest, res) => {
   try {
     const { data: profile, error } = await client
       .from('user_profiles')
-      .select('id, email, role, full_name, username, timezone, referral_wallet, payout_wallet_address, payment_wallet_bsc, status, created_at, updated_at')
+      .select('id, email, role, full_name, username, timezone, referral_wallet, payout_wallet_address, payment_wallet_bsc, avatar_url, status, created_at, updated_at')
       .eq('id', req.user!.id)
       .single();
 
@@ -111,6 +111,7 @@ profileRouter.get('/profile', async (req: AuthenticatedRequest, res) => {
       referralWallet: profile.referral_wallet,
       payoutWalletAddress: profile.payout_wallet_address,
       paymentWalletBsc: profile.payment_wallet_bsc,
+      avatarUrl: profile.avatar_url ?? null,
       status: profile.status || 'active',
       createdAt: profile.created_at,
       updatedAt: profile.updated_at,
@@ -176,6 +177,7 @@ profileRouter.put('/profile',
     optionalString('timezone', 50),
     optionalString('referralWallet', 200),
     optionalString('paymentWalletBsc', 200),
+    optionalString('avatarUrl', 500),
   ]),
   async (req: AuthenticatedRequest, res) => {
     const client = getSupabase();
@@ -184,7 +186,7 @@ profileRouter.put('/profile',
     }
 
     try {
-      const { fullName, username, timezone, referralWallet, paymentWalletBsc } = req.body;
+      const { fullName, username, timezone, referralWallet, paymentWalletBsc, avatarUrl } = req.body;
 
       // Build update object (only include provided fields)
       const updates: Record<string, any> = {
@@ -199,12 +201,13 @@ profileRouter.put('/profile',
         updates.payout_wallet_address = referralWallet || null;
       }
       if (paymentWalletBsc !== undefined) updates.payment_wallet_bsc = paymentWalletBsc || null;
+      if (avatarUrl !== undefined) updates.avatar_url = avatarUrl && String(avatarUrl).trim() ? String(avatarUrl).trim() : null;
 
       const { data: profile, error } = await client
         .from('user_profiles')
         .update(updates)
         .eq('id', req.user!.id)
-        .select('id, email, role, full_name, username, timezone, referral_wallet, payout_wallet_address, payment_wallet_bsc, status, created_at, updated_at')
+        .select('id, email, role, full_name, username, timezone, referral_wallet, payout_wallet_address, payment_wallet_bsc, avatar_url, status, created_at, updated_at')
         .single();
 
       if (error) {
@@ -222,6 +225,7 @@ profileRouter.put('/profile',
         referralWallet: profile.referral_wallet,
         payoutWalletAddress: profile.payout_wallet_address,
         paymentWalletBsc: profile.payment_wallet_bsc,
+        avatarUrl: profile.avatar_url ?? null,
         status: profile.status || 'active',
         createdAt: profile.created_at,
         updatedAt: profile.updated_at,

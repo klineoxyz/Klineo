@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { Card } from "@/app/components/ui/card";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
@@ -24,8 +25,9 @@ import {
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/app/components/ui/collapsible";
 import { ChevronDown, ChevronRight, CheckSquare } from "lucide-react";
 import { ConnectExchangeWizard } from "@/app/components/screens/ConnectExchangeWizard";
+import { ROUTES } from "@/app/config/routes";
 import { FuturesEnableModal } from "@/app/components/screens/FuturesEnableModal";
-import { Users, DollarSign, Ticket } from "lucide-react";
+import { Users, DollarSign, Ticket, LayoutDashboard, Package, CreditCard, UserPlus } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/app/components/ui/table";
 
 interface SettingsProps {
@@ -39,6 +41,8 @@ export function Settings({ onNavigate }: SettingsProps) {
   const [fullName, setFullName] = useState("");
   const [username, setUsername] = useState("");
   const [timezone, setTimezone] = useState("UTC");
+  const [avatarUrl, setAvatarUrl] = useState("");
+  const [avatarImageError, setAvatarImageError] = useState(false);
   const [referralWallet, setReferralWallet] = useState("");
   const [paymentWalletBsc, setPaymentWalletBsc] = useState("");
   const [profileLoading, setProfileLoading] = useState(true);
@@ -66,7 +70,14 @@ export function Settings({ onNavigate }: SettingsProps) {
   const [futuresTestId, setFuturesTestId] = useState<string | null>(null);
   const [futuresEnableId, setFuturesEnableId] = useState<string | null>(null);
   const [permissionChecklistOpen, setPermissionChecklistOpen] = useState(false);
-  const [entitlement, setEntitlement] = useState<{ remainingUsd: number; status: string } | null>(null);
+  const [entitlement, setEntitlement] = useState<{
+    joiningFeePaid: boolean;
+    status: string;
+    activePackageId: string | null;
+    profitAllowanceUsd: number;
+    profitUsedUsd: number;
+    remainingUsd: number;
+  } | null>(null);
   // Update credentials (re-save API key/secret to fix decrypt errors)
   const [updateCredsConn, setUpdateCredsConn] = useState<ExchangeConnection | null>(null);
   const [updateCredsForm, setUpdateCredsForm] = useState({ apiKey: "", apiSecret: "", environment: "production" as "production" | "testnet" });
@@ -122,6 +133,7 @@ export function Settings({ onNavigate }: SettingsProps) {
       timezone: string;
       referralWallet?: string;
       paymentWalletBsc?: string;
+      avatarUrl?: string | null;
       status: string;
       createdAt: string;
       updatedAt: string;
@@ -130,6 +142,8 @@ export function Settings({ onNavigate }: SettingsProps) {
         setFullName(data.fullName ?? "");
         setUsername(data.username ?? "");
         setTimezone(data.timezone ?? "UTC");
+        setAvatarUrl(data.avatarUrl ?? "");
+        setAvatarImageError(false);
         setReferralWallet(data.referralWallet ?? "");
         setPaymentWalletBsc(data.paymentWalletBsc ?? "");
         setProfileLoading(false);
@@ -149,6 +163,7 @@ export function Settings({ onNavigate }: SettingsProps) {
         fullName: fullName || null,
         username: username || null,
         timezone: timezone || "UTC",
+        avatarUrl: avatarUrl?.trim() || null,
         referralWallet: referralWallet || null,
         paymentWalletBsc: paymentWalletBsc || null,
       });
@@ -257,8 +272,24 @@ export function Settings({ onNavigate }: SettingsProps) {
 
   useEffect(() => {
     if (!user?.id || isDemoMode) return;
-    api.get<{ status: string; remainingUsd?: number }>("/api/me/entitlement")
-      .then((d) => setEntitlement({ remainingUsd: d.remainingUsd ?? 0, status: d.status ?? "inactive" }))
+    api.get<{
+      joiningFeePaid: boolean;
+      status: string;
+      activePackageId: string | null;
+      profitAllowanceUsd: number;
+      profitUsedUsd: number;
+      remainingUsd: number;
+    }>("/api/me/entitlement")
+      .then((d) =>
+        setEntitlement({
+          joiningFeePaid: d.joiningFeePaid ?? false,
+          status: d.status ?? "inactive",
+          activePackageId: d.activePackageId ?? null,
+          profitAllowanceUsd: d.profitAllowanceUsd ?? 0,
+          profitUsedUsd: d.profitUsedUsd ?? 0,
+          remainingUsd: d.remainingUsd ?? 0,
+        })
+      )
       .catch(() => setEntitlement(null));
   }, [user?.id, isDemoMode]);
 
@@ -494,6 +525,68 @@ export function Settings({ onNavigate }: SettingsProps) {
             </Alert>
           )}
 
+          {/* My overview: subscription & stats (same info as admin panel, for the user) */}
+          <Card className="p-6 space-y-4 border-primary/20 bg-primary/5">
+            <h3 className="text-lg font-semibold flex items-center gap-2">
+              <LayoutDashboard className="size-5 text-primary" />
+              My overview
+            </h3>
+            <p className="text-sm text-muted-foreground">
+              Your subscription and profit allowance. Use the links below to pay joining fee, buy packages, or check referral earnings.
+            </p>
+            {entitlement ? (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="p-3 rounded-lg bg-background border border-border">
+                  <div className="text-xs text-muted-foreground uppercase tracking-wide">Joining fee</div>
+                  <div className="font-semibold mt-0.5">
+                    {entitlement.joiningFeePaid ? (
+                      <span className="text-[#10B981] flex items-center gap-1"><CheckCircle2 className="size-4" /> Paid</span>
+                    ) : (
+                      <span className="text-amber-600">Not paid</span>
+                    )}
+                  </div>
+                  {!entitlement.joiningFeePaid && (
+                    <Link to={ROUTES.payments} className="text-xs text-primary hover:underline mt-1 inline-block">Pay now →</Link>
+                  )}
+                </div>
+                <div className="p-3 rounded-lg bg-background border border-border">
+                  <div className="text-xs text-muted-foreground uppercase tracking-wide">Package</div>
+                  <div className="font-semibold mt-0.5">
+                    {entitlement.activePackageId ? (
+                      <span className="text-primary">{entitlement.activePackageId}</span>
+                    ) : (
+                      <span className="text-muted-foreground">None</span>
+                    )}
+                  </div>
+                  <Link to={ROUTES.packages} className="text-xs text-primary hover:underline mt-1 inline-block">View packages →</Link>
+                </div>
+                <div className="p-3 rounded-lg bg-background border border-border">
+                  <div className="text-xs text-muted-foreground uppercase tracking-wide">Profit allowance</div>
+                  <div className="font-semibold mt-0.5 text-primary">
+                    ${entitlement.remainingUsd.toFixed(2)} remaining
+                  </div>
+                  <Link to={ROUTES.referrals} className="text-xs text-primary hover:underline mt-1 inline-block">Referrals →</Link>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 py-2">
+                <Loader2 className="size-4 animate-spin" />
+                <span className="text-sm text-muted-foreground">Loading overview…</span>
+              </div>
+            )}
+            <div className="flex flex-wrap gap-2 pt-2 border-t border-border">
+              <Link to={ROUTES.packages} className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline">
+                <Package className="size-4" /> Packages
+              </Link>
+              <Link to={ROUTES.payments} className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline">
+                <CreditCard className="size-4" /> Payments
+              </Link>
+              <Link to={ROUTES.referrals} className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline">
+                <UserPlus className="size-4" /> Referrals
+              </Link>
+            </div>
+          </Card>
+
           {/* Backend Connection Status */}
           <Card className="p-4 border-primary/20">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -525,6 +618,35 @@ export function Settings({ onNavigate }: SettingsProps) {
 
           <Card className="p-4 sm:p-6 space-y-4 sm:space-y-6">
             <h3 className="text-base sm:text-lg font-semibold">Profile Information</h3>
+            <div className="flex flex-col sm:flex-row gap-6">
+              <div className="flex flex-col items-start gap-2 shrink-0">
+                <Label>Profile image</Label>
+                <div className="flex items-center gap-4">
+                  <div className="size-20 rounded-full bg-muted border border-border overflow-hidden flex items-center justify-center">
+                    {avatarUrl?.trim() && !avatarImageError ? (
+                      <img
+                        src={avatarUrl.trim()}
+                        alt="Profile"
+                        className="size-full object-cover"
+                        onError={() => setAvatarImageError(true)}
+                      />
+                    ) : (
+                      <span className="text-2xl text-muted-foreground font-medium">{fullName?.charAt(0)?.toUpperCase() || user?.email?.charAt(0)?.toUpperCase() || "?"}</span>
+                    )}
+                  </div>
+                  <div className="space-y-2 min-w-0 flex-1 sm:max-w-[280px]">
+                    <Label className="text-xs text-muted-foreground">Image URL</Label>
+                    <Input
+                      placeholder="https://…"
+                      value={avatarUrl}
+                      onChange={(e) => { setAvatarUrl(e.target.value); setAvatarImageError(false); }}
+                      disabled={profileLoading}
+                      className="font-mono text-sm"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
               <div className="space-y-2">
                 <Label>Full Name</Label>
