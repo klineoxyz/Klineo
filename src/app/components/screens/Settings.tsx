@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Card } from "@/app/components/ui/card";
 import { Input } from "@/app/components/ui/input";
@@ -7,7 +7,7 @@ import { Button } from "@/app/components/ui/button";
 import { Switch } from "@/app/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/app/components/ui/tabs";
 import { Alert, AlertDescription } from "@/app/components/ui/alert";
-import { AlertTriangle, Key, Shield, Wifi, Trash2, CheckCircle2, XCircle, Loader2, Plus, KeyRound } from "lucide-react";
+import { AlertTriangle, Key, Shield, Wifi, Trash2, CheckCircle2, XCircle, Loader2, Plus, KeyRound, RefreshCw } from "lucide-react";
 import { useAuth } from "@/app/contexts/AuthContext";
 import { useDemo } from "@/app/contexts/DemoContext";
 import { api, exchangeConnections, sanitizeExchangeError, type ExchangeConnection } from "@/lib/api";
@@ -270,7 +270,7 @@ export function Settings({ onNavigate }: SettingsProps) {
       });
   }, [user?.id]);
 
-  useEffect(() => {
+  const fetchEntitlement = useCallback(() => {
     if (!user?.id || isDemoMode) return;
     api.get<{
       joiningFeePaid: boolean;
@@ -292,6 +292,10 @@ export function Settings({ onNavigate }: SettingsProps) {
       )
       .catch(() => setEntitlement(null));
   }, [user?.id, isDemoMode]);
+
+  useEffect(() => {
+    fetchEntitlement();
+  }, [fetchEntitlement]);
 
   // My Referrals: fetch when user or timeframe changes
   useEffect(() => {
@@ -318,7 +322,7 @@ export function Settings({ onNavigate }: SettingsProps) {
       .finally(() => setMyReferralsLoading(false));
   }, [user?.id, myReferralsTimeframe]);
 
-  useEffect(() => {
+  const fetchMyDiscounts = useCallback(() => {
     if (!user?.id) {
       setMyDiscounts([]);
       return;
@@ -330,6 +334,17 @@ export function Settings({ onNavigate }: SettingsProps) {
       .catch(() => setMyDiscounts([]))
       .finally(() => setMyDiscountsLoading(false));
   }, [user?.id]);
+
+  useEffect(() => {
+    fetchMyDiscounts();
+  }, [fetchMyDiscounts]);
+
+  const [activeSettingsTab, setActiveSettingsTab] = useState("profile");
+  const handleSettingsTabChange = useCallback((value: string) => {
+    setActiveSettingsTab(value);
+    if (value === "profile") fetchMyDiscounts();
+    if (value === "packages") fetchEntitlement();
+  }, [fetchMyDiscounts, fetchEntitlement]);
 
   const handleTestBeforeSave = async () => {
     if (!formData.apiKey?.trim() || !formData.apiSecret?.trim()) {
@@ -502,7 +517,7 @@ export function Settings({ onNavigate }: SettingsProps) {
         <p className="text-sm text-muted-foreground">Manage your account and preferences</p>
       </div>
 
-      <Tabs defaultValue="profile" className="space-y-4 sm:space-y-6">
+      <Tabs value={activeSettingsTab} onValueChange={handleSettingsTabChange} className="space-y-4 sm:space-y-6">
         <TabsList className="flex-wrap h-auto gap-1 p-1 w-full sm:w-fit">
           <TabsTrigger value="profile">Profile</TabsTrigger>
           <TabsTrigger value="security">Security</TabsTrigger>
@@ -652,13 +667,26 @@ export function Settings({ onNavigate }: SettingsProps) {
 
           {/* Your discounts: assigned by admin (onboarding / trading packages) */}
           <Card className="p-6 space-y-4">
-            <h3 className="text-lg font-semibold flex items-center gap-2">
-              <Ticket className="size-5 text-primary" />
-              Your Assigned Discounts
-            </h3>
-            <p className="text-sm text-muted-foreground">
-              Discounts assigned to you by the team. They apply automatically when you pay for onboarding or trading packages.
-            </p>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h3 className="text-lg font-semibold flex items-center gap-2">
+                  <Ticket className="size-5 text-primary" />
+                  Your Assigned Discounts
+                </h3>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Discounts assigned to you by the team. They apply automatically when you pay for onboarding or trading packages.
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => fetchMyDiscounts()}
+                disabled={myDiscountsLoading}
+              >
+                {myDiscountsLoading ? <Loader2 className="size-4 animate-spin mr-2" /> : <RefreshCw className="size-4 mr-2" />}
+                Refresh
+              </Button>
+            </div>
             {myDiscountsLoading ? (
               <div className="flex items-center gap-2 py-6">
                 <Loader2 className="size-4 animate-spin" />
@@ -1365,13 +1393,25 @@ export function Settings({ onNavigate }: SettingsProps) {
 
         <TabsContent value="packages" className="space-y-6">
           <Card className="p-6 space-y-4">
-            <h3 className="text-lg font-semibold flex items-center gap-2">
-              <Package className="size-5 text-primary" />
-              Your packages & credits
-            </h3>
-            <p className="text-sm text-muted-foreground">
-              Your bought packages and remaining profit allowance (credits). Buy more from Packages to top up.
-            </p>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h3 className="text-lg font-semibold flex items-center gap-2">
+                  <Package className="size-5 text-primary" />
+                  Your packages & credits
+                </h3>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Your active package, status, and remaining profit allowance (credits). Buy more from Packages to top up.
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => fetchEntitlement()}
+              >
+                <RefreshCw className="size-4 mr-2" />
+                Refresh
+              </Button>
+            </div>
             {entitlement ? (
               <div className="space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
