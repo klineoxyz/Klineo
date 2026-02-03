@@ -25,7 +25,7 @@ import {
 import { Input } from "@/app/components/ui/input";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { exchangeConnections, sanitizeExchangeError, type ExchangeConnection } from "@/lib/api";
+import { exchangeConnections, getApiErrorMessage, sanitizeExchangeError, type ExchangeConnection } from "@/lib/api";
 
 export interface FuturesEnableModalProps {
   open: boolean;
@@ -84,8 +84,9 @@ export function FuturesEnableModal({
       onSuccess?.();
       handleOpenChange(false);
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : String(e);
-      toast.error("Enable failed", {
+      const msg = getApiErrorMessage(e);
+      const isRestricted = /451|restricted|eligibility|region|unavailable.*location/i.test(msg);
+      toast.error(isRestricted ? "Futures not available in your region" : "Enable failed", {
         description: sanitizeExchangeError(msg),
       });
     } finally {

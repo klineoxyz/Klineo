@@ -21,6 +21,25 @@ export function sanitizeExchangeError(message: string | undefined | null): strin
   return out.slice(0, 500);
 }
 
+/**
+ * Extract user-facing message from an API error. Handles raw JSON body thrown by apiRequest
+ * (e.g. "403: {\"error\":\"...\", \"message\":\"...\"}" or plain "{\"message\":\"...\"}").
+ */
+export function getApiErrorMessage(err: unknown): string {
+  const msg = err instanceof Error ? err.message : String(err ?? 'Something went wrong');
+  const toParse = msg.replace(/^\d+\s*:\s*/, '').trim();
+  if (toParse.startsWith('{')) {
+    try {
+      const body = JSON.parse(toParse) as { message?: string; error?: string };
+      const text = body.message || body.error;
+      if (typeof text === 'string' && text.length > 0) return text;
+    } catch {
+      /* not JSON, use raw */
+    }
+  }
+  return msg;
+}
+
 export async function apiRequest<T = unknown>(
   path: string,
   options: RequestInit = {}

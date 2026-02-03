@@ -62,11 +62,32 @@ async function signedRequest<T>(
     headers: { 'X-MBX-APIKEY': creds.apiKey, 'Content-Type': 'application/json' },
     signal: AbortSignal.timeout(15000),
   });
-  const data = await res.json() as { code?: number; msg?: string };
+  const rawText = await res.text();
+  if (!res.ok) {
+    let errMsg: string;
+    try {
+      const data = JSON.parse(rawText) as { code?: number; msg?: string };
+      errMsg = data.msg ? String(data.msg) : res.statusText;
+      const code = data.code != null ? data.code : res.status;
+      throw new Error(`Binance Futures (${code}): ${errMsg}`);
+    } catch (parseErr) {
+      if (parseErr instanceof Error && parseErr.message.startsWith('Binance Futures')) throw parseErr;
+      const snippet = rawText.slice(0, 200).replace(/\s+/g, ' ').trim();
+      errMsg = res.status === 451
+        ? (snippet || 'Service unavailable from a restricted location (HTTP 451).')
+        : (snippet || res.statusText || `HTTP ${res.status}`);
+      throw new Error(`Binance Futures HTTP ${res.status}: ${errMsg}`);
+    }
+  }
+  let data: { code?: number; msg?: string };
+  try {
+    data = JSON.parse(rawText) as { code?: number; msg?: string };
+  } catch {
+    throw new Error(`Binance Futures HTTP ${res.status}: Invalid response body`);
+  }
   if (data.code != null && data.code !== 0) {
     throw new Error(`Binance Futures (${data.code}): ${data.msg || res.statusText}`);
   }
-  if (!res.ok) throw new Error(`Binance Futures HTTP ${res.status}: ${data.msg || res.statusText}`);
   return data as T;
 }
 

@@ -513,7 +513,15 @@ exchangeConnectionsRouter.post(
       const msg = err instanceof Error ? err.message : 'Unknown error';
       const sanitized = msg.replace(/api[_-]?key/gi, '[REDACTED]').replace(/secret/gi, '[REDACTED]');
       console.error(`[${requestId}] Futures enable error:`, sanitized);
-      res.status(500).json({ error: 'Futures enable failed', message: sanitized, requestId });
+      const isRestricted =
+        /451|restricted\s*location|eligibility|unavailable.*region/i.test(sanitized);
+      const status = isRestricted ? 403 : 500;
+      res.status(status).json({
+        error: 'Futures enable failed',
+        message: sanitized,
+        code: isRestricted ? 'FUTURES_RESTRICTED' : undefined,
+        requestId,
+      });
     }
   }
 );

@@ -10,7 +10,7 @@ import { Alert, AlertDescription } from "@/app/components/ui/alert";
 import { AlertTriangle, Key, Shield, Wifi, Trash2, CheckCircle2, XCircle, Loader2, Plus, KeyRound, RefreshCw, Upload } from "lucide-react";
 import { useAuth } from "@/app/contexts/AuthContext";
 import { useDemo } from "@/app/contexts/DemoContext";
-import { api, exchangeConnections, sanitizeExchangeError, type ExchangeConnection } from "@/lib/api";
+import { api, exchangeConnections, getApiErrorMessage, sanitizeExchangeError, type ExchangeConnection } from "@/lib/api";
 import { supabase } from "@/lib/supabase";
 import { toast } from "@/app/lib/toast";
 import { Badge } from "@/app/components/ui/badge";
@@ -552,7 +552,11 @@ export function Settings({ onNavigate }: SettingsProps) {
       const data = await exchangeConnections.list();
       setExchangeConnectionsList(data.connections);
     } catch (err: any) {
-      toast.error('Futures enable failed', { description: sanitizeExchangeError(err?.message) });
+      const msg = getApiErrorMessage(err);
+      const isRestricted = /451|restricted|eligibility|region|unavailable.*location/i.test(msg);
+      toast.error(isRestricted ? 'Futures not available in your region' : 'Futures enable failed', {
+        description: sanitizeExchangeError(msg),
+      });
     } finally {
       setFuturesEnableId(null);
     }
@@ -1345,7 +1349,8 @@ export function Settings({ onNavigate }: SettingsProps) {
                               variant="outline"
                               size="sm"
                               onClick={() => handleFuturesEnable(conn.id)}
-                              disabled={futuresEnableId === conn.id}
+                              disabled={futuresEnableId === conn.id || !!(conn.last_error_message && /restricted|eligibility|451|unavailable.*location/i.test(conn.last_error_message)) || !!(conn.futures_last_error && /restricted|eligibility|451|unavailable.*location/i.test(conn.futures_last_error))}
+                              title={conn.last_error_message && /restricted|451/i.test(conn.last_error_message) ? "Futures is not available in your region (Binance restriction)." : undefined}
                             >
                               {futuresEnableId === conn.id ? <Loader2 className="size-4 animate-spin" /> : null}
                               Enable Futures
