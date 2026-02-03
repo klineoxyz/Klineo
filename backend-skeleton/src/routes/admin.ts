@@ -754,14 +754,17 @@ adminRouter.get('/payout-requests', async (req, res) => {
  * PATCH /api/admin/referrals/:id/mark-paid
  * Admin marks a referral payout as paid and records transaction (e.g. tx hash).
  */
-adminRouter.patch('/referrals/:id/mark-paid', async (req, res) => {
+adminRouter.patch('/referrals/:id/mark-paid',
+  validate([uuidParam('id'), optionalString('transactionId', 200)]),
+  async (req, res) => {
   const client = getSupabase();
   if (!client) {
     return res.status(503).json({ error: 'Database unavailable' });
   }
 
   const { id } = req.params;
-  const { transactionId } = req.body as { transactionId?: string };
+  const raw = (req.body as { transactionId?: string })?.transactionId;
+  const transactionId = typeof raw === 'string' && raw.trim() ? raw.trim().slice(0, 200) : null;
 
   if (!id) {
     return res.status(400).json({ error: 'Missing payout id' });
@@ -773,7 +776,7 @@ adminRouter.patch('/referrals/:id/mark-paid', async (req, res) => {
       .update({
         payout_status: 'paid',
         paid_at: new Date().toISOString(),
-        transaction_id: typeof transactionId === 'string' && transactionId.trim() ? transactionId.trim() : null,
+        transaction_id: transactionId,
       })
       .eq('id', id)
       .select('id')
@@ -794,7 +797,7 @@ adminRouter.patch('/referrals/:id/mark-paid', async (req, res) => {
         action_type: 'referral_payout_marked_paid',
         entity_type: 'purchase_referral_earnings',
         entity_id: id,
-        details: { transaction_id: typeof transactionId === 'string' && transactionId.trim() ? transactionId.trim() : null },
+        details: { transaction_id: transactionId },
       });
     }
 

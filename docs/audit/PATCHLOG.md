@@ -78,6 +78,16 @@
 
 ---
 
+## P6: Transaction/tx hash validation (2025-02-03)
+
+**Files:** `backend-skeleton/src/routes/admin.ts`, `backend-skeleton/src/routes/referrals.ts`
+
+**Change:** Add optionalString('transactionId', 200) for admin mark-paid; optionalString('payoutTxId', 200) for payout_requests mark-paid. Trim and slice to max 200 chars.
+
+**Verification:** Mark paid with long tx hash; stored truncated. Invalid body rejected by validator.
+
+---
+
 ## No Changes (Documented Only)
 
 - **VITE_RUNNER_CRON_SECRET:** Never set in production frontend. Smoke test already SKIPs cron-secret test unless explicitly enabled.

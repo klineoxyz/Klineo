@@ -4,7 +4,7 @@
 import { Router, Response } from 'express';
 import { param, body } from 'express-validator';
 import { verifySupabaseJWT, AuthenticatedRequest } from '../middleware/auth.js';
-import { validate } from '../middleware/validation.js';
+import { validate, optionalString } from '../middleware/validation.js';
 import { requireAdmin } from '../middleware/auth.js';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { explainPurchaseEarnings } from '../lib/explainPurchaseEarnings.js';
@@ -477,13 +477,17 @@ referralsRouter.put(
 referralsRouter.put(
   '/payout-requests/:id/mark-paid',
   requireAdmin,
-  validate([param('id').isUUID().withMessage('Payout request ID must be a valid UUID')]),
+  validate([
+    param('id').isUUID().withMessage('Payout request ID must be a valid UUID'),
+    optionalString('payoutTxId', 200),
+  ]),
   async (req: AuthenticatedRequest, res: Response) => {
     const client = getSupabase();
     if (!client) return res.status(503).json({ error: 'Database unavailable' });
 
     const id = req.params.id;
-    const payoutTxId = (req.body?.payoutTxId as string) || null;
+    const raw = (req.body?.payoutTxId as string);
+    const payoutTxId = typeof raw === 'string' && raw.trim() ? raw.trim().slice(0, 200) : null;
     const { data, error } = await client
       .from('payout_requests')
       .update({

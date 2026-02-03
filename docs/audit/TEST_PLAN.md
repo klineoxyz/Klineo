@@ -151,8 +151,9 @@
 
 ### 8.2 Referral Payout (Admin)
 - [ ] Payout requests list; filter by status
-- [ ] Mark paid with tx hash; audit_logs has payout_request_marked_paid
-- [ ] purchase_referral_earnings mark-paid; audit_logs has referral_payout_marked_paid
+- [ ] Mark paid with tx hash (max 200 chars); audit_logs has payout_request_marked_paid
+- [ ] purchase_referral_earnings mark-paid (transactionId max 200 chars); audit_logs has referral_payout_marked_paid
+- [ ] Idempotent: cannot mark paid twice (payout_requests: only APPROVED → PAID)
 
 ### 8.3 Coupons
 - [ ] Shareable URL: `/packages?coupon=CODE` or `/payments?coupon=CODE` (from Payments directly)

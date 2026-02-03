@@ -4,6 +4,8 @@
 **Auditors:** Lead Engineer, Backend, Frontend, QA, Security  
 **Scope:** Full platform (frontend + backend + Supabase + cron runner + exchange integrations + payments/referrals/coupons/admin)
 
+**See also:** [ONBOARDING_READY.md](./ONBOARDING_READY.md) for 10-min verification checklist and Go/No-Go criteria.
+
 ---
 
 ## Executive Summary
@@ -49,11 +51,11 @@ The KLINEO platform is architecturally sound with proper auth, RLS, and rate lim
 - **Files:** `src/lib/smokeTests.ts`
 - **Status:** Documented; no code change (behavior is already SKIP-by-default).
 
-### F-4: Admin mark-paid missing body validation
+### F-4: Admin mark-paid missing body validation (FIXED)
 - **Severity:** Medium
-- **Impact:** `transactionId` in PATCH body is not validated; malformed input could cause issues.
-- **Recommendation:** Add `optionalString('transactionId', 200)` or similar validation.
-- **Status:** Deferred (low risk; transactionId is optional and trimmed).
+- **Impact:** `transactionId` in PATCH body was not validated.
+- **Fix:** Added `optionalString('transactionId', 200)`; same for `payoutTxId` in payout_requests mark-paid.
+- **Status:** Fixed in admin.ts and referrals.ts.
 
 ### F-5: exchangeConnectionLimiter not applied to update-creds route
 - **Severity:** Medium
