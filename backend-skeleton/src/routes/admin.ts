@@ -249,7 +249,7 @@ adminRouter.get('/users',
 
     let query = client
       .from('user_profiles')
-      .select('id, email, role, created_at, full_name, username, status')
+      .select('id, email, role, created_at, full_name, username, status, active_package_code')
       .order('created_at', { ascending: false });
 
     if (sanitized.length > 0) {
@@ -263,25 +263,29 @@ adminRouter.get('/users',
       return res.status(500).json({ error: 'Failed to fetch users' });
     }
 
-    // Get subscription info for each user
-    const userIds = profiles?.map((p) => p.id) || [];
+    // Build profile list - need to re-fetch with active_package_code if not in range query
+    const profileData = profiles || [];
+    const userIds = profileData.map((p: any) => p.id);
     const { data: subscriptions } = await client
       .from('subscriptions')
       .select('user_id, status, subscription_plans(name)')
       .in('user_id', userIds);
 
-    const users = profiles?.map((profile) => {
-      const sub = subscriptions?.find((s) => s.user_id === profile.id);
+    const users = profileData.map((profile: any) => {
+      const sub = subscriptions?.find((s: any) => s.user_id === profile.id);
+      const pkgCode = profile.active_package_code;
+      const planFromPkg = pkgCode ? (PACKAGE_CODE_TO_PLAN[(pkgCode || '').trim()] || (pkgCode as string)) : null;
+      const plan = planFromPkg || (sub?.subscription_plans as any)?.name || 'None';
+      const hasActivePackage = !!pkgCode;
+      const isSuspended = profile.status === 'suspended' || profile.status === 'banned';
       return {
         id: profile.id,
         email: profile.email,
         fullName: profile.full_name,
         username: profile.username,
         role: profile.role,
-        plan: (sub?.subscription_plans as any)?.name || 'None',
-        status: profile.status === 'suspended' || profile.status === 'banned' 
-          ? 'Suspended' 
-          : sub?.status === 'active' ? 'Active' : 'Inactive',
+        plan,
+        status: isSuspended ? 'Suspended' : hasActivePackage || sub?.status === 'active' ? 'Active' : 'Inactive',
         userStatus: profile.status || 'active',
         joined: new Date(profile.created_at).toLocaleDateString('en-US', {
           month: 'short',

@@ -103,6 +103,19 @@
 
 ---
 
+## P8: Admin Subscriptions + Users + Discounts (2026-02-03)
+
+**Status:** Applied (verify in repo)
+
+**Files changed:** `backend-skeleton/src/routes/admin.ts`, `src/app/components/screens/Admin.tsx`
+
+**Change:**
+- **Subscriptions tab:** Use `user_profiles.active_package_code` and `payment_intents` (approved packages) instead of legacy `subscriptions` table. Stats (Starter/Pro/Unlimited) and payment history now reflect real package holders.
+- **Users tab:** Derive plan and status from `active_package_code`; users with approved packages show correct Plan (Starter/Pro/Unlimited) and Status (Active).
+- **Discount Coupons tab:** Add `onFocus` to load coupons and user discounts when tab is focused; capitalize status display (Active/Paused/Revoked) for clarity.
+
+---
+
 ## No Changes (Documented Only)
 
 - **VITE_RUNNER_CRON_SECRET:** Never set in production frontend. Smoke test already SKIPs cron-secret test unless explicitly enabled.

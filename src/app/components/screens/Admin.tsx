@@ -1539,7 +1539,7 @@ export function Admin() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="discounts" className="space-y-6">
+        <TabsContent value="discounts" className="space-y-6" onFocus={() => { loadCoupons(); loadUserDiscounts(); loadUsers(1, ""); }}>
           {/* Create New Coupon — onboarding and/or trading packages */}
           <Card className="p-6">
             <div className="flex items-center gap-3 mb-6">
@@ -1948,8 +1948,8 @@ export function Admin() {
                             : "—"}
                         </TableCell>
                         <TableCell>
-                          <Badge variant={d.status === "active" ? "default" : "secondary"} className={d.status === "active" ? "bg-[#10B981]/10 text-[#10B981]" : ""}>
-                            {d.status}
+                          <Badge variant={d.status === "active" ? "default" : "secondary"} className={d.status === "active" ? "bg-[#10B981]/10 text-[#10B981] border-[#10B981]/50" : ""}>
+                            {d.status === "active" ? "Active" : d.status === "paused" ? "Paused" : d.status === "revoked" ? "Revoked" : d.status || "—"}
                           </Badge>
                         </TableCell>
                         <TableCell className="text-right">
