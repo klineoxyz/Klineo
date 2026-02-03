@@ -1,10 +1,11 @@
 /**
  * Binance USD-M Futures API adapter.
  * Production: fapi.binance.com | Testnet: testnet.binancefuture.com
- * Handles server time drift via recvWindow; signed requests only.
+ * Uses binanceFetch so BINANCE_HTTP_PROXY / BINANCE_HTTPS_PROXY can route requests from an allowed region.
  */
 
 import { createHmac } from 'crypto';
+import { binanceFetch } from './binance-fetch.js';
 import type {
   MarginMode,
   PositionMode,
@@ -57,7 +58,7 @@ async function signedRequest<T>(
   const base = getBaseUrl(creds.environment);
   const query = buildSignedQuery(params, creds.apiSecret);
   const url = `${base}${path}?${query}`;
-  const res = await fetch(url, {
+  const res = await binanceFetch(url, {
     method,
     headers: { 'X-MBX-APIKEY': creds.apiKey, 'Content-Type': 'application/json' },
     signal: AbortSignal.timeout(15000),
@@ -95,7 +96,7 @@ async function signedRequest<T>(
 export async function getMarkPrice(env: BinanceFuturesEnvironment, symbol: string): Promise<number> {
   const base = getBaseUrl(env);
   const sym = symbol.replace('/', '').toUpperCase();
-  const res = await fetch(`${base}/fapi/v1/premiumIndex?symbol=${encodeURIComponent(sym)}`, { signal: AbortSignal.timeout(10000) });
+  const res = await binanceFetch(`${base}/fapi/v1/premiumIndex?symbol=${encodeURIComponent(sym)}`, { signal: AbortSignal.timeout(10000) });
   const data = (await res.json()) as { markPrice?: string; msg?: string };
   if (!res.ok) throw new Error(`Binance mark price: ${data.msg || res.statusText}`);
   const mark = data.markPrice;

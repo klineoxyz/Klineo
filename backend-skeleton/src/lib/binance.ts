@@ -1,9 +1,11 @@
 /**
  * Binance Spot API client
- * Handles signed requests, testnet/production environments
+ * Handles signed requests, testnet/production environments.
+ * Uses binanceFetch so BINANCE_HTTP_PROXY / BINANCE_HTTPS_PROXY can route requests from an allowed region.
  */
 
 import { createHmac } from 'crypto';
+import { binanceFetch } from './binance-fetch.js';
 
 export type BinanceEnvironment = 'production' | 'testnet';
 
@@ -127,13 +129,12 @@ async function signedRequest<T>(
   const queryString = buildSignedQuery(params, credentials.apiSecret);
   const url = `${baseUrl}${endpoint}?${queryString}`;
 
-  const response = await fetch(url, {
+  const response = await binanceFetch(url, {
     method,
     headers: {
       'X-MBX-APIKEY': credentials.apiKey,
       'Content-Type': 'application/json',
     },
-    // Timeout: 10 seconds
     signal: AbortSignal.timeout(10000),
   });
 

@@ -1283,7 +1283,7 @@ export function Settings({ onNavigate }: SettingsProps) {
                             <div className="text-[#EF4444]">Error: {conn.last_error_message}</div>
                             {/restricted|eligibility|451|region|unavailable.*location/i.test(conn.last_error_message) && (
                               <p className="text-xs text-muted-foreground mt-1">
-                                Binance may block both Spot and Futures API access from the server&apos;s or your region. Your API key can be valid; the test runs from our server, which might be in a restricted location.
+                                Binance restricts access by the <strong>request origin IP</strong> (our server). Your API key can be valid; if you are in an allowed region, the platform can route API calls via a proxy in that region. Contact support or check deployment docs for BINANCE_HTTP_PROXY.
                               </p>
                             )}
                           </>
