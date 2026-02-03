@@ -1,6 +1,7 @@
 # KLINEO Onboarding Readiness
 
-**Date:** 2025-02-03  
+**Last updated:** 2026-02-03  
+**Audit snapshot:** 2025-02-03  
 **Status:** NOT YET — Placeholder referral links block onboarding
 
 ---

@@ -1,6 +1,7 @@
 # KLINEO Platform Audit Report
 
-**Audit Date:** 2025-02-03  
+**Audit snapshot date:** 2025-02-03  
+**Last updated:** 2026-02-03  
 **Auditors:** Lead Engineer, Backend, Frontend, QA, Security  
 **Scope:** Full platform (frontend + backend + Supabase + cron runner + exchange integrations + payments/referrals/coupons/admin)
 
@@ -135,12 +136,18 @@ The platform is architecturally sound with proper auth, RLS, and rate limiting. 
 
 ## Launch Readiness Verdict
 
-**Decision: CONDITIONAL GO**
+**Decision: NO-GO**
+
+**Blocker:** Referral code/link still placeholder in Referrals.tsx (`KLINEO-XYZ123` / `https://klineo.xyz/ref/XYZ123`). Do not onboard until real user-specific codes are wired.
+
+**Next step:** Implement real referral code API + wire UI, then re-run 10-minute production verification checklist.
 
 ### Critical Issues Blocking Onboarding
-- None. Patches P1 and P2 have been applied.
+- **Referral placeholder:** Referrals page shows hardcoded placeholder — not user-specific. Growth + attribution will break immediately if users share it.
 
 ### Steps to Validate Fixes in 30 Minutes
+
+0. **Referral code verification (BLOCKER):** Referrals page must show user-specific referral code/link and real earnings data.
 
 1. **Marketplace route (5 min):**
    - Start app: `pnpm dev`

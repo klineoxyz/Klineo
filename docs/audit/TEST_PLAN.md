@@ -1,7 +1,8 @@
 # KLINEO Test Plan
 
 **Version:** 1.0  
-**Date:** 2025-02-03
+**Last updated:** 2026-02-03  
+**Audit snapshot:** 2025-02-03
 
 ---
 
