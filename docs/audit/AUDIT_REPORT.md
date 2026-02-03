@@ -152,5 +152,33 @@ The KLINEO platform is architecturally sound with proper auth, RLS, and rate lim
    - Confirm public + auth tests pass; exchange/cron-secret tests SKIP when env not set
 
 5. **Security spot-check (5 min):**
-   - Search built assets for `apiKey`, `apiSecret`, `RUNNER_CRON` — none expected
+   - Run `pnpm run check:secrets` — must pass
    - Verify ADMIN_EMAILS is set; RUNNER_CRON_SECRET is set when runner enabled
+
+---
+
+## Final Hardening Pass (2025-02-03)
+
+### Additional Fixes Applied
+
+| Fix | File | Change |
+|-----|------|--------|
+| Strategy Backtest useEffect | `StrategyBacktest.tsx` | Use `React.useEffect` explicitly to avoid "useEffect is not defined" with recharts in production |
+| Routing validator | `smokeTests.ts` | Added routing validator smoke test; pathForView/viewForPath consistency for key routes |
+| Coupon context on Payments | `Subscription.tsx`, `Payments.tsx` | Pass couponKind and couponPackageCode when navigating with coupon so validation uses correct params |
+| Payout-requests audit log | `referrals.ts` | Add audit_logs insert when admin marks payout_request as PAID (tx hash) |
+| Secrets check script | `scripts/check-build-secrets.mjs` | `pnpm run check:secrets` scans dist for forbidden strings (RUNNER_CRON_SECRET, SUPABASE_SERVICE_ROLE_KEY, JWT) |
+| build:safe script | `package.json` | `pnpm run build:safe` runs build + check:secrets |
+
+### Go/No-Go Checklist (Final)
+
+| Item | Status |
+|------|--------|
+| URL updates on every sidebar click | ✅ |
+| Deep link + refresh keep correct view | ✅ |
+| Strategy Backtest loads without crash | ✅ |
+| Referral payout request flow complete | ✅ |
+| Admin mark-paid (both flows) with tx hash + audit | ✅ |
+| Coupon link `?coupon=CODE` on packages; applies correctly at checkout | ✅ |
+| Routing validator in Launch preset | ✅ |
+| check:secrets passes on build | ✅ |

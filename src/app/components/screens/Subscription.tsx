@@ -90,7 +90,7 @@ export function Subscription({ onNavigate }: SubscriptionProps) {
         safe_link: data.safe_link,
         status: data.intent.status,
       };
-      onNavigate("payments", { newIntent, couponCode: couponFromUrl ?? undefined });
+      onNavigate("payments", { newIntent, couponCode: couponFromUrl ?? undefined, couponKind: "joining_fee" });
       toast.success("Go to Payments", {
         description: "Send USDT (BEP20) to the Safe address, then submit your transaction hash.",
       });
@@ -98,7 +98,7 @@ export function Subscription({ onNavigate }: SubscriptionProps) {
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Checkout failed";
       if (String(msg).includes("404") || String(msg).includes("503") || String(msg).includes("Not found")) {
-        onNavigate("payments", { couponCode: couponFromUrl ?? undefined });
+        onNavigate("payments", { couponCode: couponFromUrl ?? undefined, couponKind: "joining_fee" });
         toast.info("Manual payments", {
           description: "Go to Payments, add your BSC wallet in Settings, then create a joining fee intent.",
         });
@@ -139,14 +139,14 @@ export function Subscription({ onNavigate }: SubscriptionProps) {
         safe_link: data.safe_link,
         status: data.intent.status,
       };
-      onNavigate("payments", { newIntent, couponCode: couponFromUrl ?? undefined });
+      onNavigate("payments", { newIntent, couponCode: couponFromUrl ?? undefined, couponKind: "package", couponPackageCode: packageCode });
       toast.success("Go to Payments", {
         description: "Send USDT (BEP20) to the Safe address, then submit your transaction hash.",
       });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Checkout failed";
       if (String(msg).includes("404") || String(msg).includes("503") || String(msg).includes("Not found")) {
-        onNavigate("payments", { couponCode: couponFromUrl ?? undefined });
+        onNavigate("payments", { couponCode: couponFromUrl ?? undefined, couponKind: "package", couponPackageCode: packageCode });
         toast.info("Manual payments", {
           description: "Go to Payments, then create a package intent and follow the instructions.",
         });

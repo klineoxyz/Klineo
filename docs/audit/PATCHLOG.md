@@ -48,6 +48,36 @@
 
 ---
 
+## P3: Strategy Backtest useEffect (2025-02-03)
+
+**File:** `src/app/components/screens/StrategyBacktest.tsx`
+
+**Change:** Use `import * as React from "react"` and `React.useEffect` explicitly to avoid "useEffect is not defined" with recharts in production builds.
+
+**Verification:** Load Strategy Backtest page; no console error.
+
+---
+
+## P4: Routing validator + check:secrets (2025-02-03)
+
+**Files:** `src/lib/smokeTests.ts`, `scripts/check-build-secrets.mjs`, `package.json`
+
+**Change:** Added routing validator smoke test; `pnpm run check:secrets` script; `build:safe` script.
+
+**Verification:** Run Launch preset — Routing validator PASS; run `pnpm run check:secrets` after build.
+
+---
+
+## P5: Coupon context + payout audit (2025-02-03)
+
+**Files:** `Subscription.tsx`, `Payments.tsx`, `referrals.ts`
+
+**Change:** Pass couponKind/couponPackageCode when navigating with coupon; add audit_logs for payout_request mark-paid.
+
+**Verification:** Packages → checkout with coupon → Payments; coupon validates correctly. Admin marks payout_request paid; audit_logs has payout_request_marked_paid.
+
+---
+
 ## No Changes (Documented Only)
 
 - **VITE_RUNNER_CRON_SECRET:** Never set in production frontend. Smoke test already SKIPs cron-secret test unless explicitly enabled.

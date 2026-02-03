@@ -15,12 +15,12 @@
 - [ ] 401 on protected API redirects to login
 
 ### 1.2 Routing & Navigation
-- [ ] Every sidebar/menu click updates URL
-- [ ] Deep link to `/dashboard`, `/terminal`, `/positions` works
+- [ ] Every sidebar/menu click updates URL (use Link; pathForView/viewForPath)
+- [ ] Deep link to `/dashboard`, `/terminal`, `/positions`, `/strategy-backtest`, `/referrals`, `/packages`, `/marketplace` works
 - [ ] Deep link to `/marketplace` shows Marketplace (not Dashboard)
 - [ ] Back/forward browser buttons work
 - [ ] Refresh on any screen keeps current screen
-- [ ] No runtime hook import errors (e.g. useEffect)
+- [ ] Smoke Test: Run "Run All (Launch)" — Routing validator must PASS
 
 ### 1.3 Critical Screens (Smoke)
 - [ ] **Terminal:** Loads; Futures Quick Actions; Strategy tab; Manual Futures Order (no real order required)
@@ -48,7 +48,8 @@
 
 ### 1.6 Payments & Checkout
 - [ ] Checkout page loads
-- [ ] Coupon apply via URL param `?coupon=XXX`
+- [ ] Coupon apply via URL param `?coupon=XXX` on Packages page (`/packages?coupon=CODE`)
+- [ ] From Packages with coupon: joining fee or package checkout passes coupon + kind to Payments; coupon validates correctly
 - [ ] Payment intent creation (manual flow); admin approval
 
 ---
@@ -133,6 +134,26 @@
 ## 7. Production Build
 
 - [ ] `pnpm run build` (frontend) succeeds
+- [ ] `pnpm run check:secrets` passes (no forbidden strings in dist)
 - [ ] Backend build (if applicable) succeeds
-- [ ] No console errors in production build
+- [ ] Strategy Backtest loads with no runtime error (no "useEffect is not defined")
 - [ ] No hardcoded testnet assumptions in prod UI
+
+---
+
+## 8. Referral Payout & Coupon Verification
+
+### 8.1 Referral Payout (User)
+- [ ] Set payout wallet in Settings → Profile
+- [ ] Request payout on Referrals when balance ≥ $50
+- [ ] Payout History shows PENDING
+- [ ] Admin marks paid with tx hash; user sees PAID + tx link
+
+### 8.2 Referral Payout (Admin)
+- [ ] Payout requests list; filter by status
+- [ ] Mark paid with tx hash; audit_logs has payout_request_marked_paid
+- [ ] purchase_referral_earnings mark-paid; audit_logs has referral_payout_marked_paid
+
+### 8.3 Coupons
+- [ ] Shareable URL: `/packages?coupon=CODE` or `/payments?coupon=CODE` (from Payments directly)
+- [ ] Coupon validates with correct kind (joining_fee vs package) when coming from Subscription

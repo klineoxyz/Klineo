@@ -4,6 +4,7 @@
  */
 
 import { api } from './api';
+import { pathForView, viewForPath } from '@/app/config/routes';
 
 export interface SmokeTestResult {
   name: string;
@@ -204,9 +205,47 @@ async function getAuthHeaders(): Promise<HeadersInit> {
 }
 
 /**
+ * Routing validator: ensure pathForView and viewForPath are consistent for key routes.
+ * Prevents regressions where URL doesn't match rendered view.
+ */
+function runRoutingValidator(): SmokeTestResult {
+  try {
+    const keyViews = [
+      'dashboard', 'trading-terminal', 'positions', 'orders', 'trade-history',
+      'strategy-backtest', 'portfolio', 'subscription', 'referrals', 'fees',
+      'settings', 'marketplace', 'admin', 'payments', 'copy-trading'
+    ];
+    for (const view of keyViews) {
+      const path = pathForView(view);
+      const back = viewForPath(path);
+      if (back !== view) {
+        return {
+          name: 'Routing validator',
+          status: 'FAIL',
+          message: `pathForView("${view}") → "${path}" but viewForPath("${path}") → "${back}"`,
+        };
+      }
+    }
+    return { name: 'Routing validator', status: 'PASS', message: 'pathForView/viewForPath consistent for key routes' };
+  } catch (e) {
+    return {
+      name: 'Routing validator',
+      status: 'FAIL',
+      message: (e instanceof Error ? e.message : 'Routing config error'),
+    };
+  }
+}
+
+/**
  * Test definitions
  */
 export const smokeTests: SmokeTestDefinition[] = [
+  // Frontend routing (sync)
+  {
+    name: 'Routing validator',
+    category: 'public',
+    run: async () => runRoutingValidator(),
+  },
   // Public tests
   {
     name: 'Health Check',
@@ -1053,6 +1092,7 @@ export async function runTestByName(name: string): Promise<SmokeTestResult | nul
 
 /** Launch preset test names: Public + Auth + Runner status; Futures and Runner cron SKIP unless env set. */
 const LAUNCH_PRESET_NAMES = [
+  'Routing validator',
   'Health Check',
   'GET /api/traders (Public)',
   'GET /api/auth/me',

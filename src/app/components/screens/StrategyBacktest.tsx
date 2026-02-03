@@ -1,4 +1,7 @@
-import React, { useState, useEffect } from "react";
+import * as React from "react";
+
+// Use React.useEffect explicitly to avoid "useEffect is not defined" with recharts/libraries in production builds
+const { useState, useEffect } = React;
 import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
@@ -723,11 +726,11 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
                   <RefreshCw className="h-4 w-4" />
                   Re-run
                 </Button>
-                <Button variant="outline" size="sm" className="gap-2">
+                <Button variant="outline" size="sm" className="gap-2" onClick={() => toast.info("Optimize", { description: "Parameter optimization coming soon" })}>
                   <Zap className="h-4 w-4" />
                   Optimize
                 </Button>
-                <Button variant="outline" size="sm" className="gap-2">
+                <Button variant="outline" size="sm" className="gap-2" onClick={() => toast.info("Share", { description: "Share backtest results coming soon" })}>
                   <Share2 className="h-4 w-4" />
                   Share
                 </Button>
@@ -750,7 +753,7 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
                     </p>
                   </div>
                 </div>
-                <Button variant="outline" size="sm" className="shrink-0 w-full sm:w-auto">
+                <Button variant="outline" size="sm" className="shrink-0 w-full sm:w-auto" onClick={() => toast.info("Share", { description: "Share backtest results coming soon" })}>
                   <Share2 className="h-4 w-4 mr-2" />
                   Share
                 </Button>
@@ -788,7 +791,7 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
 
               {/* Optimize Button */}
               <div className="flex justify-end">
-                <Button className="bg-[#FFB000] hover:bg-[#FFB000]/90 text-black font-semibold w-full sm:w-auto min-h-[44px] sm:min-h-0">
+                <Button className="bg-[#FFB000] hover:bg-[#FFB000]/90 text-black font-semibold w-full sm:w-auto min-h-[44px] sm:min-h-0" onClick={() => toast.info("Optimize", { description: "Parameter optimization coming soon" })}>
                   Optimize
                 </Button>
               </div>

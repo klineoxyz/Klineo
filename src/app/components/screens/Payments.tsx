@@ -34,8 +34,13 @@ interface PaymentIntent {
 
 interface PaymentsProps {
   onNavigate: (view: string) => void;
-  /** When navigating from Subscription after creating an intent, contains { newIntent, couponCode? } so we show deposit instructions and prefill/apply coupon. */
-  viewData?: { newIntent?: { id: string; amount_usdt: number; treasury_address: string; safe_link: string; status: string }; couponCode?: string };
+  /** When navigating from Subscription after creating an intent, contains { newIntent, couponCode?, couponKind?, couponPackageCode? } so we show deposit instructions and prefill/apply coupon. */
+  viewData?: {
+    newIntent?: { id: string; amount_usdt: number; treasury_address: string; safe_link: string; status: string };
+    couponCode?: string;
+    couponKind?: "joining_fee" | "package";
+    couponPackageCode?: string;
+  };
 }
 
 export function Payments({ onNavigate, viewData }: PaymentsProps) {
@@ -78,7 +83,9 @@ export function Payments({ onNavigate, viewData }: PaymentsProps) {
     if (!code) return;
     setCouponCode(code);
     setCouponValidating(true);
-    const params = new URLSearchParams({ code, kind, package_code: packageCode });
+    const vKind = viewData?.couponKind ?? kind;
+    const vPackageCode = viewData?.couponPackageCode ?? packageCode;
+    const params = new URLSearchParams({ code, kind: vKind, package_code: vPackageCode });
     api
       .get<{ valid: boolean; discountPercent?: number; originalAmountUsdt?: number; amountUsdt?: number; error?: string }>(`/api/payments/validate-coupon?${params.toString()}`)
       .then((data) => {
@@ -94,7 +101,7 @@ export function Payments({ onNavigate, viewData }: PaymentsProps) {
       })
       .catch(() => toast.error("Could not validate coupon"))
       .finally(() => setCouponValidating(false));
-  }, [viewData?.couponCode]);
+  }, [viewData?.couponCode, viewData?.couponKind, viewData?.couponPackageCode]);
 
   useEffect(() => {
     const check = async () => {

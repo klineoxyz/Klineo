@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "build": "pnpm exec vite build",
+    "build:safe": "pnpm run build && pnpm run check:secrets",
+    "check:secrets": "node scripts/check-build-secrets.mjs",
     "dev": "pnpm exec vite",
     "db:push": "node scripts/push-db-to-supabase.mjs",
     "db:migrate": "node scripts/migrate-all-to-supabase.mjs",
