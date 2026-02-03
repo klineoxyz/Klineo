@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { Card } from "@/app/components/ui/card";
 import { Input } from "@/app/components/ui/input";
@@ -7,10 +7,11 @@ import { Button } from "@/app/components/ui/button";
 import { Switch } from "@/app/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/app/components/ui/tabs";
 import { Alert, AlertDescription } from "@/app/components/ui/alert";
-import { AlertTriangle, Key, Shield, Wifi, Trash2, CheckCircle2, XCircle, Loader2, Plus, KeyRound, RefreshCw } from "lucide-react";
+import { AlertTriangle, Key, Shield, Wifi, Trash2, CheckCircle2, XCircle, Loader2, Plus, KeyRound, RefreshCw, Upload } from "lucide-react";
 import { useAuth } from "@/app/contexts/AuthContext";
 import { useDemo } from "@/app/contexts/DemoContext";
 import { api, exchangeConnections, sanitizeExchangeError, type ExchangeConnection } from "@/lib/api";
+import { supabase } from "@/lib/supabase";
 import { toast } from "@/app/lib/toast";
 import { Badge } from "@/app/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/app/components/ui/select";
@@ -43,6 +44,8 @@ export function Settings({ onNavigate }: SettingsProps) {
   const [timezone, setTimezone] = useState("UTC");
   const [avatarUrl, setAvatarUrl] = useState("");
   const [avatarImageError, setAvatarImageError] = useState(false);
+  const [avatarUploading, setAvatarUploading] = useState(false);
+  const avatarFileInputRef = useRef<HTMLInputElement>(null);
   const [referralWallet, setReferralWallet] = useState("");
   const [paymentWalletBsc, setPaymentWalletBsc] = useState("");
   const [profileLoading, setProfileLoading] = useState(true);
@@ -78,6 +81,7 @@ export function Settings({ onNavigate }: SettingsProps) {
     profitUsedUsd: number;
     remainingUsd: number;
   } | null>(null);
+  const [entitlementRefreshLoading, setEntitlementRefreshLoading] = useState(false);
   // Update credentials (re-save API key/secret to fix decrypt errors)
   const [updateCredsConn, setUpdateCredsConn] = useState<ExchangeConnection | null>(null);
   const [updateCredsForm, setUpdateCredsForm] = useState({ apiKey: "", apiSecret: "", environment: "production" as "production" | "testnet" });
@@ -175,6 +179,51 @@ export function Settings({ onNavigate }: SettingsProps) {
     }
   };
 
+  const ALLOWED_AVATAR_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp"];
+  const MAX_AVATAR_SIZE_MB = 2;
+
+  const handleAvatarFileChange = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      e.target.value = "";
+      if (!file || !user?.id) return;
+      if (!ALLOWED_AVATAR_TYPES.includes(file.type)) {
+        toast.error("Invalid image type", { description: "Use JPEG, PNG, GIF, or WebP." });
+        return;
+      }
+      if (file.size > MAX_AVATAR_SIZE_MB * 1024 * 1024) {
+        toast.error("Image too large", { description: `Max size is ${MAX_AVATAR_SIZE_MB} MB.` });
+        return;
+      }
+      setAvatarUploading(true);
+      setAvatarImageError(false);
+      try {
+        const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
+        const safeExt = ["jpeg", "jpg", "png", "gif", "webp"].includes(ext) ? ext : "jpg";
+        const path = `${user.id}/avatar.${safeExt}`;
+        const { error: uploadError } = await supabase.storage.from("avatars").upload(path, file, { upsert: true });
+        if (uploadError) throw uploadError;
+        const { data: urlData } = supabase.storage.from("avatars").getPublicUrl(path);
+        const newUrl = urlData.publicUrl;
+        setAvatarUrl(newUrl);
+        await api.put("/api/me/profile", {
+          fullName: fullName || null,
+          username: username || null,
+          timezone: timezone || "UTC",
+          avatarUrl: newUrl,
+          referralWallet: referralWallet || null,
+          paymentWalletBsc: paymentWalletBsc || null,
+        });
+        toast.success("Profile image updated");
+      } catch (err: any) {
+        toast.error("Upload failed", { description: err?.message ?? "Please try again." });
+      } finally {
+        setAvatarUploading(false);
+      }
+    },
+    [user?.id, fullName, username, timezone, referralWallet, paymentWalletBsc]
+  );
+
   const handleConnectionTest = async () => {
     setConnectionTestLoading(true);
     setConnectionTestResult(null);
@@ -271,15 +320,16 @@ export function Settings({ onNavigate }: SettingsProps) {
   }, [user?.id]);
 
   const fetchEntitlement = useCallback(() => {
-    if (!user?.id || isDemoMode) return;
-    api.get<{
-      joiningFeePaid: boolean;
-      status: string;
-      activePackageId: string | null;
-      profitAllowanceUsd: number;
-      profitUsedUsd: number;
-      remainingUsd: number;
-    }>("/api/me/entitlement")
+    if (!user?.id || isDemoMode) return Promise.resolve();
+    return api
+      .get<{
+        joiningFeePaid: boolean;
+        status: string;
+        activePackageId: string | null;
+        profitAllowanceUsd: number;
+        profitUsedUsd: number;
+        remainingUsd: number;
+      }>("/api/me/entitlement")
       .then((d) =>
         setEntitlement({
           joiningFeePaid: d.joiningFeePaid ?? false,
@@ -290,7 +340,9 @@ export function Settings({ onNavigate }: SettingsProps) {
           remainingUsd: d.remainingUsd ?? 0,
         })
       )
-      .catch(() => setEntitlement(null));
+      .catch((err) => {
+        toast.error("Failed to refresh packages", { description: err?.message ?? "Please try again." });
+      });
   }, [user?.id, isDemoMode]);
 
   useEffect(() => {
@@ -398,7 +450,8 @@ export function Settings({ onNavigate }: SettingsProps) {
       if (result.ok) {
         toast.success('Connection test passed', { description: `Latency: ${result.latencyMs}ms` });
       } else {
-        toast.error('Connection test failed', { description: result.message });
+        const detail = (result as { error?: string }).error || result.message;
+        toast.error('Connection test failed', { description: detail });
       }
       // Reload connections to get updated status
       const data = await exchangeConnections.list();
@@ -589,14 +642,28 @@ export function Settings({ onNavigate }: SettingsProps) {
                     )}
                   </div>
                   <div className="space-y-2 min-w-0 flex-1 sm:max-w-[280px]">
-                    <Label className="text-xs text-muted-foreground">Image URL</Label>
-                    <Input
-                      placeholder="https://…"
-                      value={avatarUrl}
-                      onChange={(e) => { setAvatarUrl(e.target.value); setAvatarImageError(false); }}
-                      disabled={profileLoading}
-                      className="font-mono text-sm"
+                    <input
+                      ref={avatarFileInputRef}
+                      type="file"
+                      accept="image/jpeg,image/png,image/gif,image/webp"
+                      className="hidden"
+                      onChange={handleAvatarFileChange}
                     />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={profileLoading || avatarUploading}
+                      onClick={() => avatarFileInputRef.current?.click()}
+                    >
+                      {avatarUploading ? (
+                        <Loader2 className="size-4 mr-2 animate-spin" />
+                      ) : (
+                        <Upload className="size-4 mr-2" />
+                      )}
+                      {avatarUploading ? "Uploading…" : "Upload image"}
+                    </Button>
+                    <p className="text-xs text-muted-foreground">JPEG, PNG, GIF or WebP. Max {MAX_AVATAR_SIZE_MB} MB.</p>
                   </div>
                 </div>
               </div>
@@ -1208,7 +1275,14 @@ export function Settings({ onNavigate }: SettingsProps) {
                           <div>Last tested: {new Date(conn.last_tested_at).toLocaleString()}</div>
                         )}
                         {conn.last_error_message && (
-                          <div className="text-[#EF4444]">Error: {conn.last_error_message}</div>
+                          <>
+                            <div className="text-[#EF4444]">Error: {conn.last_error_message}</div>
+                            {/restricted|eligibility|451|region|unavailable.*location/i.test(conn.last_error_message) && (
+                              <p className="text-xs text-muted-foreground mt-1">
+                                Binance may block both Spot and Futures API access from the server&apos;s or your region. Your API key can be valid; the test runs from our server, which might be in a restricted location.
+                              </p>
+                            )}
+                          </>
                         )}
                         {conn.disabled_at && (
                           <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
@@ -1406,9 +1480,21 @@ export function Settings({ onNavigate }: SettingsProps) {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => fetchEntitlement()}
+                disabled={entitlementRefreshLoading}
+                onClick={() => {
+                  if (isDemoMode) {
+                    toast.info("Packages", { description: "Refresh is not available in demo mode." });
+                    return;
+                  }
+                  setEntitlementRefreshLoading(true);
+                  fetchEntitlement().finally(() => setEntitlementRefreshLoading(false));
+                }}
               >
-                <RefreshCw className="size-4 mr-2" />
+                {entitlementRefreshLoading ? (
+                  <Loader2 className="size-4 mr-2 animate-spin" />
+                ) : (
+                  <RefreshCw className="size-4 mr-2" />
+                )}
                 Refresh
               </Button>
             </div>

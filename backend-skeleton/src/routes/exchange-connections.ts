@@ -326,11 +326,12 @@ exchangeConnectionsRouter.post(
         .eq('id', connectionId)
         .eq('user_id', req.user!.id);
 
-      // Return test result (no secrets)
+      // Return test result (no secrets); include error detail so UI can show Binance message (e.g. restricted location)
       res.json({
         ok: testResult.ok,
         latencyMs: testResult.latencyMs,
         message: testResult.message,
+        error: testResult.error ?? undefined,
         requestId,
       });
     } catch (err) {

@@ -137,14 +137,33 @@ async function signedRequest<T>(
     signal: AbortSignal.timeout(10000),
   });
 
-  const data = await response.json();
+  const rawText = await response.text();
 
   if (!response.ok) {
-    const error = data as BinanceError;
-    throw new Error(`Binance API error (${error.code}): ${error.msg || response.statusText}`);
+    let errMsg: string;
+    try {
+      const data = JSON.parse(rawText) as BinanceError;
+      errMsg = data.msg ? String(data.msg) : response.statusText;
+      const code = typeof data.code === 'number' ? data.code : response.status;
+      throw new Error(`Binance API error (${code}): ${errMsg}`);
+    } catch (parseErr) {
+      if (parseErr instanceof Error && parseErr.message.startsWith('Binance API error')) throw parseErr;
+      // Non-JSON response (e.g. HTML 451 page) — use status and snippet of body so "restricted location" is visible
+      const snippet = rawText.slice(0, 200).replace(/\s+/g, ' ').trim();
+      const statusMsg = response.status === 451
+        ? (snippet || 'Service unavailable from a restricted location (HTTP 451).')
+        : (snippet || response.statusText || `HTTP ${response.status}`);
+      throw new Error(`Binance API error (${response.status}): ${statusMsg}`);
+    }
   }
 
-  return data as T;
+  let data: T;
+  try {
+    data = JSON.parse(rawText) as T;
+  } catch {
+    throw new Error(`Binance API error (${response.status}): Invalid response body`);
+  }
+  return data;
 }
 
 /**
