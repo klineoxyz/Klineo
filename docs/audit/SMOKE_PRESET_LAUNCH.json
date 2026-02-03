@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "name": "Run All (Launch)",
+  "description": "Production-safe Launch preset. Skips exchange tests (require VITE_ENABLE_EXCHANGE_SMOKE_TESTS) and cron-secret test (require VITE_ENABLE_RUNNER_CRON_TEST). Never uses VITE_RUNNER_CRON_SECRET in production.",
+  "productionSafe": true,
+  "adminOnly": true,
+  "tests": [
+    "Health Check",
+    "GET /api/traders (Public)",
+    "GET /api/auth/me",
+    "GET /api/me/profile",
+    "GET /api/exchange-connections",
+    "GET /api/portfolio/summary",
+    "GET /api/positions",
+    "GET /api/orders",
+    "GET /api/trades",
+    "GET /api/notifications",
+    "GET /api/runner/status",
+    "POST /api/runner/cron",
+    "POST /api/exchange-connections/:id/futures/test",
+    "POST /api/exchange-connections/:id/futures/enable",
+    "POST /api/futures/order",
+    "POST /api/runner/cron (cron-secret)"
+  ],
+  "skipRules": {
+    "POST /api/exchange-connections/:id/futures/test": "VITE_ENABLE_EXCHANGE_SMOKE_TESTS not set",
+    "POST /api/exchange-connections/:id/futures/enable": "VITE_ENABLE_EXCHANGE_SMOKE_TESTS not set",
+    "POST /api/futures/order": "VITE_ENABLE_EXCHANGE_SMOKE_TESTS not set",
+    "POST /api/runner/cron (cron-secret)": "VITE_ENABLE_RUNNER_CRON_TEST not set; never use VITE_RUNNER_CRON_SECRET in prod"
+  },
+  "implementation": "src/lib/smokeTests.ts runLaunchTests()"
+}

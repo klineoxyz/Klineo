@@ -82,10 +82,16 @@ export const VIEW_TO_PATH: Record<string, string> = {
   "copy-setup": ROUTES.marketplace,
 };
 
-/** Path to view id for Sidebar active state */
+/** Path to view id for Sidebar active state. Prefer primary view when multiple views share a path (e.g. /marketplace). */
 export const PATH_TO_VIEW: Record<string, string> = {};
+const PRIMARY_VIEW_FOR_PATH: Record<string, string> = { [ROUTES.marketplace]: 'marketplace' };
 Object.entries(VIEW_TO_PATH).forEach(([view, path]) => {
-  PATH_TO_VIEW[path] = view;
+  const primary = PRIMARY_VIEW_FOR_PATH[path];
+  if (primary) {
+    if (view === primary) PATH_TO_VIEW[path] = view;
+  } else {
+    PATH_TO_VIEW[path] = view;
+  }
 });
 
 export function pathForView(view: string): string {

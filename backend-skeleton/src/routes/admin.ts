@@ -787,6 +787,17 @@ adminRouter.patch('/referrals/:id/mark-paid', async (req, res) => {
       return res.status(404).json({ error: 'Payout not found' });
     }
 
+    const adminId = (req as AuthenticatedRequest).user?.id;
+    if (adminId) {
+      await client.from('audit_logs').insert({
+        admin_id: adminId,
+        action_type: 'referral_payout_marked_paid',
+        entity_type: 'purchase_referral_earnings',
+        entity_id: id,
+        details: { transaction_id: typeof transactionId === 'string' && transactionId.trim() ? transactionId.trim() : null },
+      });
+    }
+
     res.json({ ok: true, id: data.id });
   } catch (err) {
     console.error('Admin mark-paid error:', err);
