@@ -944,6 +944,9 @@ export function Settings({ onNavigate }: SettingsProps) {
                 {connectionTestLoading ? "Testing..." : "Test Connection"}
               </Button>
             </div>
+            {typeof import.meta.env.VITE_APP_VERSION === 'string' && (
+              <p className="text-xs text-muted-foreground mt-2" title="Build version">App v{import.meta.env.VITE_APP_VERSION}</p>
+            )}
           </Card>
 
           <Card className="p-6 space-y-4 border-primary/20 bg-primary/5">

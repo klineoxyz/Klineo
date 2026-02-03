@@ -7,6 +7,9 @@
 
 ## 1. Manual QA Checklist (User Flows)
 
+### 0. Pre-Launch Blocker
+- [ ] **Referral codes:** Confirm Referrals page shows real user-specific code/link (not `KLINEO-XYZ123`). Do not launch until fixed.
+
 ### 1.1 Authentication
 - [ ] Sign up with email/password; verify profile created
 - [ ] Login; verify redirect to dashboard
@@ -133,8 +136,9 @@
 
 ## 7. Production Build
 
-- [ ] `pnpm run build` (frontend) succeeds
+- [ ] `pnpm run build:safe` (frontend) succeeds
 - [ ] `pnpm run check:secrets` passes (no forbidden strings in dist)
+- [ ] Footer shows build version (v0.0.1); Settings → Profile shows "App v0.0.1"
 - [ ] Backend build (if applicable) succeeds
 - [ ] Strategy Backtest loads with no runtime error (no "useEffect is not defined")
 - [ ] No hardcoded testnet assumptions in prod UI
@@ -158,3 +162,4 @@
 ### 8.3 Coupons
 - [ ] Shareable URL: `/packages?coupon=CODE` or `/payments?coupon=CODE` (from Payments directly)
 - [ ] Coupon validates with correct kind (joining_fee vs package) when coming from Subscription
+- [ ] Admin → Discount Coupons: Filter by coupon code (search input); Payment Intents list shows coupon_code for usage

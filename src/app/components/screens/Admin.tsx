@@ -69,6 +69,7 @@ export function Admin() {
   const [payoutRequestRejectReason, setPayoutRequestRejectReason] = useState("");
   const [payoutRequestRejectLoading, setPayoutRequestRejectLoading] = useState(false);
   const [coupons, setCoupons] = useState<any[]>([]);
+  const [couponSearchCode, setCouponSearchCode] = useState("");
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
   const [paymentIntents, setPaymentIntents] = useState<any[]>([]);
   const [paymentIntentsLoading, setPaymentIntentsLoading] = useState(false);
@@ -1695,15 +1696,23 @@ export function Admin() {
 
           {/* Discount Coupons list */}
           <Card>
-            <div className="p-6 border-b border-border flex items-center justify-between flex-wrap gap-2">
+            <div className="p-6 border-b border-border flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <div>
                 <h3 className="text-lg font-semibold">Discount Coupons</h3>
                 <p className="text-sm text-muted-foreground mt-1">{coupons.filter(c => c.status === "Active").length} active · Onboarding and/or trading packages</p>
               </div>
-              <Button variant="outline" size="sm" onClick={loadCoupons}>
-                <RefreshCw className="size-4 mr-2" />
-                Refresh
-              </Button>
+              <div className="flex gap-2 flex-wrap">
+                <Input
+                  placeholder="Filter by coupon code"
+                  value={couponSearchCode}
+                  onChange={(e) => setCouponSearchCode(e.target.value)}
+                  className="max-w-[200px] font-mono text-sm"
+                />
+                <Button variant="outline" size="sm" onClick={loadCoupons}>
+                  <RefreshCw className="size-4 mr-2" />
+                  Refresh
+                </Button>
+              </div>
             </div>
             {couponsLoading ? (
               <div className="p-8 text-center text-muted-foreground">Loading coupons...</div>
@@ -1731,7 +1740,9 @@ export function Admin() {
                       </TableCell>
                     </TableRow>
                   ) : (
-                    coupons.map((coupon) => (
+                    coupons
+                      .filter((c) => !couponSearchCode.trim() || (c.code || "").toLowerCase().includes(couponSearchCode.trim().toLowerCase()))
+                      .map((coupon) => (
                       <TableRow key={coupon.id}>
                         <TableCell className="font-mono font-semibold text-primary">{coupon.code}</TableCell>
                         <TableCell className="font-mono text-[#10B981] font-semibold">{coupon.discount}%</TableCell>

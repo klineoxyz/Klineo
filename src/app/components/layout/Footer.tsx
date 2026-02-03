@@ -243,6 +243,9 @@ export function Footer({ onNavigate }: FooterProps) {
         <div className="border-t border-border pt-8 flex flex-col md:flex-row justify-between items-center gap-4">
           <p className="text-xs text-muted-foreground">
             © 2026 KLINEO. All rights reserved. Not financial advice.
+            {typeof import.meta.env.VITE_APP_VERSION === 'string' && (
+              <span className="ml-2" title="Build version">v{import.meta.env.VITE_APP_VERSION}</span>
+            )}
           </p>
           <div className="flex items-center gap-6">
             <a href="#" className="text-xs text-muted-foreground hover:text-foreground transition">

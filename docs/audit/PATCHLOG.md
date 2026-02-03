@@ -88,6 +88,18 @@
 
 ---
 
+## P7: Final doc + beta readiness (2025-02-03)
+
+**Files:** ONBOARDING_READY.md, AUDIT_REPORT.md, TEST_PLAN.md, Admin.tsx, Footer.tsx, Settings.tsx, vite.config.ts
+
+**Change:**
+- Mark referral placeholder (KLINEO-XYZ123) as GO/NO-GO blocker in all docs
+- Add admin coupon search filter (Filter by coupon code input on Discount Coupons)
+- Add Production Config Sanity and Version verification to 10-min checklist
+- Add VITE_APP_VERSION (from package.json or env) — Footer + Settings show build version
+
+---
+
 ## No Changes (Documented Only)
 
 - **VITE_RUNNER_CRON_SECRET:** Never set in production frontend. Smoke test already SKIPs cron-secret test unless explicitly enabled.

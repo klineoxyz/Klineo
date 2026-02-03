@@ -10,9 +10,11 @@
 
 ## Executive Summary
 
-**Launch Readiness: CONDITIONAL GO**
+**Launch Readiness: NO-GO until referral codes are real**
 
-The KLINEO platform is architecturally sound with proper auth, RLS, and rate limiting. Critical routing bug and missing audit log for referral payouts have been patched. No secrets are exposed in frontend bundle when configured correctly. The following items require attention before production launch.
+**GO/NO-GO BLOCKER:** The Referrals page displays placeholder code `KLINEO-XYZ123` and link `https://klineo.xyz/ref/XYZ123`. Do not onboard users until real user-specific referral codes are wired.
+
+The platform is architecturally sound with proper auth, RLS, and rate limiting. Critical routing bug and missing audit log for referral payouts have been patched. No secrets are exposed in frontend bundle when configured correctly.
 
 ---
 
@@ -20,7 +22,7 @@ The KLINEO platform is architecturally sound with proper auth, RLS, and rate lim
 
 | Severity | Count | Description |
 |----------|-------|-------------|
-| Critical | 0 | Issues that would cause data loss, privilege escalation, or secret exposure in default config |
+| Critical | 1 | Referral links/codes are placeholder (KLINEO-XYZ123) — blocks onboarding |
 | High | 2 | Fixed: Marketplace route bug; Missing audit log for payout mark-paid |
 | Medium | 4 | See findings below |
 | Low | 3 | Minor hardening recommendations |
@@ -79,12 +81,20 @@ The KLINEO platform is architecturally sound with proper auth, RLS, and rate lim
 - **Impact:** `/api/self-test/*` and `/api/launch/*` require admin JWT. Properly gated.
 - **Status:** No action.
 
+### F-9: Referral links/codes are placeholder (BLOCKER)
+- **Severity:** Critical
+- **Impact:** Referrals page shows hardcoded `KLINEO-XYZ123` / `https://klineo.xyz/ref/XYZ123` — not user-specific. Users sharing this link would all get the same placeholder.
+- **Files:** `src/app/components/screens/Referrals.tsx`
+- **Recommendation:** Do not onboard until real referral API returns user-specific code/link.
+- **Status:** Documented as GO/NO-GO blocker.
+
 ---
 
 ## Go/No-Go Checklist
 
 | Item | Status |
 |------|--------|
+| **Real referral codes** (not placeholder) | ❌ BLOCKER |
 | No secrets in frontend bundle (apiKey, apiSecret, service_role, cron secret) | ✅ |
 | Only VITE_* env in frontend | ✅ |
 | Admin UI gated (role check + route guard) | ✅ |

@@ -1,7 +1,20 @@
 # KLINEO Onboarding Readiness
 
 **Date:** 2025-02-03  
-**Status:** BETA-READY
+**Status:** NOT YET — Placeholder referral links block onboarding
+
+---
+
+## GO/NO-GO BLOCKER
+
+**Do not onboard users until real referral codes are enabled.**
+
+The Referrals page (`src/app/components/screens/Referrals.tsx`) currently displays **placeholder** values:
+- Code: `KLINEO-XYZ123`
+- Link: `https://klineo.xyz/ref/XYZ123`
+- Earnings data is hardcoded
+
+These are not user-specific. Wire the Referrals page to a real API that returns the current user's referral code/link before beta launch.
 
 ---
 
@@ -31,12 +44,21 @@ Run through these steps in production (or staging with prod-like config):
 - [ ] Admin: Create coupon; copy shareable link; User discounts shows assignments
 
 ### 5. Security (2 min)
-- [ ] `pnpm run build` then `pnpm run check:secrets` — passes
+- [ ] `pnpm run build:safe` — passes (build + check:secrets)
 - [ ] No `VITE_RUNNER_CRON_SECRET` or `SUPABASE_SERVICE_ROLE_KEY` in frontend env
 - [ ] Non-admin cannot access `/admin` — redirected to Dashboard
 
-### 6. Builds (1 min)
-- [ ] `pnpm run build` (frontend) — succeeds
+### 6. Production Config Sanity
+- [ ] **Railway (backend):** `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `ENCRYPTION_KEY`, `FRONTEND_URL`, `ADMIN_EMAILS`, `RUNNER_CRON_SECRET` (if runner enabled)
+- [ ] **Vercel (frontend):** `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_API_BASE_URL` only — no service role, no cron secret
+- [ ] **Cron secret:** Only in Railway backend env; never in Vercel/frontend
+
+### 7. Version / Commit Verification
+- [ ] Footer or Settings shows build version (e.g. `v0.0.1` or commit hash)
+- [ ] Deployed version matches expected commit (check git SHA or version in UI)
+
+### 8. Builds (1 min)
+- [ ] `pnpm run build:safe` (frontend) — succeeds
 - [ ] `cd backend-skeleton && pnpm run build` — succeeds
 
 ---
@@ -45,6 +67,7 @@ Run through these steps in production (or staging with prod-like config):
 
 | Criterion | Required |
 |-----------|----------|
+| **Real referral codes** (not placeholder) | **BLOCKER** |
 | All main routes update URL on navigation | Yes |
 | Deep link + refresh render correct screen | Yes |
 | Strategy Backtest loads without crash | Yes |
@@ -53,15 +76,15 @@ Run through these steps in production (or staging with prod-like config):
 | Audit logs for payout mark-paid | Yes |
 | check:secrets passes | Yes |
 | Admin routes gated | Yes |
+| Production config: service role only in Railway, anon only in frontend | Yes |
 
 ---
 
 ## Known Limitations for Beta
 
-1. **Referral code/link**: Referrals page uses placeholder `KLINEO-XYZ123` / `https://klineo.xyz/ref/XYZ123` until referral API returns real user code.
-2. **Coupon redemption tracking**: Admin sees coupon `currentRedemptions`; "who used" requires scanning payment_intents by coupon_code (no dedicated redemption table).
-3. **Admin filter by coupon code**: Coupons list shows all; no search/filter API — use browser Find or scroll.
-4. **Playwright E2E**: Not added; manual QA + smoke test preset used for launch.
+1. **Referral code/link (BLOCKER):** Referrals page uses **placeholder** `KLINEO-XYZ123` / `https://klineo.xyz/ref/XYZ123`. Do not onboard until real user-specific referral codes are wired.
+2. **Coupon admin:** Search filter by coupon code on Discount Coupons list; usage visible via `currentRedemptions`; payment_intents list shows `coupon_code` (masked user id) for who used.
+3. **Playwright E2E:** Not added; manual QA + smoke test preset used for launch.
 
 ---
 
@@ -83,6 +106,12 @@ Run through these steps in production (or staging with prod-like config):
 ```bash
 pnpm run build          # Frontend
 pnpm run check:secrets  # Scan dist for forbidden strings
-pnpm run build:safe     # Build + check:secrets
+pnpm run build:safe     # Build + check:secrets (recommended for deploy)
 cd backend-skeleton && pnpm run build  # Backend
 ```
+
+## Coupons Admin Visibility
+
+- **Filter by coupon code:** Admin → Discount Coupons → search input filters list by code (client-side).
+- **Who received:** User-Specific Discounts table shows assignments (user email, code, claim link).
+- **Who used:** Coupons table shows `currentRedemptions`; Payment Intents list shows `coupon_code` per intent (masked user_id in API; no PII).
