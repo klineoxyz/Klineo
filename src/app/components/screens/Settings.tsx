@@ -1280,7 +1280,9 @@ export function Settings({ onNavigate }: SettingsProps) {
                         )}
                         {conn.last_error_message && (
                           <>
-                            <div className="text-[#EF4444]">Error: {conn.last_error_message}</div>
+                            <div className="text-[#EF4444] break-words" title={conn.last_error_message}>
+                              Error: {conn.last_error_message}
+                            </div>
                             {/restricted|eligibility|451|region|unavailable.*location/i.test(conn.last_error_message) && (
                               <p className="text-xs text-muted-foreground mt-1">
                                 Binance restricts access by the <strong>request origin IP</strong> (our server). Your API key can be valid; if you are in an allowed region, the platform can route API calls via a proxy in that region. Contact support or check deployment docs for BINANCE_HTTP_PROXY.

@@ -143,6 +143,8 @@ export interface TestConnectionResponse {
   ok: boolean;
   latencyMs: number;
   message: string;
+  /** Present when ok is false; e.g. Binance "Service unavailable from a restricted location" */
+  error?: string;
   requestId: string;
 }
 
