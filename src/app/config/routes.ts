@@ -16,6 +16,7 @@ export const ROUTES = {
   riskDisclosure: "/risk-disclosure",
   login: "/login",
   signup: "/signup",
+  ref: "/ref", // /ref/:code — store code, redirect to signup
   // App (authenticated)
   dashboard: "/dashboard",
   terminal: "/terminal",
@@ -101,6 +102,8 @@ export function pathForView(view: string): string {
 export function viewForPath(path: string): string {
   return PATH_TO_VIEW[path] ?? "dashboard";
 }
+
+export const REF_CODE_STORAGE_KEY = 'klineo_ref_code';
 
 export const PUBLIC_PATHS = new Set([
   ROUTES.landing,

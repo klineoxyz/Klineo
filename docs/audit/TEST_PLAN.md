@@ -8,8 +8,8 @@
 
 ## 1. Manual QA Checklist (User Flows)
 
-### 0. Pre-Launch Blocker
-- [ ] **Referral codes:** Confirm Referrals page shows real user-specific code/link (not `KLINEO-XYZ123`). Do not launch until fixed.
+### 0. Pre-Launch
+- [ ] **Referral codes:** Smoke test "Referral code real + self-referral blocked" passes. Referrals page shows real code/link from GET /api/referrals/me.
 
 ### 1.1 Authentication
 - [ ] Sign up with email/password; verify profile created

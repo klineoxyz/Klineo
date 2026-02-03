@@ -10,6 +10,18 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { explainPurchaseEarnings } from '../lib/explainPurchaseEarnings.js';
 
 const MIN_PAYOUT_USD = 50;
+const REFERRAL_CODE_PREFIX = 'KLINEO-';
+const REFERRAL_CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Exclude I,O,0,1 for clarity
+const REFERRAL_CODE_LEN = 8;
+
+/** Generate collision-resistant referral code: KLINEO-XXXXXXXX */
+function generateReferralCode(): string {
+  let s = '';
+  for (let i = 0; i < REFERRAL_CODE_LEN; i++) {
+    s += REFERRAL_CODE_CHARS.charAt(Math.floor(Math.random() * REFERRAL_CODE_CHARS.length));
+  }
+  return REFERRAL_CODE_PREFIX + s;
+}
 
 let supabase: SupabaseClient | null = null;
 
@@ -50,6 +62,160 @@ async function getPendingApprovedTotal(client: SupabaseClient, userId: string): 
 
 export const referralsRouter: Router = Router();
 referralsRouter.use(verifySupabaseJWT);
+
+/**
+ * GET /api/referrals/me
+ * Returns user's referral code, link, earnings summary, payout wallet, payout requests.
+ * Auto-generates referral_code on first access if missing.
+ */
+referralsRouter.get('/me', async (req: AuthenticatedRequest, res: Response) => {
+  const client = getSupabase();
+  if (!client) return res.status(503).json({ error: 'Database unavailable' });
+
+  const userId = req.user!.id;
+  const baseUrl = (process.env.FRONTEND_URL || 'https://www.klineo.xyz').replace(/\/$/, '');
+
+  try {
+    const { data: profile, error: profErr } = await client
+      .from('user_profiles')
+      .select('referral_code')
+      .eq('id', userId)
+      .single();
+
+    if (profErr) return res.status(500).json({ error: 'Failed to load profile' });
+
+    let referralCode = (profile as { referral_code?: string } | null)?.referral_code?.trim();
+    if (!referralCode) {
+      for (let attempt = 0; attempt < 10; attempt++) {
+        referralCode = generateReferralCode();
+        const { error: upErr } = await client
+          .from('user_profiles')
+          .update({ referral_code: referralCode, updated_at: new Date().toISOString() })
+          .eq('id', userId)
+          .is('referral_code', null);
+        if (!upErr) break;
+        if (attempt === 9) return res.status(500).json({ error: 'Failed to generate referral code' });
+      }
+    }
+
+    const referralLink = referralCode ? `${baseUrl}/ref/${encodeURIComponent(referralCode)}` : null;
+    const available = await getAvailableRewardsUsd(client, userId);
+    const pendingApproved = await getPendingApprovedTotal(client, userId);
+    const requestable = Math.max(0, available - pendingApproved);
+
+    const { data: prof } = await client
+      .from('user_profiles')
+      .select('payout_wallet_address, referral_wallet')
+      .eq('id', userId)
+      .single();
+    const p = prof as { payout_wallet_address?: string; referral_wallet?: string } | null;
+    const payoutWallet = (p?.payout_wallet_address?.trim() || p?.referral_wallet?.trim() || null) ?? null;
+
+    const { data: requests } = await client
+      .from('payout_requests')
+      .select('id, amount, currency, status, created_at, paid_at, rejection_reason, payout_tx_id')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false });
+    const payoutRequests = (requests || []).map((r: Record<string, unknown>) => ({
+      id: r.id,
+      amount: parseFloat(String(r.amount ?? 0)),
+      currency: r.currency ?? 'USDT',
+      status: r.status,
+      createdAt: r.created_at,
+      paidAt: r.paid_at ?? null,
+      rejectionReason: r.rejection_reason ?? null,
+      payoutTxId: r.payout_tx_id ?? null,
+    }));
+
+    const { data: earnings } = await client.from('purchase_referral_earnings').select('amount').eq('user_id', userId);
+    const totalEarned = (earnings || []).reduce((s, e) => s + Number(e.amount ?? 0), 0);
+    const { data: paidRows } = await client.from('payout_requests').select('amount').eq('user_id', userId).eq('status', 'PAID');
+    const totalPaidOut = (paidRows || []).reduce((s, r) => s + Number(r.amount ?? 0), 0);
+
+    return res.json({
+      referralCode: referralCode || null,
+      referralLink: referralLink || null,
+      earningsSummary: {
+        totalEarnedUsd: Math.round(totalEarned * 100) / 100,
+        paidUsd: Math.round(totalPaidOut * 100) / 100,
+        pendingUsd: Math.round(Math.max(0, totalEarned - totalPaidOut) * 100) / 100,
+        availableUsd: Math.round(available * 100) / 100,
+        requestableUsd: Math.round(requestable * 100) / 100,
+        minPayoutUsd: MIN_PAYOUT_USD,
+      },
+      payoutWallet,
+      payoutRequests,
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Unknown error';
+    return res.status(500).json({ error: msg });
+  }
+});
+
+/**
+ * POST /api/referrals/claim
+ * Body: { code }. Claims referral attribution. Idempotent: cannot overwrite existing referred_by.
+ * Self-referral blocked. Creates referrals row (referrer_id, referred_id) for upline.
+ */
+referralsRouter.post(
+  '/claim',
+  validate([body('code').trim().notEmpty().withMessage('code is required')]),
+  async (req: AuthenticatedRequest, res: Response) => {
+    const client = getSupabase();
+    if (!client) return res.status(503).json({ error: 'Database unavailable' });
+
+    const userId = req.user!.id;
+    const code = String(req.body.code || '').trim().toUpperCase();
+    if (!code) return res.status(400).json({ error: 'Referral code is required' });
+
+    try {
+      const { data: referrerProfile } = await client
+        .from('user_profiles')
+        .select('id, referral_code')
+        .eq('referral_code', code)
+        .maybeSingle();
+
+      if (!referrerProfile || (referrerProfile.referral_code || '').toUpperCase() !== code) {
+        return res.status(400).json({ error: 'Invalid referral code' });
+      }
+      const referrerId = referrerProfile.id as string;
+      if (referrerId === userId) {
+        return res.status(400).json({ error: 'Cannot use your own referral code' });
+      }
+
+      const { data: myProfile } = await client
+        .from('user_profiles')
+        .select('referred_by_user_id')
+        .eq('id', userId)
+        .single();
+      const existingRef = (myProfile as { referred_by_user_id?: string } | null)?.referred_by_user_id;
+      if (existingRef) {
+        return res.json({ claimed: true, message: 'Already referred' });
+      }
+
+      await client.from('user_profiles').update({
+        referred_by_user_id: referrerId,
+        updated_at: new Date().toISOString(),
+      }).eq('id', userId);
+
+      const { error: insErr } = await client.from('referrals').insert(
+        { referrer_id: referrerId, referred_id: userId, tier: 1 }
+      );
+      if (insErr) {
+        await client.from('user_profiles').update({
+          referred_by_user_id: null,
+          updated_at: new Date().toISOString(),
+        }).eq('id', userId);
+        return res.status(500).json({ error: 'Failed to create referral' });
+      }
+
+      return res.json({ claimed: true });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Unknown error';
+      return res.status(500).json({ error: msg });
+    }
+  }
+);
 
 /** Mask email for display: u***@***.com */
 function maskEmail(email: string | null | undefined): string {

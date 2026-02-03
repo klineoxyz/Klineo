@@ -11,41 +11,19 @@ import { toast } from "@/app/lib/toast";
 import { copyToClipboard } from "@/app/lib/clipboard";
 import { api } from "@/lib/api";
 
-const referralData = {
-  code: "KLINEO-XYZ123",
-  link: "https://klineo.xyz/ref/XYZ123",
-  tier1Earnings: 1275.50,
-  tier2Earnings: 342.80,
-  pendingEarnings: 85.00,
-  paidEarnings: 1533.30,
-};
-
-const earningsHistory = [
-  { user: "user_abc***", level: 1, purchaseAmount: 100, sharePct: 26.25, amount: 26.25, status: "Paid" },
-  { user: "user_def***", level: 1, purchaseAmount: 80, sharePct: 26.25, amount: 21.00, status: "Paid" },
-  { user: "user_ghi***", level: 2, purchaseAmount: 60, sharePct: 17.5, amount: 10.50, status: "Paid" },
-  { user: "user_jkl***", level: 1, purchaseAmount: 120, sharePct: 26.25, amount: 31.50, status: "Pending" },
-  { user: "user_mno***", level: 2, purchaseAmount: 50, sharePct: 17.5, amount: 8.75, status: "Pending" },
-];
-
-interface ReferralsProps {
-  onNavigate: (view: string) => void;
-}
-
-type PayoutSummary = {
-  availableRewardsUsd: number;
-  requestableUsd: number;
-  minPayoutUsd: number;
-  payoutWalletAddress: string | null;
-};
-
-export function Referrals({ onNavigate }: ReferralsProps) {
-  const [copied, setCopied] = useState<string | null>(null);
-  const [payoutSummary, setPayoutSummary] = useState<PayoutSummary | null>(null);
-  const [payoutSummaryLoading, setPayoutSummaryLoading] = useState(true);
-  const [requestPayoutLoading, setRequestPayoutLoading] = useState(false);
-
-  type PayoutRequestRow = {
+type ReferralMeData = {
+  referralCode: string | null;
+  referralLink: string | null;
+  earningsSummary: {
+    totalEarnedUsd: number;
+    paidUsd: number;
+    pendingUsd: number;
+    availableUsd: number;
+    requestableUsd: number;
+    minPayoutUsd: number;
+  };
+  payoutWallet: string | null;
+  payoutRequests: Array<{
     id: string;
     amount: number;
     currency: string;
@@ -54,64 +32,53 @@ export function Referrals({ onNavigate }: ReferralsProps) {
     paidAt: string | null;
     rejectionReason: string | null;
     payoutTxId: string | null;
-  };
-  const [myPayoutRequests, setMyPayoutRequests] = useState<PayoutRequestRow[]>([]);
-  const [myPayoutRequestsLoading, setMyPayoutRequestsLoading] = useState(true);
+  }>;
+};
 
-  const fetchPayoutSummary = () => {
+interface ReferralsProps {
+  onNavigate: (view: string) => void;
+}
+
+type MyReferralRow = { referredDisplay: string; joinedAt: string; totalSpendUsd: number; yourEarningsFromThemUsd: number };
+
+export function Referrals({ onNavigate }: ReferralsProps) {
+  const [copied, setCopied] = useState<string | null>(null);
+  const [referralMe, setReferralMe] = useState<ReferralMeData | null>(null);
+  const [referralMeLoading, setReferralMeLoading] = useState(true);
+  const [requestPayoutLoading, setRequestPayoutLoading] = useState(false);
+  const [myReferrals, setMyReferrals] = useState<MyReferralRow[]>([]);
+
+  const fetchReferralMe = () => {
+    setReferralMeLoading(true);
     api
-      .get<PayoutSummary>("/api/referrals/payout-summary")
-      .then(setPayoutSummary)
-      .catch(() => setPayoutSummary(null));
+      .get<ReferralMeData>("/api/referrals/me")
+      .then(setReferralMe)
+      .catch(() => setReferralMe(null))
+      .finally(() => setReferralMeLoading(false));
   };
 
   useEffect(() => {
-    let cancelled = false;
-    setPayoutSummaryLoading(true);
-    api
-      .get<PayoutSummary>("/api/referrals/payout-summary")
-      .then((data) => { if (!cancelled) setPayoutSummary(data); })
-      .catch(() => { if (!cancelled) setPayoutSummary(null); })
-      .finally(() => { if (!cancelled) setPayoutSummaryLoading(false); });
-    return () => { cancelled = true; };
+    fetchReferralMe();
   }, []);
 
   useEffect(() => {
-    const onVisible = () => {
-      fetchPayoutSummary();
-    };
+    const onVisible = () => fetchReferralMe();
     document.addEventListener("visibilitychange", onVisible);
     return () => document.removeEventListener("visibilitychange", onVisible);
   }, []);
 
-  const refetchPayoutSummary = () => {
-    api
-      .get<PayoutSummary>("/api/referrals/payout-summary")
-      .then(setPayoutSummary)
-      .catch(() => setPayoutSummary(null));
-  };
-
   useEffect(() => {
-    let cancelled = false;
-    setMyPayoutRequestsLoading(true);
     api
-      .get<{ payoutRequests: PayoutRequestRow[] }>("/api/referrals/my-payout-requests")
-      .then((data) => { if (!cancelled) setMyPayoutRequests(data.payoutRequests ?? []); })
-      .catch(() => { if (!cancelled) setMyPayoutRequests([]); })
-      .finally(() => { if (!cancelled) setMyPayoutRequestsLoading(false); });
-    return () => { cancelled = true; };
+      .get<{ referrals: MyReferralRow[] }>("/api/referrals/my-referrals")
+      .then((data) => setMyReferrals(data.referrals ?? []))
+      .catch(() => setMyReferrals([]));
   }, []);
 
-  const refetchMyPayoutRequests = () => {
-    api
-      .get<{ payoutRequests: PayoutRequestRow[] }>("/api/referrals/my-payout-requests")
-      .then((data) => setMyPayoutRequests(data.payoutRequests ?? []))
-      .catch(() => setMyPayoutRequests([]));
-  };
-
   const handleRequestPayout = async () => {
-    if (!payoutSummary || payoutSummary.requestableUsd < payoutSummary.minPayoutUsd || !payoutSummary.payoutWalletAddress) return;
-    const amount = Math.round(payoutSummary.requestableUsd * 100) / 100;
+    const summary = referralMe?.earningsSummary;
+    const wallet = referralMe?.payoutWallet;
+    if (!summary || summary.requestableUsd < summary.minPayoutUsd || !wallet) return;
+    const amount = Math.round(summary.requestableUsd * 100) / 100;
     setRequestPayoutLoading(true);
     try {
       await api.post("/api/referrals/payout-request", { amount });
@@ -143,34 +110,43 @@ export function Referrals({ onNavigate }: ReferralsProps) {
       <Card className="p-4 sm:p-6 flex flex-col gap-6 overflow-visible">
         <section className="space-y-4">
           <h3 className="text-base sm:text-lg font-semibold">Your Referral Details</h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
-            <div className="space-y-2 min-w-0">
-              <Label className="text-xs text-muted-foreground uppercase tracking-wide">Referral Link</Label>
-              <div className="flex gap-2 flex-col sm:flex-row">
-                <Input value={referralData.link} readOnly className="font-mono text-sm min-w-0" />
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={() => handleCopy(referralData.link, "link")}
-                >
-                  {copied === "link" ? <Check className="size-4 text-[#10B981]" /> : <Copy className="size-4" />}
-                </Button>
+          {referralMeLoading ? (
+            <div className="flex gap-2 py-4 text-sm text-muted-foreground">
+              <Loader2 className="size-4 animate-spin" />
+              Loading…
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+              <div className="space-y-2 min-w-0">
+                <Label className="text-xs text-muted-foreground uppercase tracking-wide">Referral Link</Label>
+                <div className="flex gap-2 flex-col sm:flex-row">
+                  <Input value={referralMe?.referralLink ?? ""} readOnly className="font-mono text-sm min-w-0" placeholder="—" />
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => referralMe?.referralLink && handleCopy(referralMe.referralLink, "link")}
+                    disabled={!referralMe?.referralLink}
+                  >
+                    {copied === "link" ? <Check className="size-4 text-[#10B981]" /> : <Copy className="size-4" />}
+                  </Button>
+                </div>
+              </div>
+              <div className="space-y-2 min-w-0">
+                <Label className="text-xs text-muted-foreground uppercase tracking-wide">Referral Code</Label>
+                <div className="flex gap-2 flex-col sm:flex-row">
+                  <Input value={referralMe?.referralCode ?? ""} readOnly className="font-mono text-sm min-w-0" placeholder="—" />
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => referralMe?.referralCode && handleCopy(referralMe.referralCode!, "code")}
+                    disabled={!referralMe?.referralCode}
+                  >
+                    {copied === "code" ? <Check className="size-4 text-[#10B981]" /> : <Copy className="size-4" />}
+                  </Button>
+                </div>
               </div>
             </div>
-            <div className="space-y-2 min-w-0">
-              <Label className="text-xs text-muted-foreground uppercase tracking-wide">Referral Code</Label>
-              <div className="flex gap-2 flex-col sm:flex-row">
-                <Input value={referralData.code} readOnly className="font-mono text-sm min-w-0" />
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={() => handleCopy(referralData.code, "code")}
-                >
-                  {copied === "code" ? <Check className="size-4 text-[#10B981]" /> : <Copy className="size-4" />}
-                </Button>
-              </div>
-            </div>
-          </div>
+          )}
         </section>
 
         <Separator />
@@ -286,7 +262,9 @@ export function Referrals({ onNavigate }: ReferralsProps) {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <Card className="p-3 sm:p-4 space-y-2">
           <div className="text-xs text-muted-foreground uppercase tracking-wide">L1–L7 Earnings</div>
-          <div className="text-xl sm:text-2xl font-semibold text-primary truncate">${(referralData.tier1Earnings + referralData.tier2Earnings).toFixed(2)}</div>
+          <div className="text-xl sm:text-2xl font-semibold text-primary truncate">
+            ${(referralMe?.earningsSummary?.totalEarnedUsd ?? 0).toFixed(2)}
+          </div>
           <div className="text-xs text-muted-foreground">From community rewards (purchases)</div>
         </Card>
 
@@ -298,55 +276,52 @@ export function Referrals({ onNavigate }: ReferralsProps) {
 
         <Card className="p-3 sm:p-4 space-y-2">
           <div className="text-xs text-muted-foreground uppercase tracking-wide">Pending Earnings</div>
-          <div className="text-xl sm:text-2xl font-semibold truncate">${referralData.pendingEarnings.toFixed(2)}</div>
+          <div className="text-xl sm:text-2xl font-semibold truncate">
+            ${(referralMe?.earningsSummary?.pendingUsd ?? 0).toFixed(2)}
+          </div>
           <div className="text-xs text-muted-foreground">Awaiting settlement</div>
         </Card>
 
         <Card className="p-3 sm:p-4 space-y-2">
           <div className="text-xs text-muted-foreground uppercase tracking-wide">Paid Earnings</div>
-          <div className="text-xl sm:text-2xl font-semibold text-[#10B981] truncate">${referralData.paidEarnings.toFixed(2)}</div>
+          <div className="text-xl sm:text-2xl font-semibold text-[#10B981] truncate">
+            ${(referralMe?.earningsSummary?.paidUsd ?? 0).toFixed(2)}
+          </div>
           <div className="text-xs text-muted-foreground">Total paid out</div>
         </Card>
       </div>
 
-      {/* Earnings Table */}
+      {/* Earnings Table — from my-referrals (people you referred and earnings from them) */}
       <Card>
         <div className="p-4 sm:p-6 border-b border-border">
-          <h3 className="text-base sm:text-lg font-semibold">Earnings History</h3>
+          <h3 className="text-base sm:text-lg font-semibold">Earnings from Referrals</h3>
         </div>
         <Table className="min-w-[640px]">
           <TableHeader>
             <TableRow>
               <TableHead>Source User</TableHead>
-              <TableHead>Level</TableHead>
-              <TableHead>Purchase Amount</TableHead>
-              <TableHead>Share %</TableHead>
+              <TableHead>Joined</TableHead>
+              <TableHead>Their Spend</TableHead>
               <TableHead>Your Share</TableHead>
-              <TableHead>Status</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {earningsHistory.map((earning, i) => (
-              <TableRow key={i}>
-                <TableCell className="font-mono text-sm">{earning.user}</TableCell>
-                <TableCell>
-                  <Badge variant="outline" className={earning.level === 1 ? "border-primary/50 text-primary" : ""}>
-                    L{earning.level}
-                  </Badge>
-                </TableCell>
-                <TableCell className="font-mono">${earning.purchaseAmount.toFixed(2)}</TableCell>
-                <TableCell className="font-mono">{earning.sharePct}%</TableCell>
-                <TableCell className="font-mono font-semibold text-primary">${earning.amount.toFixed(2)}</TableCell>
-                <TableCell>
-                  <Badge 
-                    variant={earning.status === "Paid" ? "default" : "secondary"}
-                    className={earning.status === "Paid" ? "border-[#10B981]/50 text-[#10B981] bg-[#10B981]/10" : ""}
-                  >
-                    {earning.status}
-                  </Badge>
+            {myReferrals.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={4} className="text-center text-muted-foreground py-8">
+                  No referral earnings yet. Share your link to grow your network.
                 </TableCell>
               </TableRow>
-            ))}
+            ) : (
+              myReferrals.map((r, i) => (
+                <TableRow key={i}>
+                  <TableCell className="font-mono text-sm">{r.referredDisplay}</TableCell>
+                  <TableCell className="text-sm text-muted-foreground">{r.joinedAt ? new Date(r.joinedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—"}</TableCell>
+                  <TableCell className="font-mono">${r.totalSpendUsd.toFixed(2)}</TableCell>
+                  <TableCell className="font-mono font-semibold text-primary">${r.yourEarningsFromThemUsd.toFixed(2)}</TableCell>
+                </TableRow>
+              ))
+            )}
           </TableBody>
         </Table>
       </Card>
@@ -358,16 +333,16 @@ export function Referrals({ onNavigate }: ReferralsProps) {
           <div className="space-y-4">
             <div>
               <label className="text-sm font-medium mb-2 block">Payout Wallet Address</label>
-              {payoutSummaryLoading ? (
+              {referralMeLoading ? (
                 <div className="flex items-center gap-2 py-2 text-sm text-muted-foreground">
                   <Loader2 className="size-4 animate-spin" />
                   Loading…
                 </div>
-              ) : payoutSummary?.payoutWalletAddress ? (
+              ) : referralMe?.payoutWallet ? (
                 <>
                   <Input
                     readOnly
-                    value={payoutSummary.payoutWalletAddress}
+                    value={referralMe.payoutWallet}
                     className="font-mono text-sm bg-muted/50"
                   />
                   <p className="text-xs text-muted-foreground mt-1">
@@ -395,12 +370,12 @@ export function Referrals({ onNavigate }: ReferralsProps) {
               <div className="flex justify-between mb-2">
                 <span className="text-sm text-muted-foreground">Available Balance:</span>
                 <span className="font-mono font-semibold">
-                  ${(payoutSummary?.requestableUsd ?? 0).toFixed(2)}
+                  ${(referralMe?.earningsSummary?.requestableUsd ?? 0).toFixed(2)}
                 </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-sm text-muted-foreground">Minimum Payout:</span>
-                <span className="font-mono">${(payoutSummary?.minPayoutUsd ?? 50).toFixed(2)}</span>
+                <span className="font-mono">${(referralMe?.earningsSummary?.minPayoutUsd ?? 50).toFixed(2)}</span>
               </div>
             </div>
           </div>
@@ -409,10 +384,10 @@ export function Referrals({ onNavigate }: ReferralsProps) {
               type="button"
               className="w-full bg-primary text-primary-foreground"
               disabled={
-                payoutSummaryLoading ||
+                referralMeLoading ||
                 requestPayoutLoading ||
-                !(payoutSummary?.payoutWalletAddress?.trim?.() ?? payoutSummary?.payoutWalletAddress) ||
-                (payoutSummary?.requestableUsd ?? 0) < (payoutSummary?.minPayoutUsd ?? 50)
+                !(referralMe?.payoutWallet?.trim?.() ?? referralMe?.payoutWallet) ||
+                (referralMe?.earningsSummary?.requestableUsd ?? 0) < (referralMe?.earningsSummary?.minPayoutUsd ?? 50)
               }
               onClick={() => handleRequestPayout()}
             >
@@ -427,7 +402,7 @@ export function Referrals({ onNavigate }: ReferralsProps) {
             </Button>
             <div className="text-xs text-muted-foreground space-y-1">
               <p>• Payouts processed within 24-48 hours</p>
-              <p>• Minimum payout amount: ${(payoutSummary?.minPayoutUsd ?? 50).toFixed(2)} USDT</p>
+              <p>• Minimum payout amount: ${(referralMe?.earningsSummary?.minPayoutUsd ?? 50).toFixed(2)} USDT</p>
               <p>• Ensure wallet address is correct in Settings before requesting</p>
             </div>
           </div>
@@ -440,16 +415,16 @@ export function Referrals({ onNavigate }: ReferralsProps) {
         <p className="text-sm text-muted-foreground mb-4">
           Your payout requests. When admin processes and marks one as paid, it will show here with the transaction hash.
         </p>
-        {myPayoutRequestsLoading ? (
+        {referralMeLoading ? (
           <div className="flex items-center gap-2 py-6 text-muted-foreground">
             <Loader2 className="size-4 animate-spin" />
             Loading…
           </div>
-        ) : myPayoutRequests.length === 0 ? (
+        ) : (referralMe?.payoutRequests?.length ?? 0) === 0 ? (
           <p className="text-sm text-muted-foreground py-6">No payout requests yet.</p>
         ) : (
           <div className="space-y-3">
-            {myPayoutRequests.map((pr) => (
+            {(referralMe?.payoutRequests ?? []).map((pr) => (
               <div key={pr.id} className="flex flex-wrap items-center justify-between gap-3 p-4 bg-secondary/30 rounded border border-border">
                 <div>
                   <div className="font-mono font-semibold mb-1">${pr.amount.toFixed(2)} {pr.currency}</div>

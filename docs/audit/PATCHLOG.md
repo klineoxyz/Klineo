@@ -116,6 +116,24 @@
 
 ---
 
+## P9: Real referral codes end-to-end (2026-02-03)
+
+**Status:** Applied (verify in repo)
+
+**Files changed:** `supabase/migrations/20260129270000_user_profiles_referral_code.sql`, `backend-skeleton/src/routes/referrals.ts`, `src/app/components/screens/Referrals.tsx`, `src/app/config/routes.ts`, `src/app/App.tsx`, `src/app/components/auth/RefRedirect.tsx`, `src/app/components/auth/LoginPage.tsx`, `src/app/components/auth/SignUpPage.tsx`, `src/lib/smokeTests.ts`, `docs/audit/*`
+
+**Change:**
+- DB: referral_code (unique) + referred_by_user_id on user_profiles
+- Backend: GET /api/referrals/me (auto-generates code, returns code/link/earningsSummary/payoutWallet/payoutRequests)
+- Backend: POST /api/referrals/claim (idempotent, no self-refer, no overwrite)
+- Frontend: Referrals screen calls /me, displays real data, no placeholders
+- Frontend: /ref/:code route stores code, redirects to signup; ?ref= on login/signup stored
+- Frontend: claim after auth (useEffect when isAuthenticated)
+- Smoke test: "Referral code real + self-referral blocked"
+- Docs: Blocker removed, status BETA-READY
+
+---
+
 ## No Changes (Documented Only)
 
 - **VITE_RUNNER_CRON_SECRET:** Never set in production frontend. Smoke test already SKIPs cron-secret test unless explicitly enabled.

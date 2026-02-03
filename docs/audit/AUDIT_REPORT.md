@@ -11,11 +11,9 @@
 
 ## Executive Summary
 
-**Launch Readiness: NO-GO until referral codes are real**
+**Launch Readiness: CONDITIONAL GO**
 
-**GO/NO-GO BLOCKER:** The Referrals page displays placeholder code `KLINEO-XYZ123` and link `https://klineo.xyz/ref/XYZ123`. Do not onboard users until real user-specific referral codes are wired.
-
-The platform is architecturally sound with proper auth, RLS, and rate limiting. Critical routing bug and missing audit log for referral payouts have been patched. No secrets are exposed in frontend bundle when configured correctly.
+Real user-specific referral codes have been implemented (GET /api/referrals/me, POST /api/referrals/claim, /ref/:code deep link). The platform is architecturally sound with proper auth, RLS, and rate limiting. Critical routing bug and missing audit log for referral payouts have been patched. No secrets are exposed in frontend bundle when configured correctly.
 
 ---
 
@@ -23,7 +21,7 @@ The platform is architecturally sound with proper auth, RLS, and rate limiting. 
 
 | Severity | Count | Description |
 |----------|-------|-------------|
-| Critical | 1 | Referral links/codes are placeholder (KLINEO-XYZ123) — blocks onboarding |
+| Critical | 0 | — |
 | High | 2 | Fixed: Marketplace route bug; Missing audit log for payout mark-paid |
 | Medium | 4 | See findings below |
 | Low | 3 | Minor hardening recommendations |
@@ -82,12 +80,11 @@ The platform is architecturally sound with proper auth, RLS, and rate limiting. 
 - **Impact:** `/api/self-test/*` and `/api/launch/*` require admin JWT. Properly gated.
 - **Status:** No action.
 
-### F-9: Referral links/codes are placeholder (BLOCKER)
-- **Severity:** Critical
-- **Impact:** Referrals page shows hardcoded `KLINEO-XYZ123` / `https://klineo.xyz/ref/XYZ123` — not user-specific. Users sharing this link would all get the same placeholder.
-- **Files:** `src/app/components/screens/Referrals.tsx`
-- **Recommendation:** Do not onboard until real referral API returns user-specific code/link.
-- **Status:** Documented as GO/NO-GO blocker.
+### F-9: Referral links/codes were placeholder (FIXED)
+- **Severity:** Critical (was)
+- **Impact:** Referrals page showed hardcoded placeholder — not user-specific.
+- **Fix:** Implemented GET /api/referrals/me (real code/link), POST /api/referrals/claim, /ref/:code deep link, referral_code + referred_by_user_id in user_profiles.
+- **Status:** Fixed.
 
 ---
 
@@ -95,7 +92,7 @@ The platform is architecturally sound with proper auth, RLS, and rate limiting. 
 
 | Item | Status |
 |------|--------|
-| **Real referral codes** (not placeholder) | ❌ BLOCKER |
+| **Real referral codes** (not placeholder) | ✅ |
 | No secrets in frontend bundle (apiKey, apiSecret, service_role, cron secret) | ✅ |
 | Only VITE_* env in frontend | ✅ |
 | Admin UI gated (role check + route guard) | ✅ |
@@ -136,16 +133,14 @@ The platform is architecturally sound with proper auth, RLS, and rate limiting. 
 
 ## Launch Readiness Verdict
 
-**Decision: NO-GO**
+**Decision: CONDITIONAL GO**
 
-**Blocker:** Referral code/link still placeholder in Referrals.tsx (`KLINEO-XYZ123` / `https://klineo.xyz/ref/XYZ123`). Do not onboard until real user-specific codes are wired.
+Real referral codes are implemented. Re-run 10-minute production verification checklist before launch.
 
-**Next step:** Implement real referral code API + wire UI, then re-run 10-minute production verification checklist.
-
-**GO criteria after fix:** Referrals page shows a real user-specific referral code/link and referral attribution works end-to-end (new user signup via ref link creates earning record tied to referrer).
+**GO criteria:** Referrals page shows real user-specific referral code/link; /ref/:code stores code and redirects to signup; claim works after auth; self-referral blocked. Smoke test "Referral code real + self-referral blocked" validates this.
 
 ### Critical Issues Blocking Onboarding
-- **Referral placeholder:** Referrals page shows hardcoded placeholder — not user-specific. Growth + attribution will break immediately if users share it.
+- None (referral placeholder fixed).
 
 ### Steps to Validate Fixes in 30 Minutes
 

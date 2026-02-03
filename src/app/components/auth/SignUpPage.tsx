@@ -1,4 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
+import { REF_CODE_STORAGE_KEY } from "@/app/config/routes";
 import { Button } from "@/app/components/ui/button";
 import klineoIcon from "@/assets/klineo-icon-64.png";
 import { Card } from "@/app/components/ui/card";
@@ -14,6 +16,17 @@ interface SignUpPageProps {
 
 export function SignUpPage({ onNavigate }: SignUpPageProps) {
   const { signup } = useAuth();
+  const [searchParams] = useSearchParams();
+  useEffect(() => {
+    const ref = searchParams.get("ref")?.trim();
+    if (ref) {
+      try {
+        localStorage.setItem(REF_CODE_STORAGE_KEY, ref.toUpperCase());
+      } catch {
+        /* ignore */
+      }
+    }
+  }, [searchParams]);
   const [email, setEmail] = useState("");
   const [fullName, setFullName] = useState("");
   const [password, setPassword] = useState("");

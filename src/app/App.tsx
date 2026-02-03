@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Routes, Route, useLocation, useNavigate, Navigate } from "react-router-dom";
 import { Toaster } from "@/app/components/ui/sonner";
 import { TopBar } from "@/app/components/layout/TopBar";
@@ -41,6 +41,7 @@ import { PrivacyPolicy } from "@/app/components/public/PrivacyPolicy";
 import { RiskDisclosure } from "@/app/components/public/RiskDisclosure";
 import { LoginPage } from "@/app/components/auth/LoginPage";
 import { SignUpPage } from "@/app/components/auth/SignUpPage";
+import { RefRedirect } from "@/app/components/auth/RefRedirect";
 import { useAuth } from "@/app/contexts/AuthContext";
 import { TerminalLoader } from "@/app/components/ui/spinner";
 import { Button } from "@/app/components/ui/button";
@@ -48,7 +49,8 @@ import { toast } from "sonner";
 import { useIsMobile } from "@/app/components/ui/use-mobile";
 import { MobileNavSheet } from "@/app/components/layout/MobileNavSheet";
 import { ErrorBoundary } from "@/app/components/ui/error-boundary";
-import { ROUTES, pathForView, viewForPath, PUBLIC_PATHS } from "@/app/config/routes";
+import { ROUTES, pathForView, viewForPath, PUBLIC_PATHS, REF_CODE_STORAGE_KEY } from "@/app/config/routes";
+import { api } from "@/lib/api";
 
 export default function App() {
   const { isAuthenticated, isAdmin, loading, logout } = useAuth();
@@ -73,6 +75,30 @@ export default function App() {
     navigate(ROUTES.landing, { replace: true });
   };
 
+  const refClaimAttempted = useRef(false);
+  useEffect(() => {
+    if (!isAuthenticated || refClaimAttempted.current) return;
+    try {
+      const stored = localStorage.getItem(REF_CODE_STORAGE_KEY);
+      if (!stored?.trim()) return;
+      refClaimAttempted.current = true;
+      api
+        .post("/api/referrals/claim", { code: stored.trim() })
+        .then(() => {
+          try {
+            localStorage.removeItem(REF_CODE_STORAGE_KEY);
+          } catch {
+            /* ignore */
+          }
+        })
+        .catch(() => {
+          refClaimAttempted.current = false;
+        });
+    } catch {
+      refClaimAttempted.current = false;
+    }
+  }, [isAuthenticated]);
+
   if (loading) {
     return (
       <div className="h-screen w-screen flex items-center justify-center bg-background">
@@ -81,7 +107,8 @@ export default function App() {
     );
   }
 
-  if (!isAuthenticated && !PUBLIC_PATHS.has(pathname)) {
+  const isPublicPath = PUBLIC_PATHS.has(pathname) || pathname.startsWith(`${ROUTES.ref}/`);
+  if (!isAuthenticated && !isPublicPath) {
     return <Navigate to={ROUTES.login} replace />;
   }
 
@@ -109,6 +136,7 @@ export default function App() {
         <Route path={ROUTES.riskDisclosure} element={<RiskDisclosure onNavigate={handleNavigate} />} />
         <Route path={ROUTES.login} element={<LoginPage onNavigate={handleNavigate} />} />
         <Route path={ROUTES.signup} element={<SignUpPage onNavigate={handleNavigate} />} />
+        <Route path={`${ROUTES.ref}/:code`} element={<RefRedirect />} />
         <Route path="*" element={<LandingPage onNavigate={handleNavigate} />} />
       </Routes>
     );

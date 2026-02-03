@@ -2,20 +2,7 @@
 
 **Last updated:** 2026-02-03  
 **Audit snapshot:** 2025-02-03  
-**Status:** NOT YET — Placeholder referral links block onboarding
-
----
-
-## GO/NO-GO BLOCKER
-
-**Do not onboard users until real referral codes are enabled.**
-
-The Referrals page (`src/app/components/screens/Referrals.tsx`) currently displays **placeholder** values:
-- Code: `KLINEO-XYZ123`
-- Link: `https://klineo.xyz/ref/XYZ123`
-- Earnings data is hardcoded
-
-These are not user-specific. Wire the Referrals page to a real API that returns the current user's referral code/link before beta launch.
+**Status:** BETA-READY (real referral codes implemented)
 
 ---
 
@@ -68,7 +55,7 @@ Run through these steps in production (or staging with prod-like config):
 
 | Criterion | Required |
 |-----------|----------|
-| **Real referral codes** (not placeholder) | **BLOCKER** |
+| **Real referral codes** (not placeholder) | ✅ |
 | All main routes update URL on navigation | Yes |
 | Deep link + refresh render correct screen | Yes |
 | Strategy Backtest loads without crash | Yes |
@@ -83,7 +70,7 @@ Run through these steps in production (or staging with prod-like config):
 
 ## Known Limitations for Beta
 
-1. **Referral code/link (BLOCKER):** Referrals page uses **placeholder** `KLINEO-XYZ123` / `https://klineo.xyz/ref/XYZ123`. Do not onboard until real user-specific referral codes are wired.
+1. **Referral code/link:** Implemented — GET /api/referrals/me returns real code/link; /ref/:code deep link; POST /api/referrals/claim for attribution.
 2. **Coupon admin:** Search filter by coupon code on Discount Coupons list; usage visible via `currentRedemptions`; payment_intents list shows `coupon_code` (masked user id) for who used.
 3. **Playwright E2E:** Not added; manual QA + smoke test preset used for launch.
 

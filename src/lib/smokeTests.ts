@@ -429,6 +429,75 @@ export const smokeTests: SmokeTestDefinition[] = [
       );
     }
   },
+  {
+    name: 'Referral code real + self-referral blocked',
+    category: 'authenticated',
+    run: async () => {
+      const user = await getCurrentUser();
+      if (!user) {
+        return { name: 'Referral code real + self-referral blocked', status: 'SKIP', message: 'Login required' };
+      }
+      const baseURL = getBaseURL();
+      const headers = await getAuthHeaders();
+      const meRes = await fetch(`${baseURL}/api/referrals/me`, { headers });
+      if (!meRes.ok) {
+        return {
+          name: 'Referral code real + self-referral blocked',
+          status: 'FAIL',
+          httpCode: meRes.status,
+          message: `GET /api/referrals/me failed: ${meRes.status}`,
+        };
+      }
+      const meData = (await meRes.json()) as { referralCode?: string; referralLink?: string };
+      const code = meData.referralCode || '';
+      const link = meData.referralLink || '';
+      if (code === 'KLINEO-XYZ123' || link.includes('XYZ123')) {
+        return {
+          name: 'Referral code real + self-referral blocked',
+          status: 'FAIL',
+          message: 'Referral code/link is still placeholder (KLINEO-XYZ123)',
+          details: { referralCode: code, referralLink: link },
+        };
+      }
+      if (!code || !link || !link.includes(code)) {
+        return {
+          name: 'Referral code real + self-referral blocked',
+          status: 'FAIL',
+          message: 'referralLink must contain referralCode',
+          details: { referralCode: code, referralLink: link },
+        };
+      }
+      const claimRes = await fetch(`${baseURL}/api/referrals/claim`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ code }),
+      });
+      const claimData = claimRes.ok ? await claimRes.json() : await claimRes.text();
+      if (claimRes.status !== 400) {
+        return {
+          name: 'Referral code real + self-referral blocked',
+          status: 'FAIL',
+          httpCode: claimRes.status,
+          message: 'Self-referral (claim own code) should return 400',
+          details: { response: claimData },
+        };
+      }
+      const errMsg = typeof claimData === 'string' ? claimData : (claimData as { error?: string })?.error || '';
+      if (!errMsg.toLowerCase().includes('own') && !errMsg.toLowerCase().includes('self')) {
+        return {
+          name: 'Referral code real + self-referral blocked',
+          status: 'FAIL',
+          message: 'Self-referral should be rejected with own/self message',
+          details: { response: claimData },
+        };
+      }
+      return {
+        name: 'Referral code real + self-referral blocked',
+        status: 'PASS',
+        message: 'Real referral code; self-referral correctly blocked',
+      };
+    },
+  },
 
   // Admin tests
   {
@@ -1098,6 +1167,7 @@ const LAUNCH_PRESET_NAMES = [
   'GET /api/auth/me',
   'GET /api/me/profile',
   'GET /api/exchange-connections',
+  'Referral code real + self-referral blocked',
   'GET /api/portfolio/summary',
   'GET /api/positions',
   'GET /api/orders',
