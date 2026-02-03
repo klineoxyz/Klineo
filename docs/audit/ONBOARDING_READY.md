@@ -20,32 +20,38 @@ Run through these steps in production (or staging with prod-like config):
 - [ ] Open Strategy Backtest page — no console error, no "useEffect is not defined"
 - [ ] Run backtest — completes; Run Demo / Go Live buttons work
 
-### 3. Referral Payouts (2 min)
+### 3. Referral Code & Attribution E2E (3 min)
+- [ ] **Referral code (GO check):** Log in as User A → Referrals → copy referral link (must be real, not KLINEO-XYZ123)
+- [ ] **Attribution E2E:** In incognito, visit User A’s referral link (e.g. `/ref/KLINEO-XXXXXXXX`) → redirects to signup → create User B → complete signup
+- [ ] **Verify attribution:** Admin → Referrals tab: User A’s referrals list includes User B, OR User A’s Referrals page → Earnings from Referrals shows User B. Fallback: `SELECT * FROM referrals WHERE referrer_id = '<user_a_id>' AND referred_id = '<user_b_id>'` returns 1 row
+- [ ] **Self-referral blocked:** Smoke test "Referral code real + self-referral blocked" passes
+
+### 4. Referral Payouts (2 min)
 - [ ] User: Set payout wallet in Settings → Request payout on Referrals (if balance ≥ $50)
 - [ ] Admin: Payout requests tab — mark one as paid with tx hash
 - [ ] User: Payout History shows PAID + tx link
 - [ ] Query `audit_logs` for `payout_request_marked_paid` or `referral_payout_marked_paid`
 
-### 4. Coupons (2 min)
+### 5. Coupons (2 min)
 - [ ] Visit `/packages?coupon=TESTCODE` — coupon field prefilled
 - [ ] From Packages with coupon: checkout → Payments; coupon validates and applies
 - [ ] Admin: Create coupon; copy shareable link; User discounts shows assignments
 
-### 5. Security (2 min)
+### 6. Security (2 min)
 - [ ] `pnpm run build:safe` — passes (build + check:secrets)
 - [ ] No `VITE_RUNNER_CRON_SECRET` or `SUPABASE_SERVICE_ROLE_KEY` in frontend env
 - [ ] Non-admin cannot access `/admin` — redirected to Dashboard
 
-### 6. Production Config Sanity
+### 7. Production Config Sanity
 - [ ] **Railway (backend):** `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `ENCRYPTION_KEY`, `FRONTEND_URL`, `ADMIN_EMAILS`, `RUNNER_CRON_SECRET` (if runner enabled)
 - [ ] **Vercel (frontend):** `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_API_BASE_URL` only — no service role, no cron secret
 - [ ] **Cron secret:** Only in Railway backend env; never in Vercel/frontend
 
-### 7. Version / Commit Verification
+### 8. Version / Commit Verification
 - [ ] Footer or Settings shows build version (e.g. `v0.0.1` or commit hash)
 - [ ] Deployed version matches expected commit (check git SHA or version in UI)
 
-### 8. Builds (1 min)
+### 9. Builds (1 min)
 - [ ] `pnpm run build:safe` (frontend) — succeeds
 - [ ] `cd backend-skeleton && pnpm run build` — succeeds
 
@@ -98,8 +104,21 @@ pnpm run build:safe     # Build + check:secrets (recommended for deploy)
 cd backend-skeleton && pnpm run build  # Backend
 ```
 
+---
+
 ## Coupons Admin Visibility
 
 - **Filter by coupon code:** Admin → Discount Coupons → search input filters list by code (client-side).
 - **Who received:** User-Specific Discounts table shows assignments (user email, code, claim link).
 - **Who used:** Coupons table shows `currentRedemptions`; Payment Intents list shows `coupon_code` per intent (masked user_id in API; no PII).
+
+---
+
+## Docs Consistency Checklist
+
+| Scan | Result |
+|------|--------|
+| "BLOCKER" (referral-related) | None |
+| "NO-GO" | None |
+| "placeholder" (current) | None |
+| Referral E2E verification | Added (step 3) |

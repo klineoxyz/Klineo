@@ -11,9 +11,9 @@
 
 ## Executive Summary
 
-**Launch Readiness: CONDITIONAL GO**
+**Launch Readiness: GO (Beta) after production checklist passes**
 
-Real user-specific referral codes have been implemented (GET /api/referrals/me, POST /api/referrals/claim, /ref/:code deep link). The platform is architecturally sound with proper auth, RLS, and rate limiting. Critical routing bug and missing audit log for referral payouts have been patched. No secrets are exposed in frontend bundle when configured correctly.
+Real user-specific referral codes have been implemented (GET /api/referrals/me, POST /api/referrals/claim, /ref/:code deep link). The platform is architecturally sound with proper auth, RLS, and rate limiting. Launch is approved once the 10-minute production checklist and referral attribution E2E verification pass. Critical routing bug and missing audit log for referral payouts have been patched. No secrets are exposed in frontend bundle when configured correctly.
 
 ---
 
@@ -133,18 +133,18 @@ Real user-specific referral codes have been implemented (GET /api/referrals/me, 
 
 ## Launch Readiness Verdict
 
-**Decision: CONDITIONAL GO**
+**Decision: GO (Beta) after production checklist passes**
 
-Real referral codes are implemented. Re-run 10-minute production verification checklist before launch.
+**Condition:** 10-minute production checklist + build:safe + referral attribution E2E verification must pass. Real referral codes are implemented; no blockers remain.
 
-**GO criteria:** Referrals page shows real user-specific referral code/link; /ref/:code stores code and redirects to signup; claim works after auth; self-referral blocked. Smoke test "Referral code real + self-referral blocked" validates this.
+**GO criteria:** Referrals page shows real user-specific referral code/link; /ref/:code stores code and redirects to signup; claim works after auth; self-referral blocked; attribution visible (User B created via /ref/:code shows in User A’s referrals). Smoke test "Referral code real + self-referral blocked" validates code + self-referral.
 
 ### Critical Issues Blocking Onboarding
-- None (referral placeholder fixed).
+- None.
 
 ### Steps to Validate Fixes in 30 Minutes
 
-0. **Referral code verification (BLOCKER):** Referrals page must show user-specific referral code/link and real earnings data.
+0. **Referral code verification (GO check):** Referrals page must show user-specific referral code/link and real earnings data.
 
 1. **Marketplace route (5 min):**
    - Start app: `pnpm dev`
@@ -173,7 +173,9 @@ Real referral codes are implemented. Re-run 10-minute production verification ch
 
 ---
 
-## Final Hardening Pass (2025-02-03)
+## Final Hardening Pass
+
+*Initial pass: 2025-02-03. Updates through 2026-02-03 (P9 referral codes, P8 admin subscriptions).*
 
 ### Additional Fixes Applied
 
@@ -198,3 +200,15 @@ Real referral codes are implemented. Re-run 10-minute production verification ch
 | Coupon link `?coupon=CODE` on packages; applies correctly at checkout | ✅ |
 | Routing validator in Launch preset | ✅ |
 | check:secrets passes on build | ✅ |
+
+---
+
+## Docs Consistency Checklist
+
+| Scan | Result |
+|------|--------|
+| "BLOCKER" (referral-related) | None; Step 0 labeled "GO check" |
+| "NO-GO" | None |
+| "CONDITIONAL GO" | Replaced with "GO (Beta) after production checklist passes" |
+| "placeholder" (current/imminent) | None; F-9 refers to past state ("were placeholder") |
+| Referral implementation status | Documented as implemented (P9) |

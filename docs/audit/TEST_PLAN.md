@@ -8,7 +8,7 @@
 
 ## 1. Manual QA Checklist (User Flows)
 
-### 0. Pre-Launch
+### 0. Pre-Launch (GO check)
 - [ ] **Referral codes:** Smoke test "Referral code real + self-referral blocked" passes. Referrals page shows real code/link from GET /api/referrals/me.
 
 ### 1.1 Authentication
@@ -146,21 +146,40 @@
 
 ---
 
-## 8. Referral Payout & Coupon Verification
+## 8. Referral Attribution E2E Verification
 
-### 8.1 Referral Payout (User)
+- [ ] **User A copies referral link:** Log in as User A → Referrals → copy referral link (must be real, not KLINEO-XYZ123)
+- [ ] **User B via /ref/:code:** In incognito, visit User A’s referral link (e.g. `https://yoursite.com/ref/KLINEO-XXXXXXXX`) → redirects to signup → create User B → complete signup
+- [ ] **Verify attribution:** Admin → Referrals tab: User A’s referrals list includes User B. OR User A → Referrals → "Earnings from Referrals" table shows User B. Fallback DB query: `SELECT * FROM referrals WHERE referrer_id = '<user_a_id>' AND referred_id = '<user_b_id>'` returns 1 row
+- [ ] **Self-referral blocked:** Smoke test "Referral code real + self-referral blocked" passes (claim own code → 400)
+
+---
+
+## 9. Referral Payout & Coupon Verification
+
+### 9.1 Referral Payout (User)
 - [ ] Set payout wallet in Settings → Profile
 - [ ] Request payout on Referrals when balance ≥ $50
 - [ ] Payout History shows PENDING
 - [ ] Admin marks paid with tx hash; user sees PAID + tx link
 
-### 8.2 Referral Payout (Admin)
+### 9.2 Referral Payout (Admin)
 - [ ] Payout requests list; filter by status
 - [ ] Mark paid with tx hash (max 200 chars); audit_logs has payout_request_marked_paid
 - [ ] purchase_referral_earnings mark-paid (transactionId max 200 chars); audit_logs has referral_payout_marked_paid
 - [ ] Idempotent: cannot mark paid twice (payout_requests: only APPROVED → PAID)
 
-### 8.3 Coupons
+### 9.3 Coupons
 - [ ] Shareable URL: `/packages?coupon=CODE` or `/payments?coupon=CODE` (from Payments directly)
 - [ ] Coupon validates with correct kind (joining_fee vs package) when coming from Subscription
 - [ ] Admin → Discount Coupons: Filter by coupon code (search input); Payment Intents list shows coupon_code for usage
+
+---
+
+## Docs Consistency Checklist
+
+| Scan | Result |
+|------|--------|
+| "BLOCKER" (referral-related) | None; Pre-Launch labeled "GO check" |
+| "NO-GO" | None |
+| Referral E2E verification | Added (section 8) |
