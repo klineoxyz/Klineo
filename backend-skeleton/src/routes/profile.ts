@@ -43,7 +43,7 @@ profileRouter.get('/entitlement', async (req: AuthenticatedRequest, res) => {
         .maybeSingle(),
       client
         .from('user_profiles')
-        .select('member_active')
+        .select('member_active, active_package_code, package_started_at')
         .eq('id', userId)
         .single(),
     ]);
@@ -53,10 +53,13 @@ profileRouter.get('/entitlement', async (req: AuthenticatedRequest, res) => {
       return res.status(500).json({ error: 'Failed to fetch entitlement' });
     }
 
-    const memberActive = !!(profile as { member_active?: boolean } | null)?.member_active;
+    type ProfileRow = { member_active?: boolean; active_package_code?: string | null; package_started_at?: string | null } | null;
+    const profileRow = profile as ProfileRow;
+    const memberActive = !!profileRow?.member_active;
     const joiningFeePaid = !!ent?.joining_fee_paid || memberActive;
-    const status = (ent?.status as 'inactive' | 'active' | 'exhausted') || 'inactive';
-    const activePackageId = ent?.active_package_id ?? null;
+    // Prefer user_entitlements; fall back to user_profiles (set when admin approves package payment intent)
+    const activePackageId = ent?.active_package_id ?? profileRow?.active_package_code ?? null;
+    const status = (ent?.status as 'inactive' | 'active' | 'exhausted') || (activePackageId ? 'active' : 'inactive');
     const profitAllowanceUsd = parseFloat(String(ent?.profit_allowance_usd ?? 0));
     const profitUsedUsd = parseFloat(String(ent?.profit_used_usd ?? 0));
     const remainingUsd = Math.max(0, profitAllowanceUsd - profitUsedUsd);
