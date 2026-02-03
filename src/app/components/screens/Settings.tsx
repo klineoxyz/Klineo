@@ -1184,12 +1184,12 @@ export function Settings({ onNavigate }: SettingsProps) {
                         )}
                         {conn.disabled_at && (
                           <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
-                            Connection was auto-disabled after 5 consecutive failures. Use <strong>Re-enable</strong> then run Test (or Update credentials and Test).
+                            Connection was auto-disabled after 5 consecutive failures. Use <strong>Re-enable</strong>, then click <strong>Test Spot</strong> to verify your API (or Update credentials first if keys changed).
                           </p>
                         )}
                         {(conn.last_test_status === "fail" || !conn.last_test_status) && !conn.disabled_at && (
                           <p className="text-xs text-muted-foreground mt-1">
-                            If Test fails with a decrypt error, use <strong>Update credentials</strong> to re-enter your API key and secret.
+                            Use <strong>Test Spot</strong> to verify your API key. If it fails with a decrypt error, use <strong>Update credentials</strong> to re-enter your API key and secret.
                           </p>
                         )}
                       </div>
@@ -1212,11 +1212,12 @@ export function Settings({ onNavigate }: SettingsProps) {
                         size="sm"
                         onClick={() => handleTestConnection(conn.id)}
                         disabled={testingId === conn.id}
+                        title="Test Spot API (account/balance). Run this to verify your API key works for Spot."
                       >
                         {testingId === conn.id ? (
                           <Loader2 className="size-4 animate-spin" />
                         ) : (
-                          "Test"
+                          "Test Spot"
                         )}
                       </Button>
                       {(conn.exchange === "binance" || conn.exchange === "bybit") && (
