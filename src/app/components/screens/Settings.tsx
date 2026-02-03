@@ -630,10 +630,10 @@ export function Settings({ onNavigate }: SettingsProps) {
           <Card className="p-4 sm:p-6 space-y-4 sm:space-y-6">
             <h3 className="text-base sm:text-lg font-semibold">Profile Information</h3>
             <div className="flex flex-col sm:flex-row gap-6">
-              <div className="flex flex-col items-start gap-2 shrink-0">
-                <Label>Profile image</Label>
+              <div className="flex flex-col items-start gap-2 shrink-0" role="group" aria-label="Profile photo upload">
+                <Label id="profile-photo-label">Profile photo</Label>
                 <div className="flex items-center gap-4">
-                  <div className="size-20 rounded-full bg-muted border border-border overflow-hidden flex items-center justify-center">
+                  <div className="size-20 rounded-full bg-muted border border-border overflow-hidden flex items-center justify-center shrink-0">
                     {avatarUrl?.trim() && !avatarImageError ? (
                       <img
                         src={avatarUrl.trim()}
@@ -642,7 +642,7 @@ export function Settings({ onNavigate }: SettingsProps) {
                         onError={() => setAvatarImageError(true)}
                       />
                     ) : (
-                      <span className="text-2xl text-muted-foreground font-medium">{fullName?.charAt(0)?.toUpperCase() || user?.email?.charAt(0)?.toUpperCase() || "?"}</span>
+                      <span className="text-2xl text-muted-foreground font-medium" aria-hidden>{fullName?.charAt(0)?.toUpperCase() || user?.email?.charAt(0)?.toUpperCase() || "?"}</span>
                     )}
                   </div>
                   <div className="space-y-2 min-w-0 flex-1 sm:max-w-[280px]">
@@ -652,6 +652,7 @@ export function Settings({ onNavigate }: SettingsProps) {
                       accept="image/jpeg,image/png,image/gif,image/webp"
                       className="hidden"
                       onChange={handleAvatarFileChange}
+                      aria-labelledby="profile-photo-label"
                     />
                     <Button
                       type="button"
@@ -659,15 +660,16 @@ export function Settings({ onNavigate }: SettingsProps) {
                       size="sm"
                       disabled={profileLoading || avatarUploading}
                       onClick={() => avatarFileInputRef.current?.click()}
+                      aria-label="Upload profile photo"
                     >
                       {avatarUploading ? (
-                        <Loader2 className="size-4 mr-2 animate-spin" />
+                        <Loader2 className="size-4 mr-2 animate-spin" aria-hidden />
                       ) : (
-                        <Upload className="size-4 mr-2" />
+                        <Upload className="size-4 mr-2" aria-hidden />
                       )}
-                      {avatarUploading ? "Uploading…" : "Upload image"}
+                      {avatarUploading ? "Uploading…" : "Upload photo"}
                     </Button>
-                    <p className="text-xs text-muted-foreground">JPEG, PNG, GIF or WebP. Max {MAX_AVATAR_SIZE_MB} MB.</p>
+                    <p className="text-xs text-muted-foreground">Upload a photo (JPEG, PNG, GIF or WebP, max {MAX_AVATAR_SIZE_MB} MB).</p>
                   </div>
                 </div>
               </div>
