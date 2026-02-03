@@ -91,7 +91,7 @@
 
 ## P7: Final doc + beta readiness (2025-02-03)
 
-**Status:** Applied (all changes implemented in code and docs)
+**Status:** Applied (verify in repo)
 
 **Files changed:** `docs/audit/ONBOARDING_READY.md`, `docs/audit/AUDIT_REPORT.md`, `docs/audit/TEST_PLAN.md`, `src/app/components/screens/Admin.tsx`, `src/app/components/layout/Footer.tsx`, `src/app/components/screens/Settings.tsx`, `vite.config.ts`
 

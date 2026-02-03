@@ -142,6 +142,8 @@ The platform is architecturally sound with proper auth, RLS, and rate limiting. 
 
 **Next step:** Implement real referral code API + wire UI, then re-run 10-minute production verification checklist.
 
+**GO criteria after fix:** Referrals page shows a real user-specific referral code/link and referral attribution works end-to-end (new user signup via ref link creates earning record tied to referrer).
+
 ### Critical Issues Blocking Onboarding
 - **Referral placeholder:** Referrals page shows hardcoded placeholder — not user-specific. Growth + attribution will break immediately if users share it.
 
