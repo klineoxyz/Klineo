@@ -432,21 +432,20 @@ adminRouter.put('/traders/:id',
   }
 });
 
-/** Map package code (ENTRY_100, LEVEL_200, LEVEL_500 or entry_100, pro_200, elite_500) to Admin display plan name. */
-function packageCodeToPlanName(code: string | null | undefined): string {
-  if (!code) return 'Unknown';
-  const c = (code || '').toUpperCase();
-  if (c === 'ENTRY_100') return 'Starter';
-  if (c === 'LEVEL_200' || c === 'PRO_200') return 'Pro';
-  if (c === 'LEVEL_500' || c === 'ELITE_500') return 'Unlimited';
-  return code;
-}
+/** Package code → plan label for Admin Subscriptions (Starter/Pro/Unlimited) */
+const PACKAGE_CODE_TO_PLAN: Record<string, string> = {
+  ENTRY_100: 'Starter',
+  entry_100: 'Starter',
+  LEVEL_200: 'Pro',
+  pro_200: 'Pro',
+  LEVEL_500: 'Unlimited',
+  elite_500: 'Unlimited',
+};
 
 /**
  * GET /api/admin/subscriptions
- * List all subscriptions and payments.
- * Uses user_entitlements + payment_intents (manual USDT flow) as primary source.
- * Falls back to legacy subscriptions table if it has data.
+ * List active package holders and payment history.
+ * Uses user_profiles.active_package_code and payment_intents (approved packages), not the legacy subscriptions table.
  */
 adminRouter.get('/subscriptions', async (req, res) => {
   const client = getSupabase();
@@ -455,141 +454,74 @@ adminRouter.get('/subscriptions', async (req, res) => {
   }
 
   try {
-    // 1) Primary: user_entitlements (active package holders) + payment_intents (approved package payments)
-    const [{ data: entitlements }, { data: intents }] = await Promise.all([
-      client
-        .from('user_entitlements')
-        .select('user_id, active_package_id, status, activated_at, exhausted_at')
-        .eq('status', 'active')
-        .not('active_package_id', 'is', null),
-      client
-        .from('payment_intents')
-        .select('id, user_id, package_code, amount_usdt, status, reviewed_at, tx_hash, created_at')
-        .eq('kind', 'package')
-        .eq('status', 'approved')
-        .order('created_at', { ascending: false }),
-    ]);
-
-    const userIds = [...new Set([
-      ...(entitlements?.map((e) => e.user_id).filter(Boolean) || []),
-      ...(intents?.map((i) => i.user_id).filter(Boolean) || []),
-    ])];
-    const { data: profiles } = await client
+    // 1) Stats: count users with active_package_code by plan (Starter/Pro/Unlimited)
+    const { data: profilesWithPackage, error: profilesError } = await client
       .from('user_profiles')
-      .select('id, email, package_started_at')
-      .in('id', userIds);
-    const profileMap = new Map(profiles?.map((p) => [p.id, p]) || []);
+      .select('id, email, active_package_code, package_started_at')
+      .not('active_package_code', 'is', null);
 
-    // subscriptionPayments from approved payment_intents (package) — already ordered by created_at desc
-    const subscriptionPayments: Array<{
-      userId: string;
-      email: string;
-      plan: string;
-      amount: number;
-      status: string;
-      date: string;
-      nextRenewal: string;
-      txHash: string;
-      _sortAt?: number;
-    }> = (intents || []).map((pi) => {
-      const profile = profileMap.get(pi.user_id);
-      const planName = packageCodeToPlanName(pi.package_code);
-      const sortAt = new Date(pi.reviewed_at || pi.created_at).getTime();
+    if (profilesError) {
+      console.error('Error fetching user_profiles for subscriptions:', profilesError);
+      return res.status(500).json({ error: 'Failed to fetch subscriptions' });
+    }
+
+    const packageCounts = { starter: 0, pro: 0, unlimited: 0 };
+    for (const p of profilesWithPackage || []) {
+      const code = (p.active_package_code || '').trim();
+      const plan = PACKAGE_CODE_TO_PLAN[code] || null;
+      if (plan === 'Starter') packageCounts.starter++;
+      else if (plan === 'Pro') packageCounts.pro++;
+      else if (plan === 'Unlimited') packageCounts.unlimited++;
+    }
+
+    // 2) Payment history: approved payment_intents with kind=package
+    const { data: intents, error: intentsError } = await client
+      .from('payment_intents')
+      .select('id, user_id, package_code, amount_usdt, status, tx_hash, reviewed_at, created_at')
+      .eq('kind', 'package')
+      .eq('status', 'approved')
+      .order('created_at', { ascending: false });
+
+    if (intentsError) {
+      console.error('Error fetching payment_intents for subscriptions:', intentsError);
+    }
+
+    const userIds = [...new Set((intents || []).map((i) => i.user_id).filter(Boolean))];
+    const { data: userProfiles } = await client
+      .from('user_profiles')
+      .select('id, email')
+      .in('id', userIds);
+    const emailMap = new Map(userProfiles?.map((u) => [u.id, u.email]) || []);
+
+    const subscriptionPayments = (intents || []).map((intent) => {
+      const code = (intent.package_code || '').trim();
+      const planName = PACKAGE_CODE_TO_PLAN[code] || code || 'Package';
+      const email = emailMap.get(intent.user_id as string) || '';
+
       return {
-        userId: pi.user_id,
-        email: profile?.email || '—',
+        userId: intent.user_id,
+        email,
         plan: planName,
-        amount: parseFloat(String(pi.amount_usdt ?? 0)),
+        amount: parseFloat(String(intent.amount_usdt ?? 0)),
         status: 'Paid',
-        date: new Date(pi.reviewed_at || pi.created_at).toLocaleDateString('en-US', {
-          month: 'short',
-          day: 'numeric',
-          year: 'numeric',
-        }),
+        date: (intent.reviewed_at || intent.created_at)
+          ? new Date((intent.reviewed_at || intent.created_at) as string).toLocaleDateString('en-US', {
+              month: 'short',
+              day: 'numeric',
+              year: 'numeric',
+            })
+          : '—',
         nextRenewal: '—',
-        txHash: pi.tx_hash || '—',
-        _sortAt: sortAt,
+        txHash: (intent.tx_hash as string) || '—',
       };
     });
 
-    // Active subscription counts from user_entitlements (status=active, active_package_id set)
-    let starterCount = 0, proCount = 0, unlimitedCount = 0;
-    (entitlements || []).forEach((e) => {
-      const plan = packageCodeToPlanName(e.active_package_id);
-      if (plan === 'Starter') starterCount++;
-      else if (plan === 'Pro') proCount++;
-      else if (plan === 'Unlimited') unlimitedCount++;
-    });
-
-    // 2) Fallback: legacy subscriptions table (if it has data and we got no manual-payment data)
-    const { data: subscriptions } = await client
-      .from('subscriptions')
-      .select('id, user_id, status, current_period_start, current_period_end, created_at, plan_id')
-      .order('created_at', { ascending: false });
-
-    if (subscriptions && subscriptions.length > 0) {
-      const planIds = [...new Set(subscriptions.map((s) => s.plan_id).filter(Boolean))];
-      const { data: plans } = await client
-        .from('subscription_plans')
-        .select('id, name')
-        .in('id', planIds);
-      const planMap = new Map(plans?.map((p) => [p.id, p.name]) || []);
-
-      const { data: payments } = await client
-        .from('payments')
-        .select('id, user_id, subscription_id, amount, currency, status, created_at, provider_payment_id')
-        .order('created_at', { ascending: false });
-
-      const legUserIds = [...new Set(subscriptions.map((s) => s.user_id))];
-      const { data: legProfiles } = await client
-        .from('user_profiles')
-        .select('id, email')
-        .in('id', legUserIds);
-      const legEmailMap = new Map(legProfiles?.map((u) => [u.id, u.email]) || []);
-
-      subscriptions.forEach((sub) => {
-        const planName = planMap.get(sub.plan_id);
-        if (planName === 'Starter' && sub.status === 'active') starterCount++;
-        else if (planName === 'Pro' && sub.status === 'active') proCount++;
-        else if ((planName === 'Premium' || planName === 'Unlimited') && sub.status === 'active') unlimitedCount++;
-      });
-
-      // Merge legacy payments into subscriptionPayments if not already present from intents
-      const existingUserDates = new Set(subscriptionPayments.map((p) => `${p.userId}-${p.date}`));
-      subscriptions.forEach((sub) => {
-        const payment = payments?.find((p) => p.subscription_id === sub.id);
-        const planName = planMap.get(sub.plan_id) || 'Unknown';
-        const email = legEmailMap.get(sub.user_id) || '';
-        const rawDate = payment ? payment.created_at : sub.created_at;
-        const date = new Date(rawDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-        if (!existingUserDates.has(`${sub.user_id}-${date}`)) {
-          subscriptionPayments.push({
-            userId: sub.user_id,
-            email,
-            plan: planName,
-            amount: payment ? parseFloat(payment.amount?.toString() || '0') : 0,
-            status: payment?.status === 'succeeded' ? 'Paid' : (payment?.status || 'Pending'),
-            date,
-            nextRenewal: sub.status === 'active'
-              ? new Date(sub.current_period_end).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-              : '—',
-            txHash: payment?.provider_payment_id || '—',
-            _sortAt: new Date(rawDate).getTime(),
-          });
-        }
-      });
-    }
-
-    // Sort by date desc, then strip _sortAt from response
-    subscriptionPayments.sort((a, b) => (b._sortAt ?? 0) - (a._sortAt ?? 0));
-    const cleanPayments = subscriptionPayments.map(({ _sortAt, ...p }) => p);
-
     res.json({
-      subscriptionPayments: cleanPayments,
+      subscriptionPayments,
       stats: {
-        starter: starterCount,
-        pro: proCount,
-        unlimited: unlimitedCount,
+        starter: packageCounts.starter,
+        pro: packageCounts.pro,
+        unlimited: packageCounts.unlimited,
       },
     });
   } catch (err) {
