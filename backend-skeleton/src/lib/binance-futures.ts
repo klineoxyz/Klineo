@@ -18,7 +18,7 @@ import type {
 
 export type BinanceFuturesEnvironment = 'production' | 'testnet';
 
-const BINANCE_FUTURES_PROD = 'https://fapi.binance.com';
+const BINANCE_FUTURES_PROD = process.env.BINANCE_FUTURES_BASE_URL?.trim() || 'https://fapi.binance.com';
 const BINANCE_FUTURES_TESTNET = 'https://testnet.binancefuture.com';
 
 export interface BinanceFuturesCredentials {

@@ -9,7 +9,7 @@ import { binanceFetch } from './binance-fetch.js';
 
 export type BinanceEnvironment = 'production' | 'testnet';
 
-const BINANCE_PRODUCTION_BASE = 'https://api.binance.com';
+const BINANCE_PRODUCTION_BASE = process.env.BINANCE_SPOT_BASE_URL?.trim() || 'https://api.binance.com';
 const BINANCE_TESTNET_BASE = 'https://testnet.binance.vision';
 
 export interface BinanceCredentials {
@@ -96,7 +96,7 @@ function sign(queryString: string, secret: string): string {
  */
 function buildSignedQuery(params: Record<string, string | number | undefined>, secret: string): string {
   const timestamp = Date.now();
-  const recvWindow = 5000; // 5 seconds
+  const recvWindow = 10000; // 10 seconds (Binance allows clock drift; -1021 if too small)
 
   const queryParams = new URLSearchParams();
   queryParams.append('timestamp', timestamp.toString());

@@ -514,7 +514,7 @@ exchangeConnectionsRouter.post(
       const sanitized = msg.replace(/api[_-]?key/gi, '[REDACTED]').replace(/secret/gi, '[REDACTED]');
       console.error(`[${requestId}] Futures enable error:`, sanitized);
       const isRestricted =
-        /451|restricted\s*location|eligibility|unavailable.*region/i.test(sanitized);
+        /451|restricted|eligibility|unavailable.*location|service unavailable.*restricted/i.test(sanitized);
       const status = isRestricted ? 403 : 500;
       res.status(status).json({
         error: 'Futures enable failed',
