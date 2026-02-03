@@ -19,6 +19,12 @@ const AMOUNTS: Record<string, number> = {
   LEVEL_500: 500,
 };
 
+/** Profit allowance (USD) for a package code. Used by GET /api/me/entitlement and admin approve. */
+export function getPackageProfitAllowanceUsd(packageCode: string): number {
+  if (!packageCode || packageCode === 'joining_fee') return 0;
+  return Number(AMOUNTS[packageCode]) || 0;
+}
+
 /** Package code (payment_intents) -> package id (coupons.package_ids) */
 const PACKAGE_CODE_TO_ID: Record<string, string> = {
   ENTRY_100: 'entry_100',

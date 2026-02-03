@@ -3,6 +3,7 @@ import { verifySupabaseJWT, AuthenticatedRequest } from '../middleware/auth.js';
 import { validate, optionalString } from '../middleware/validation.js';
 import { body } from 'express-validator';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { getPackageProfitAllowanceUsd } from './payment-intents.js';
 
 let supabase: SupabaseClient | null = null;
 
@@ -59,9 +60,16 @@ profileRouter.get('/entitlement', async (req: AuthenticatedRequest, res) => {
     const joiningFeePaid = !!ent?.joining_fee_paid || memberActive;
     // Prefer user_entitlements; fall back to user_profiles (set when admin approves package payment intent)
     const activePackageId = ent?.active_package_id ?? profileRow?.active_package_code ?? null;
-    const status = (ent?.status as 'inactive' | 'active' | 'exhausted') || (activePackageId ? 'active' : 'inactive');
-    const profitAllowanceUsd = parseFloat(String(ent?.profit_allowance_usd ?? 0));
+    const entStatus = ent?.status as 'inactive' | 'active' | 'exhausted' | undefined;
+    // If user has an active package, show Active unless entitlement is explicitly exhausted
+    const status = activePackageId && entStatus !== 'exhausted' ? 'active' : (entStatus || 'inactive');
+
+    let profitAllowanceUsd = parseFloat(String(ent?.profit_allowance_usd ?? 0));
     const profitUsedUsd = parseFloat(String(ent?.profit_used_usd ?? 0));
+    // When package was set via admin approve (profile only), entitlement may have 0 allowance; use package code → allowance map
+    if (activePackageId && profitAllowanceUsd <= 0) {
+      profitAllowanceUsd = getPackageProfitAllowanceUsd(activePackageId);
+    }
     const remainingUsd = Math.max(0, profitAllowanceUsd - profitUsedUsd);
 
     res.json({

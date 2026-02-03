@@ -4,6 +4,7 @@ import { validate, uuidParam, statusBody, optionalString, pageQuery, limitQuery,
 import { body } from 'express-validator';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { financialRatiosRouter, getMarketingSpend, postMarketingSpend } from './admin-financial-ratios.js';
+import { getPackageProfitAllowanceUsd } from './payment-intents.js';
 
 let supabase: SupabaseClient | null = null;
 
@@ -1470,6 +1471,29 @@ adminRouter.post('/payments/intents/:id/approve',
     } else if (kind === 'package' && packageCode) {
       profileUpdates.active_package_code = packageCode;
       profileUpdates.package_started_at = new Date().toISOString();
+
+      const allowanceUsd = getPackageProfitAllowanceUsd(packageCode);
+      const now = new Date().toISOString();
+      const { data: existingEnt } = await client
+        .from('user_entitlements')
+        .select('joining_fee_paid, joining_fee_paid_at, profit_used_usd')
+        .eq('user_id', userId)
+        .maybeSingle();
+      await client.from('user_entitlements').upsert(
+        {
+          user_id: userId,
+          joining_fee_paid: (existingEnt as { joining_fee_paid?: boolean } | null)?.joining_fee_paid ?? false,
+          joining_fee_paid_at: (existingEnt as { joining_fee_paid_at?: string | null } | null)?.joining_fee_paid_at ?? null,
+          active_package_id: packageCode,
+          profit_allowance_usd: allowanceUsd,
+          profit_used_usd: (existingEnt as { profit_used_usd?: number } | null)?.profit_used_usd ?? 0,
+          status: 'active',
+          activated_at: now,
+          exhausted_at: null,
+          updated_at: now,
+        },
+        { onConflict: 'user_id' }
+      );
     }
 
     const { error: profileErr } = await client
