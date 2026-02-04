@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { Router } from 'express';
 import { verifySupabaseJWT, requireAdmin, AuthenticatedRequest } from '../middleware/auth.js';
 import { validate, uuidParam, statusBody, optionalString, pageQuery, limitQuery, searchQuery } from '../middleware/validation.js';
@@ -20,12 +21,13 @@ function getSupabase(): SupabaseClient | null {
   return supabase;
 }
 
-/** Generate a system coupon code (8 chars, A-Z0-9). */
+/** Generate a cryptographically random coupon code (10 chars, A-Z0-9). Collision-resistant; never overwrites another user's assignment. */
 function generateSystemCouponCode(): string {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  const bytes = crypto.randomBytes(10);
   let code = '';
-  for (let i = 0; i < 8; i++) {
-    code += chars.charAt(Math.floor(Math.random() * chars.length));
+  for (let i = 0; i < 10; i++) {
+    code += chars.charAt(bytes[i]! % chars.length);
   }
   return code;
 }
@@ -893,11 +895,14 @@ adminRouter.post('/coupons',
     try {
       let { code, discount, appliesTo, packageIds, maxRedemptions, durationMonths, expiresAt, description } = req.body;
       if (!code || (code as string).trim() === '') {
-        for (let attempt = 0; attempt < 10; attempt++) {
+        for (let attempt = 0; attempt < 15; attempt++) {
           code = generateSystemCouponCode();
-          const { data: existing } = await client.from('coupons').select('id').eq('code', code).single();
-          if (!existing) break;
-          if (attempt === 9) {
+          const [{ data: existingCoupon }, { data: existingUd }] = await Promise.all([
+            client.from('coupons').select('id').eq('code', code).maybeSingle(),
+            client.from('user_discounts').select('id').eq('code', code).maybeSingle(),
+          ]);
+          if (!existingCoupon && !existingUd) break;
+          if (attempt === 14) {
             return res.status(500).json({ error: 'Failed to generate unique coupon code. Please try again.' });
           }
         }
@@ -1225,13 +1230,16 @@ adminRouter.post('/user-discounts',
     try {
       const { userId, scope, onboardingDiscountPercent, onboardingDiscountFixedUsd, tradingDiscountPercent, tradingPackageIds, tradingMaxPackages } = req.body;
 
-      // System-generated coupon code (unique)
+      // System-generated coupon code (unique across user_discounts AND coupons — never overwrites another user's assignment)
       let code = generateSystemCouponCode();
-      for (let attempt = 0; attempt < 10; attempt++) {
-        const { data: existing } = await client.from('user_discounts').select('id').eq('code', code).single();
-        if (!existing) break;
+      for (let attempt = 0; attempt < 15; attempt++) {
+        const [{ data: existingUd }, { data: existingCoupon }] = await Promise.all([
+          client.from('user_discounts').select('id').eq('code', code).maybeSingle(),
+          client.from('coupons').select('id').eq('code', code).maybeSingle(),
+        ]);
+        if (!existingUd && !existingCoupon) break;
         code = generateSystemCouponCode();
-        if (attempt === 9) {
+        if (attempt === 14) {
           return res.status(500).json({ error: 'Failed to generate unique coupon code. Please try again.' });
         }
       }

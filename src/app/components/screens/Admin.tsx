@@ -1699,7 +1699,7 @@ export function Admin() {
             <div className="p-6 border-b border-border flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <div>
                 <h3 className="text-lg font-semibold">Discount Coupons</h3>
-                <p className="text-sm text-muted-foreground mt-1">{coupons.filter(c => c.status === "Active").length} active · Onboarding and/or trading packages</p>
+                <p className="text-sm text-muted-foreground mt-1">{coupons.filter(c => c.status === "Active").length} global coupons active · {userDiscounts.filter(d => d.status === "active").length} user-specific discounts active · Onboarding and/or trading packages</p>
               </div>
               <div className="flex gap-2 flex-wrap">
                 <Input
