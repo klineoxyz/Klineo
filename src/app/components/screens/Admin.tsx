@@ -1744,7 +1744,7 @@ export function Admin() {
                         </TableCell>
                         <TableCell>
                           <Badge variant={coupon.status === "Active" ? "default" : "secondary"} className={coupon.status === "Active" ? "bg-[#10B981]/10 text-[#10B981] border-[#10B981]/50" : ""}>
-                            {coupon.status}
+                            {coupon.status === "Active" && (coupon.currentRedemptions ?? 0) > 0 ? "Claimed and active" : coupon.status}
                           </Badge>
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground max-w-[180px] truncate">{coupon.description}</TableCell>

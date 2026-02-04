@@ -238,6 +238,33 @@ financialRatiosRouter.get('/', async (req: Request, res: Response) => {
       notes.push('Tick metrics skipped');
     }
 
+    // --- User analytics: referred users, package mix ---
+    try {
+      const { count: referredTotal } = await client.from('user_profiles').select('*', { count: 'exact', head: true }).not('referred_by_user_id', 'is', null);
+      const { count: referredInWindow } = await client.from('user_profiles').select('*', { count: 'exact', head: true }).not('referred_by_user_id', 'is', null).gte('created_at', fromIso).lte('created_at', toIso);
+      kpis.referred_users_total = referredTotal ?? 0;
+      kpis.referred_users_in_window = referredInWindow ?? 0;
+    } catch {
+      kpis.referred_users_total = 0;
+      kpis.referred_users_in_window = 0;
+    }
+    try {
+      const { data: pkgProfiles } = await client.from('user_profiles').select('active_package_code').not('active_package_code', 'is', null);
+      const pkgList = pkgProfiles || [];
+      const starter = pkgList.filter((p: { active_package_code?: string }) => /entry_100|ENTRY_100/i.test(p.active_package_code || '')).length;
+      const pro = pkgList.filter((p: { active_package_code?: string }) => /pro_200|LEVEL_200/i.test(p.active_package_code || '')).length;
+      const unlimited = pkgList.filter((p: { active_package_code?: string }) => /elite_500|LEVEL_500/i.test(p.active_package_code || '')).length;
+      kpis.package_starter = starter;
+      kpis.package_pro = pro;
+      kpis.package_unlimited = unlimited;
+      kpis.package_total = starter + pro + unlimited;
+    } catch {
+      kpis.package_starter = 0;
+      kpis.package_pro = 0;
+      kpis.package_unlimited = 0;
+      kpis.package_total = 0;
+    }
+
     // CAC from admin_marketing_spend (if entry for this period)
     try {
       const fromDate = fromIso.slice(0, 10);
@@ -327,7 +354,18 @@ financialRatiosRouter.get('/by-exchange', async (req: Request, res: Response) =>
 
   const cacheKey = `by-exchange:${windowParam}:${Math.floor(from.getTime() / 60000)}`;
   const result = await getCached(cacheKey, async () => {
-    const exchanges = ['binance', 'bybit'] as const;
+    // Discover exchanges from DB; fallback to known list for future CEX additions
+    let exchangeList: string[] = ['binance', 'bybit'];
+    try {
+      const { data: connExchanges } = await client.from('user_exchange_connections').select('exchange');
+      const seen = new Set<string>();
+      for (const r of connExchanges || []) {
+        const ex = (r as { exchange?: string }).exchange;
+        if (ex && /^[a-z]+$/.test(ex)) seen.add(ex);
+      }
+      if (seen.size > 0) exchangeList = [...seen].sort();
+    } catch { /* keep default */ }
+
     const byExchange: Array<{
       exchange: string;
       connections: number;
@@ -342,7 +380,7 @@ financialRatiosRouter.get('/by-exchange', async (req: Request, res: Response) =>
       volume_usd_in_window: number;
     }> = [];
 
-    for (const exchange of exchanges) {
+    for (const exchange of exchangeList) {
       const row = {
         exchange,
         connections: 0,
@@ -411,6 +449,22 @@ financialRatiosRouter.get('/by-exchange', async (req: Request, res: Response) =>
 
       byExchange.push(row);
     }
+
+    // Add Mix (aggregate) row first — for platform totals; per-exchange rows for CEX reporting
+    const mixRow = {
+      exchange: 'mix',
+      connections: byExchange.reduce((s, r) => s + r.connections, 0),
+      connections_ok: byExchange.reduce((s, r) => s + r.connections_ok, 0),
+      strategy_runs_total: byExchange.reduce((s, r) => s + r.strategy_runs_total, 0),
+      strategy_runs_active: byExchange.reduce((s, r) => s + r.strategy_runs_active, 0),
+      ticks_in_window: byExchange.reduce((s, r) => s + r.ticks_in_window, 0),
+      ticks_ok: byExchange.reduce((s, r) => s + r.ticks_ok, 0),
+      ticks_error: byExchange.reduce((s, r) => s + r.ticks_error, 0),
+      orders_placed_in_window: byExchange.reduce((s, r) => s + r.orders_placed_in_window, 0),
+      trades_count_in_window: byExchange.reduce((s, r) => s + r.trades_count_in_window, 0),
+      volume_usd_in_window: Math.round(byExchange.reduce((s, r) => s + r.volume_usd_in_window, 0) * 100) / 100,
+    };
+    byExchange.unshift(mixRow);
 
     return { window: windowParam, from: fromIso, to: toIso, byExchange };
   });

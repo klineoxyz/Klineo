@@ -226,6 +226,23 @@ export function AdminFinancialRatios() {
     toast.success("Exported CSV");
   };
 
+  const handleExportByExchangeCSV = () => {
+    const cols = [
+      { key: "exchange", header: "Exchange" },
+      { key: "connections", header: "Connections" },
+      { key: "connections_ok", header: "OK" },
+      { key: "strategy_runs_total", header: "Strategy runs" },
+      { key: "strategy_runs_active", header: "Active" },
+      { key: "ticks_in_window", header: "Ticks" },
+      { key: "orders_placed_in_window", header: "Orders" },
+      { key: "trades_count_in_window", header: "Trades" },
+      { key: "volume_usd_in_window", header: "Volume USD" },
+    ];
+    const rows = byExchange.map((r) => ({ ...r, exchange: r.exchange === "mix" ? "Mix (all)" : r.exchange }));
+    downloadCSV(rows, cols, `platform-by-exchange-${windowKey}.csv`);
+    toast.success("Exported by-exchange CSV");
+  };
+
   const handleSubmitMarketingSpend = async () => {
     if (!marketingForm.period_start || !marketingForm.period_end || marketingForm.spend_usdt === "") {
       toast.error("Period start, end and spend required");
@@ -286,7 +303,11 @@ export function AdminFinancialRatios() {
           </Button>
           <Button variant="outline" size="sm" onClick={handleExportCSV} disabled={topPayers.length === 0}>
             <Download className="size-4 mr-2" />
-            Export CSV
+            Top payers CSV
+          </Button>
+          <Button variant="outline" size="sm" onClick={handleExportByExchangeCSV} disabled={byExchange.length === 0}>
+            <Download className="size-4 mr-2" />
+            By exchange CSV
           </Button>
         </div>
       </div>
@@ -335,6 +356,41 @@ export function AdminFinancialRatios() {
               </div>
               <div className="text-xl font-semibold">{Number(ratiosMap.tick_success_rate ?? 0) * 100}%</div>
             </Card>
+          </div>
+
+          {/* User analytics: referred, package mix */}
+          <div>
+            <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
+              <Users className="size-4 text-primary" />
+              User analytics
+            </h3>
+            <p className="text-xs text-muted-foreground mb-3">Referral attribution and package distribution.</p>
+            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3">
+              <Card className="p-4 space-y-1">
+                <div className="text-xs text-muted-foreground uppercase tracking-wide">Referred users (total)</div>
+                <div className="text-xl font-semibold text-primary">{Number(kpis.referred_users_total ?? 0)}</div>
+              </Card>
+              <Card className="p-4 space-y-1">
+                <div className="text-xs text-muted-foreground uppercase tracking-wide">Referred (window)</div>
+                <div className="text-xl font-semibold">{Number(kpis.referred_users_in_window ?? 0)}</div>
+              </Card>
+              <Card className="p-4 space-y-1">
+                <div className="text-xs text-muted-foreground uppercase tracking-wide">Starter ($100)</div>
+                <div className="text-xl font-semibold">{Number(kpis.package_starter ?? 0)}</div>
+              </Card>
+              <Card className="p-4 space-y-1">
+                <div className="text-xs text-muted-foreground uppercase tracking-wide">Pro ($200)</div>
+                <div className="text-xl font-semibold">{Number(kpis.package_pro ?? 0)}</div>
+              </Card>
+              <Card className="p-4 space-y-1">
+                <div className="text-xs text-muted-foreground uppercase tracking-wide">Unlimited ($500)</div>
+                <div className="text-xl font-semibold">{Number(kpis.package_unlimited ?? 0)}</div>
+              </Card>
+              <Card className="p-4 space-y-1">
+                <div className="text-xs text-muted-foreground uppercase tracking-wide">Package total</div>
+                <div className="text-xl font-semibold">{Number(kpis.package_total ?? 0)}</div>
+              </Card>
+            </div>
           </div>
 
           {/* Activity & traders: DAU, WAU, MAU, new users, connections, strategies */}
@@ -387,13 +443,13 @@ export function AdminFinancialRatios() {
             </div>
           </div>
 
-          {/* By exchange: connections, strategy runs, ticks, orders, trades, volume */}
+          {/* Platform & by exchange: Mix (aggregate) + per-CEX for reporting */}
           <div>
             <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
               <Building2 className="size-4 text-primary" />
-              By exchange
+              Platform (mix) & by exchange
             </h3>
-            <p className="text-xs text-muted-foreground mb-3">Per-exchange connections, strategy runs, ticks, orders placed, trades executed, and volume (window: {ratios?.label ?? windowKey}). Trades/volume use the exchange column when set.</p>
+            <p className="text-xs text-muted-foreground mb-3">Mix = platform aggregate. Per-exchange rows = CEX-specific for reporting (Binance, Bybit, etc.). Window: {ratios?.label ?? windowKey}.</p>
             <Card className="overflow-hidden">
               <Table>
                 <TableHeader>
@@ -416,8 +472,8 @@ export function AdminFinancialRatios() {
                     </TableRow>
                   ) : (
                     byExchange.map((r) => (
-                      <TableRow key={r.exchange}>
-                        <TableCell className="font-medium capitalize">{r.exchange}</TableCell>
+                      <TableRow key={r.exchange} className={r.exchange === "mix" ? "bg-primary/5 font-medium" : ""}>
+                        <TableCell className="font-medium">{r.exchange === "mix" ? "Mix (all)" : (r.exchange.charAt(0).toUpperCase() + r.exchange.slice(1))}</TableCell>
                         <TableCell className="text-right font-mono">{r.connections}</TableCell>
                         <TableCell className="text-right font-mono text-primary">{r.connections_ok}</TableCell>
                         <TableCell className="text-right font-mono">{r.strategy_runs_total}</TableCell>
