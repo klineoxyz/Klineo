@@ -614,12 +614,12 @@ export function Admin() {
     }
   };
 
-  const copyCouponURL = (code: string) => {
-    const url = `https://klineo.xyz/packages?coupon=${code}`;
+  const copyCouponURL = (code: string, appliesTo?: string) => {
+    const base = typeof window !== "undefined" ? window.location.origin.replace(/\/$/, "") : "https://www.klineo.xyz";
+    const path = appliesTo === "onboarding" ? "/payments" : "/packages";
+    const url = `${base}${path}?coupon=${code}`;
     copyToClipboard(url);
-    toast.success("Coupon URL copied", {
-      description: `Users can claim ${code} at this URL`,
-    });
+    toast.success("Coupon URL copied", { description: `${code} → ${path}` });
   };
 
   return (
@@ -1533,35 +1533,35 @@ export function Admin() {
         </TabsContent>
 
         <TabsContent value="discounts" className="space-y-6" onFocus={() => { loadCoupons(); loadUserDiscounts(); loadUsers(1, ""); }}>
-          {/* Create New Coupon — onboarding and/or trading packages */}
-          <Card className="p-6">
+          {/* Create New Coupon — OB (onboarding) or 100/200/500 (packages) */}
+          <Card className="p-6 border-primary/20">
             <div className="flex items-center gap-3 mb-6">
               <Ticket className="size-6 text-primary" />
               <div>
-                <h3 className="text-lg font-semibold">Create Discount Coupon</h3>
-                <p className="text-sm text-muted-foreground">Onboarding (joining fee) and/or trading packages. Choose applies-to, which packages, expiry, and max redemptions.</p>
+                <h3 className="text-lg font-semibold">Create Global Coupon</h3>
+                <p className="text-sm text-muted-foreground">One coupon = one scope. OB for joining fee; 100/200/500 for packages. Code auto-generates as OB/100/200/500 + 8 chars. Share link: /payments (OB) or /packages (100/200/500).</p>
               </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="coupon-code">Coupon code (system-generated)</Label>
+                  <Label htmlFor="coupon-code">Coupon code</Label>
                   <div className="flex gap-2">
                     <Input
                       id="coupon-code"
                       value={couponCode}
                       onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
-                      placeholder="Leave empty to auto-generate"
+                      placeholder={`Leave empty → ${couponScope} + 8 chars`}
                       className="font-mono uppercase"
-                      maxLength={20}
+                      maxLength={32}
                     />
                     <Button variant="outline" onClick={generateCouponCode} className="shrink-0">
                       <RefreshCw className="size-4 mr-2" />
-                      Generate
+                      Preview
                     </Button>
                   </div>
-                  <p className="text-xs text-muted-foreground">Leave empty to have a code generated on create, or click Generate to preview. Do not enter manually unless reusing an existing code.</p>
+                  <p className="text-xs text-muted-foreground">Empty = auto-generated on Create. Preview shows format.</p>
                 </div>
 
                 <div className="space-y-2">
@@ -1668,8 +1668,8 @@ export function Admin() {
           <Card>
             <div className="p-6 border-b border-border flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <div>
-                <h3 className="text-lg font-semibold">Discount Coupons</h3>
-                <p className="text-sm text-muted-foreground mt-1">{coupons.filter(c => c.status === "Active").length} global coupons active · {userDiscounts.filter(d => d.status === "active").length} user-specific discounts active · Onboarding and/or trading packages</p>
+                <h3 className="text-lg font-semibold">Global Coupons (OB / 100 / 200 / 500)</h3>
+                <p className="text-sm text-muted-foreground mt-1">{coupons.filter(c => c.status === "Active").length} active · {userDiscounts.filter(d => d.status === "active").length} user-specific active</p>
               </div>
               <div className="flex gap-2 flex-wrap">
                 <Input
@@ -1691,11 +1691,9 @@ export function Admin() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Code</TableHead>
+                    <TableHead>Scope</TableHead>
                     <TableHead>Discount</TableHead>
-                    <TableHead>Applies To</TableHead>
-                    <TableHead>Packages</TableHead>
                     <TableHead>Usage</TableHead>
-                    <TableHead>Duration</TableHead>
                     <TableHead>Expires</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Description</TableHead>
@@ -1705,21 +1703,26 @@ export function Admin() {
                 <TableBody>
                   {coupons.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={10} className="text-center text-muted-foreground py-8">
+                      <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
                         No coupons found.
                       </TableCell>
                     </TableRow>
                   ) : (
                     coupons
                       .filter((c) => !couponSearchCode.trim() || (c.code || "").toLowerCase().includes(couponSearchCode.trim().toLowerCase()))
-                      .map((coupon) => (
+                      .map((coupon) => {
+                        const scopeLabel = (() => {
+                          if ((coupon.code || "").toUpperCase().startsWith("OB")) return "OB (joining fee)";
+                          if ((coupon.code || "").startsWith("100")) return "100 ($100 pkg)";
+                          if ((coupon.code || "").startsWith("200")) return "200 ($200 pkg)";
+                          if ((coupon.code || "").startsWith("500")) return "500 ($500 pkg)";
+                          return coupon.appliesTo === "onboarding" ? "Onboarding" : (coupon.packageIds?.join(", ") || "Packages");
+                        })();
+                        return (
                       <TableRow key={coupon.id}>
                         <TableCell className="font-mono font-semibold text-primary">{coupon.code}</TableCell>
+                        <TableCell className="text-sm font-medium">{scopeLabel}</TableCell>
                         <TableCell className="font-mono text-[#10B981] font-semibold">{coupon.discount}%</TableCell>
-                        <TableCell className="text-sm capitalize">{coupon.appliesTo?.replace("_", " ") ?? "both"}</TableCell>
-                        <TableCell className="text-sm">
-                          {coupon.packageIds?.length ? coupon.packageIds.join(", ") : "All"}
-                        </TableCell>
                         <TableCell>
                           {coupon.maxRedemptions != null ? (
                             <>
@@ -1732,7 +1735,6 @@ export function Admin() {
                             <span className="text-muted-foreground">{coupon.currentRedemptions} (unlimited)</span>
                           )}
                         </TableCell>
-                        <TableCell className="text-sm">{coupon.durationMonths} mo</TableCell>
                         <TableCell className="text-muted-foreground text-sm">
                           {coupon.expiresAt === "—" ? (
                             <Badge variant="outline" className="border-primary/50 text-primary">No Expiry</Badge>
@@ -1748,7 +1750,7 @@ export function Admin() {
                         <TableCell className="text-sm text-muted-foreground max-w-[180px] truncate">{coupon.description}</TableCell>
                         <TableCell className="text-right">
                           <div className="flex gap-2 justify-end">
-                            <Button variant="outline" size="sm" onClick={() => copyCouponURL(coupon.code)} title="Copy coupon URL">
+                            <Button variant="outline" size="sm" onClick={() => copyCouponURL(coupon.code, coupon.appliesTo)} title="Copy coupon URL">
                               <Link2 className="size-4" />
                             </Button>
                             {coupon.statusRaw === "active" ? (
@@ -1763,7 +1765,7 @@ export function Admin() {
                           </div>
                         </TableCell>
                       </TableRow>
-                    ))
+                    ); })
                   )}
                 </TableBody>
               </Table>
@@ -1776,21 +1778,28 @@ export function Admin() {
               <Link2 className="size-5 text-primary" />
               <div>
                 <h3 className="text-sm font-semibold">Shareable Coupon Links</h3>
-                <p className="text-xs text-muted-foreground">Share these links; coupon auto-applies at checkout (joining fee or package)</p>
+                <p className="text-xs text-muted-foreground">OB → /payments; 100/200/500 → /packages. Coupon auto-populates at checkout.</p>
               </div>
             </div>
             <div className="space-y-2">
-              {coupons.filter(c => c.status === "Active").slice(0, 3).map((coupon) => (
+              {coupons.filter(c => c.status === "Active").slice(0, 5).map((coupon) => {
+                const base = typeof window !== "undefined" ? window.location.origin.replace(/\/$/, "") : "https://www.klineo.xyz";
+                const path = coupon.appliesTo === "onboarding" ? "/payments" : "/packages";
+                const url = `${base}${path}?coupon=${coupon.code}`;
+                return (
                 <div key={coupon.id} className="flex items-center gap-3 p-3 bg-secondary/30 rounded border border-border">
-                  <div className="flex-1 min-w-0 font-mono text-xs text-muted-foreground truncate">
-                    https://klineo.xyz/packages?coupon={coupon.code}
+                  <div className="flex-1 min-w-0 flex flex-col gap-0.5">
+                    <span className="text-xs font-medium text-muted-foreground">
+                      {(coupon.code || "").toUpperCase().startsWith("OB") ? "OB (joining fee)" : (coupon.code || "").match(/^(100|200|500)/) ? `${(coupon.code || "").slice(0, 3)} (package)` : coupon.appliesTo || "—"}
+                    </span>
+                    <span className="font-mono text-xs truncate">{url}</span>
                   </div>
-                  <Button variant="outline" size="sm" onClick={() => copyCouponURL(coupon.code)}>
+                  <Button variant="outline" size="sm" onClick={() => copyCouponURL(coupon.code, coupon.appliesTo)}>
                     <Copy className="size-4 mr-2" />
                     Copy
                   </Button>
                 </div>
-              ))}
+              ); })}
             </div>
           </Card>
 
