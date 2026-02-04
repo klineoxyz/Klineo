@@ -1475,7 +1475,7 @@ adminRouter.post('/payments/intents/:id/approve',
 
     const { data: intent, error: findErr } = await client
       .from('payment_intents')
-      .select('id, user_id, kind, package_code, status')
+      .select('id, user_id, kind, package_code, coupon_code, status')
       .eq('id', intentId)
       .single();
 
@@ -1535,6 +1535,22 @@ adminRouter.post('/payments/intents/:id/approve',
         },
         { onConflict: 'user_id' }
       );
+
+      // Increment user_discounts.trading_used_count when package approved with user-specific discount
+      const couponCodeRaw = (intent as { coupon_code?: string | null }).coupon_code;
+      if (couponCodeRaw?.trim()) {
+        const { data: ud } = await client
+          .from('user_discounts')
+          .select('id, trading_used_count')
+          .eq('code', couponCodeRaw.trim().toUpperCase())
+          .eq('user_id', userId)
+          .eq('scope', 'trading_packages')
+          .maybeSingle();
+        if (ud) {
+          const cur = (ud as { trading_used_count?: number }).trading_used_count ?? 0;
+          await client.from('user_discounts').update({ trading_used_count: cur + 1, updated_at: new Date().toISOString() }).eq('id', (ud as { id: string }).id);
+        }
+      }
     }
 
     const { error: profileErr } = await client

@@ -91,7 +91,7 @@ User → Packages/Subscription
 | Check | Status | Notes |
 |-------|--------|-------|
 | QR for Safe address | ✅ | External API: `https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=...` |
-| Third-party dependency | ⚠️ | Relies on qrserver.com. If blocked or down, QR fails. Consider self-hosted or client-side QR lib. |
+| Client-side QR | ✅ | Uses qrcode.react (QRCodeSVG); no external API. |
 
 ---
 
@@ -123,8 +123,8 @@ User → Packages/Subscription
 |-------|--------|-------|
 | Increment on intent create | ✅ | After insert, `coupons` row updated: `current_redemptions += 1`. |
 | Only for global coupons | ✅ | Increment only when `couponRow` exists (from `coupons` table). User_discounts not incremented. |
-| Race condition | ⚠️ | **Gap:** Two concurrent intents with same coupon can both pass validation (max_redemptions) and both increment. Recommendation: use `UPDATE coupons SET current_redemptions = current_redemptions + 1 WHERE id = ? AND (max_redemptions IS NULL OR current_redemptions < max_redemptions) RETURNING id` and fail if no row updated. |
-| user_discounts.trading_used_count | ⚠️ | **Not incremented** on package payment. User_discounts have `trading_max_packages` and `trading_used_count` but payment-intents flow does not update `trading_used_count`. Consider adding increment when package intent is approved with a user_discount code. |
+| Race condition | ✅ | Fixed: `try_increment_coupon_redemption` RPC atomically increments; fails if max_redemptions reached. Migration `20260203100000_atomic_coupon_redemption.sql`. |
+| user_discounts.trading_used_count | ✅ | Fixed: Admin approve increments `trading_used_count` when package intent approved with user_discount (scope=trading_packages). |
 
 ### 3.4 URL / Deep Link
 
@@ -194,12 +194,12 @@ User → Packages/Subscription
 
 ### 6.1 Documented Gaps
 
-| ID | Severity | Description | Recommendation |
-|----|----------|-------------|----------------|
-| G1 | Medium | **Coupon redemption race:** Concurrent intents can over-redeem. | Use atomic `UPDATE ... WHERE current_redemptions < max_redemptions` and check affected rows. |
-| G2 | Low | **user_discounts.trading_used_count** not incremented on package approval. | Add increment in admin approve flow when intent used a user_discount code. |
-| G3 | Low | **QR code external API:** qrserver.com. | Consider `qrcode.react` or similar for client-side QR; no external dependency. |
-| G4 | Low | **Custom coupon + wrong scope:** Admin can enter code "OB123" but select scope "100". Backend uses `couponScope` for applies_to/package_ids. Code format (OB/100/200/500) is not enforced for custom codes. | Document that custom codes should match scope; or validate prefix vs scope. |
+| ID | Severity | Description | Status |
+|----|----------|-------------|--------|
+| G1 | Medium | **Coupon redemption race** | ✅ Fixed: `try_increment_coupon_redemption` RPC |
+| G2 | Low | **user_discounts.trading_used_count** not incremented | ✅ Fixed: Admin approve increments on package + user_discount |
+| G3 | Low | **QR code external API** | ✅ Fixed: Client-side `qrcode.react` |
+| G4 | Low | **Custom coupon + wrong scope:** Admin can enter code "OB123" but select scope "100". Backend uses `couponScope` for applies_to/package_ids. | Document that custom codes should match scope; or validate prefix vs scope. |
 
 ### 6.2 Schema Notes
 
@@ -259,16 +259,13 @@ User → Packages/Subscription
 - Contribution wallet flow is straightforward.
 - Coupon validation is thorough (expiry, redemptions, scope).
 
-### Recommended Follow-Ups (Priority)
+### Deployment Note
 
-1. **P1 — Coupon redemption race:** Implement atomic increment with max_redemptions check.
-2. **P2 — user_discounts.trading_used_count:** Increment when package intent approved with user_discount.
-3. **P3 — QR code:** Evaluate client-side QR generation to remove external API dependency.
-4. **P4 — Custom coupon scope validation:** Optionally enforce that custom code prefix matches selected scope.
+**Run migration before deploy:** `supabase/migrations/20260203100000_atomic_coupon_redemption.sql` creates `try_increment_coupon_redemption`. Without it, coupon redemption will return 500.
 
 ### No Critical Blockers
 
-The system is suitable for beta/production use. Address P1 before high-volume coupon usage.
+The system is suitable for beta/production use. All audit gaps G1–G3 have been addressed.
 
 ---
 

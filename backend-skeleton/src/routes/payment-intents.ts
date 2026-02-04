@@ -239,6 +239,20 @@ paymentIntentsRouter.post(
       }
     }
 
+    // Atomic coupon redemption (prevents race: max_redemptions overflow)
+    if (couponApplied) {
+      const { data: couponRow } = await client.from('coupons').select('id').eq('code', couponApplied.code).single();
+      if (couponRow) {
+        const { data: incremented, error: rpcErr } = await client.rpc('try_increment_coupon_redemption', { p_coupon_id: (couponRow as { id: string }).id });
+        if (rpcErr) {
+          return res.status(500).json({ error: 'Failed to redeem coupon. Ensure migration 20260203100000_atomic_coupon_redemption is applied.' });
+        }
+        if (!incremented) {
+          return res.status(400).json({ error: 'This coupon has reached its redemption limit' });
+        }
+      }
+    }
+
     const insertPayload: Record<string, unknown> = {
       user_id: userId,
       kind: kind as string,
@@ -268,11 +282,6 @@ paymentIntentsRouter.post(
     if (couponApplied) {
       details.coupon_code = couponApplied.code;
       details.discount_percent = couponApplied.discountPercent;
-      const { data: couponRow } = await client.from('coupons').select('id, current_redemptions').eq('code', couponApplied.code).single();
-      if (couponRow) {
-        const current = (couponRow as { current_redemptions?: number }).current_redemptions ?? 0;
-        await client.from('coupons').update({ current_redemptions: current + 1, updated_at: new Date().toISOString() }).eq('id', (couponRow as { id: string }).id);
-      }
     }
 
     const instructions = `Send exactly ${amountUsdt} USDT (BEP20) to the Treasury Safe. Use BSC network. USDT contract: ${USDT_BSC}`;

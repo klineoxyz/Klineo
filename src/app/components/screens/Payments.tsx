@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { api } from "@/lib/api";
 import { toast } from "@/app/lib/toast";
 import { copyToClipboard } from "@/app/lib/clipboard";
+import { QRCodeSVG } from "qrcode.react";
 import { Copy, ExternalLink, Wallet, AlertCircle, Loader2, Send, Tag, X, Trash2 } from "lucide-react";
 
 const SAFE_LINK = "https://app.safe.global/home?safe=bnb:0x0E60e94252F58aBb56604A8260492d96cf879007";
@@ -519,11 +520,9 @@ export function Payments({ onNavigate, viewData }: PaymentsProps) {
                     <a href={currentIntent.safe_link} target="_blank" rel="noopener noreferrer" className="text-primary inline-flex items-center gap-1 text-sm">
                       Open Safe <ExternalLink className="size-3" />
                     </a>
-                    <img
-                      src={`https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(currentIntent.treasury_address)}`}
-                      alt="QR code for Safe address"
-                      className="size-[120px] rounded border border-border"
-                    />
+                    <div className="size-[120px] rounded border border-border flex items-center justify-center bg-white p-1">
+                      <QRCodeSVG value={currentIntent.treasury_address} size={108} level="M" />
+                    </div>
                   </div>
                   <div className="pt-4 border-t space-y-3">
                     <Label>Transaction hash (after you send USDT)</Label>
