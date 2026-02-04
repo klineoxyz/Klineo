@@ -1539,7 +1539,7 @@ export function Admin() {
               <Ticket className="size-6 text-primary" />
               <div>
                 <h3 className="text-lg font-semibold">Create Global Coupon</h3>
-                <p className="text-sm text-muted-foreground">One coupon = one scope. OB for joining fee; 100/200/500 for packages. Code auto-generates as OB/100/200/500 + 8 chars. Share link: /payments (OB) or /packages (100/200/500).</p>
+                <p className="text-sm text-muted-foreground">One coupon = one scope. OB for joining fee; 100/200/500 for packages. Share link: /payments (OB) or /packages (100/200/500).</p>
               </div>
             </div>
 
@@ -1552,16 +1552,16 @@ export function Admin() {
                       id="coupon-code"
                       value={couponCode}
                       onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
-                      placeholder={`Leave empty → ${couponScope} + 8 chars`}
+                      placeholder="Leave empty to auto-generate"
                       className="font-mono uppercase"
                       maxLength={32}
                     />
                     <Button variant="outline" onClick={generateCouponCode} className="shrink-0">
                       <RefreshCw className="size-4 mr-2" />
-                      Preview
+                      Generate
                     </Button>
                   </div>
-                  <p className="text-xs text-muted-foreground">Empty = auto-generated on Create. Preview shows format.</p>
+                  <p className="text-xs text-muted-foreground">Optional. System generates a unique code if left empty.</p>
                 </div>
 
                 <div className="space-y-2">
@@ -1587,13 +1587,13 @@ export function Admin() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="OB">Onboarding (OB + code) — joining fee only</SelectItem>
-                      <SelectItem value="100">Package $100 (100 + code)</SelectItem>
-                      <SelectItem value="200">Package $200 (200 + code)</SelectItem>
-                      <SelectItem value="500">Package $500 (500 + code)</SelectItem>
+                      <SelectItem value="OB">Onboarding — joining fee only</SelectItem>
+                      <SelectItem value="100">Package $100</SelectItem>
+                      <SelectItem value="200">Package $200</SelectItem>
+                      <SelectItem value="500">Package $500</SelectItem>
                     </SelectContent>
                   </Select>
-                  <p className="text-xs text-muted-foreground">One coupon = one scope. Code format: OB/100/200/500 + alphanumeric.</p>
+                  <p className="text-xs text-muted-foreground">One coupon applies to one type only.</p>
                 </div>
 
                 <div className="space-y-2">
