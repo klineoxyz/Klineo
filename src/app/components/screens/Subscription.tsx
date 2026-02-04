@@ -77,12 +77,14 @@ export function Subscription({ onNavigate }: SubscriptionProps) {
   const handleJoiningFeeCheckout = async () => {
     setJoiningFeeLoading(true);
     try {
+      const body: { kind: "joining_fee"; coupon_code?: string } = { kind: "joining_fee" };
+      if (couponFromUrl?.trim()) body.coupon_code = couponFromUrl.trim();
       const data = await api.post<{
         intent: { id: string; amount_usdt: number; status: string };
         treasury_address: string;
         amount_usdt: number;
         safe_link: string;
-      }>("/api/payments/intents", { kind: "joining_fee" });
+      }>("/api/payments/intents", body);
       const newIntent = {
         id: data.intent.id,
         amount_usdt: data.amount_usdt,
@@ -126,12 +128,14 @@ export function Subscription({ onNavigate }: SubscriptionProps) {
     setPackageLoading(packageId);
     try {
       const packageCode = packageCodeForId[packageId] ?? "ENTRY_100";
+      const body: { kind: "package"; package_code: string; coupon_code?: string } = { kind: "package", package_code: packageCode };
+      if (couponFromUrl?.trim()) body.coupon_code = couponFromUrl.trim();
       const data = await api.post<{
         intent: { id: string; amount_usdt: number; status: string };
         treasury_address: string;
         amount_usdt: number;
         safe_link: string;
-      }>("/api/payments/intents", { kind: "package", package_code: packageCode });
+      }>("/api/payments/intents", body);
       const newIntent = {
         id: data.intent.id,
         amount_usdt: data.amount_usdt,

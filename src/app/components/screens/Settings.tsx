@@ -896,7 +896,7 @@ export function Settings({ onNavigate }: SettingsProps) {
           </Card>
 
           <Card className="p-6 space-y-4">
-            <h3 className="text-lg font-semibold">Payment Wallet (BSC)</h3>
+            <h3 className="text-lg font-semibold">Contribution Wallet (BSC)</h3>
             <div className="space-y-2">
               <Label>USDT Wallet Address (BEP20)</Label>
               <Input
@@ -906,7 +906,7 @@ export function Settings({ onNavigate }: SettingsProps) {
                 onChange={(e) => setPaymentWalletBsc(e.target.value)}
                 disabled={profileLoading}
               />
-              <p className="text-xs text-muted-foreground">BSC wallet used when you send manual USDT payments to Safe (joining fee or packages)</p>
+              <p className="text-xs text-muted-foreground">Your BSC wallet — you send USDT from here for joining fee and packages. Required before paying.</p>
             </div>
             <Button
               variant="outline"

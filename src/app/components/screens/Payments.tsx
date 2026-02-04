@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Card } from "@/app/components/ui/card";
 import { Badge } from "@/app/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/app/components/ui/table";
@@ -44,6 +45,7 @@ interface PaymentsProps {
 }
 
 export function Payments({ onNavigate, viewData }: PaymentsProps) {
+  const [searchParams] = useSearchParams();
   const [manualEnabled, setManualEnabled] = useState<boolean | null>(null);
   const [profile, setProfile] = useState<{ paymentWalletBsc?: string } | null>(null);
   const [intents, setIntents] = useState<PaymentIntent[]>([]);
@@ -78,8 +80,17 @@ export function Payments({ onNavigate, viewData }: PaymentsProps) {
     if (viewData?.newIntent) setCurrentIntent(viewData.newIntent);
   }, [viewData?.newIntent]);
 
+  // Auto-fill from wallet from Contribution wallet (profile) when opening submit form
   useEffect(() => {
-    const code = viewData?.couponCode?.trim()?.toUpperCase();
+    if (currentIntent?.status === "draft" && profile?.paymentWalletBsc?.trim()) {
+      setFromWallet(profile.paymentWalletBsc.trim());
+    }
+  }, [currentIntent?.id, currentIntent?.status, profile?.paymentWalletBsc]);
+
+  useEffect(() => {
+    const fromView = viewData?.couponCode?.trim()?.toUpperCase();
+    const fromUrl = searchParams.get("coupon")?.trim()?.toUpperCase();
+    const code = fromView || fromUrl;
     if (!code) return;
     setCouponCode(code);
     setCouponValidating(true);
@@ -101,7 +112,7 @@ export function Payments({ onNavigate, viewData }: PaymentsProps) {
       })
       .catch(() => toast.error("Could not validate coupon"))
       .finally(() => setCouponValidating(false));
-  }, [viewData?.couponCode, viewData?.couponKind, viewData?.couponPackageCode]);
+  }, [viewData?.couponCode, viewData?.couponKind, viewData?.couponPackageCode, searchParams]);
 
   useEffect(() => {
     const check = async () => {
@@ -229,7 +240,7 @@ export function Payments({ onNavigate, viewData }: PaymentsProps) {
 
   const handleCreateIntent = async () => {
     if (!hasPaymentWallet) {
-      toast.error("Save your payment wallet (BSC) in Settings first");
+      toast.error("Save your Contribution wallet in Settings → Profile first");
       return;
     }
     setCreating(true);
@@ -343,8 +354,8 @@ export function Payments({ onNavigate, viewData }: PaymentsProps) {
           <div className="flex items-start gap-3">
             <AlertCircle className="size-5 text-amber-600 shrink-0 mt-0.5" />
             <div>
-              <p className="font-medium">Payment wallet required</p>
-              <p className="text-sm text-muted-foreground mt-1">Save your BSC (BEP20) USDT wallet in Settings before creating a payment. This is the wallet you will send from.</p>
+              <p className="font-medium">Contribution wallet required</p>
+              <p className="text-sm text-muted-foreground mt-1">Set your Contribution wallet in Settings → Profile. You pay from this wallet for joining fee and packages.</p>
               <Button variant="outline" size="sm" className="mt-3" onClick={() => onNavigate("settings")}>
                 Open Settings
               </Button>
@@ -508,6 +519,11 @@ export function Payments({ onNavigate, viewData }: PaymentsProps) {
                     <a href={currentIntent.safe_link} target="_blank" rel="noopener noreferrer" className="text-primary inline-flex items-center gap-1 text-sm">
                       Open Safe <ExternalLink className="size-3" />
                     </a>
+                    <img
+                      src={`https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(currentIntent.treasury_address)}`}
+                      alt="QR code for Safe address"
+                      className="size-[120px] rounded border border-border"
+                    />
                   </div>
                   <div className="pt-4 border-t space-y-3">
                     <Label>Transaction hash (after you send USDT)</Label>
@@ -517,7 +533,7 @@ export function Payments({ onNavigate, viewData }: PaymentsProps) {
                       value={txHash}
                       onChange={(e) => setTxHash(e.target.value)}
                     />
-                    <Label className="text-muted-foreground">From wallet (optional)</Label>
+                    <Label className="text-muted-foreground">From wallet (auto-filled from Contribution wallet)</Label>
                     <Input
                       placeholder="0x... (BEP20)"
                       className="font-mono"

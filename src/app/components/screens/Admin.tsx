@@ -101,8 +101,7 @@ export function Admin() {
   // Coupon creation state
   const [couponCode, setCouponCode] = useState("");
   const [discountPercent, setDiscountPercent] = useState("");
-  const [couponAppliesTo, setCouponAppliesTo] = useState<"onboarding" | "trading_packages" | "both">("both");
-  const [couponPackageIds, setCouponPackageIds] = useState<string[]>([]);
+  const [couponScope, setCouponScope] = useState<"OB" | "100" | "200" | "500">("OB");
   const [maxRedemptions, setMaxRedemptions] = useState("");
   const [durationMonths, setDurationMonths] = useState("");
   const [couponExpiry, setCouponExpiry] = useState("");
@@ -467,12 +466,13 @@ export function Admin() {
 
   const generateCouponCode = () => {
     const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-    let code = "";
+    let suffix = "";
     for (let i = 0; i < 8; i++) {
-      code += chars.charAt(Math.floor(Math.random() * chars.length));
+      suffix += chars.charAt(Math.floor(Math.random() * chars.length));
     }
+    const code = couponScope + suffix;
     setCouponCode(code);
-    toast.info("Coupon code generated", { description: code });
+    toast.info("Preview", { description: code });
   };
 
   const handleCreateCoupon = async () => {
@@ -487,8 +487,7 @@ export function Admin() {
       const res = await api.post<{ coupon: { code: string } }>('/api/admin/coupons', {
         code: couponCode.trim() || undefined,
         discount: parseFloat(discountPercent),
-        appliesTo: couponAppliesTo,
-        packageIds: (couponAppliesTo === "trading_packages" || couponAppliesTo === "both") && couponPackageIds.length > 0 ? couponPackageIds : undefined,
+        couponScope,
         maxRedemptions: maxRedemptions ? parseInt(maxRedemptions, 10) : undefined,
         durationMonths: parseInt(durationMonths, 10),
         expiresAt: couponExpiry || undefined,
@@ -496,12 +495,10 @@ export function Admin() {
       });
       const createdCode = (res as any)?.coupon?.code ?? couponCode;
       toast.success("Coupon created successfully", {
-        description: createdCode ? `${createdCode} — ${discountPercent}% off (${couponAppliesTo}) for ${durationMonths} months` : `${discountPercent}% off for ${durationMonths} months`,
+        description: createdCode ? `${createdCode} — ${discountPercent}% off (${couponScope}) for ${durationMonths} months` : `${discountPercent}% off for ${durationMonths} months`,
       });
       setCouponCode("");
       setDiscountPercent("");
-      setCouponAppliesTo("both");
-      setCouponPackageIds([]);
       setMaxRedemptions("");
       setDurationMonths("");
       setCouponExpiry("");
@@ -522,10 +519,6 @@ export function Admin() {
     } catch (err: any) {
       toast.error("Failed to update coupon");
     }
-  };
-
-  const togglePackageId = (id: string) => {
-    setCouponPackageIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   };
 
   const PACKAGE_OPTIONS = [
@@ -1588,43 +1581,20 @@ export function Admin() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label>Applies To *</Label>
-                  <Select value={couponAppliesTo} onValueChange={(v: "onboarding" | "trading_packages" | "both") => setCouponAppliesTo(v)}>
+                  <Label>Discount Type *</Label>
+                  <Select value={couponScope} onValueChange={(v: "OB" | "100" | "200" | "500") => setCouponScope(v)}>
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="onboarding">Onboarding (joining fee only)</SelectItem>
-                      <SelectItem value="trading_packages">Trading packages only</SelectItem>
-                      <SelectItem value="both">Both onboarding & trading packages</SelectItem>
+                      <SelectItem value="OB">Onboarding (OB + code) — joining fee only</SelectItem>
+                      <SelectItem value="100">Package $100 (100 + code)</SelectItem>
+                      <SelectItem value="200">Package $200 (200 + code)</SelectItem>
+                      <SelectItem value="500">Package $500 (500 + code)</SelectItem>
                     </SelectContent>
                   </Select>
-                  <p className="text-xs text-muted-foreground">Where this discount applies</p>
+                  <p className="text-xs text-muted-foreground">One coupon = one scope. Code format: OB/100/200/500 + alphanumeric.</p>
                 </div>
-
-                {(couponAppliesTo === "trading_packages" || couponAppliesTo === "both") && (
-                  <div className="space-y-2">
-                    <Label>Which Packages (optional)</Label>
-                    <div className="flex flex-wrap gap-3">
-                      {[
-                        { id: "entry_100", label: "Entry $100" },
-                        { id: "pro_200", label: "Pro $200" },
-                        { id: "elite_500", label: "Elite $500" },
-                      ].map((p) => (
-                        <label key={p.id} className="flex items-center gap-2 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={couponPackageIds.includes(p.id)}
-                            onChange={() => togglePackageId(p.id)}
-                            className="rounded border-input"
-                          />
-                          <span className="text-sm">{p.label}</span>
-                        </label>
-                      ))}
-                    </div>
-                    <p className="text-xs text-muted-foreground">Leave all unchecked for all packages</p>
-                  </div>
-                )}
 
                 <div className="space-y-2">
                   <Label htmlFor="max-redemptions">Max Redemptions</Label>
@@ -1689,7 +1659,7 @@ export function Admin() {
                 Create Coupon
               </Button>
               <p className="text-xs text-muted-foreground">
-                Shareable link: klineo.xyz/packages?coupon=CODE — applies at checkout for joining fee or package.
+                Shareable link: /packages?coupon=CODE or /payments?coupon=CODE — coupon auto-populates at checkout. 100% off = no TX hash required.
               </p>
             </div>
           </Card>
@@ -2038,7 +2008,7 @@ export function Admin() {
               <div>
                 <h3 className="text-lg font-semibold">Payment Intents (Manual Safe)</h3>
                 <p className="text-sm text-muted-foreground mt-0.5">
-                  Submitted payments from all users appear here. Each user sees only their own intents on the Payments page. <strong>Reject</strong> (with optional reason in Note) or <strong>Approve</strong> for Pending review / Flagged; Reject only for Draft. For 100% discount, TX hash is not required.
+                  Submitted payments from all users. Check Klineo Safe wallet for TX hash; if payment received → <strong>Confirm</strong>; if not → <strong>Deny</strong>. Coupon code (when used) is shown. For 100% discount, TX hash is not required.
                 </p>
               </div>
               <div className="flex items-center gap-2">
@@ -2126,18 +2096,18 @@ export function Admin() {
                           ) : '—'}
                         </TableCell>
                         <TableCell className="text-right">
-                          {(pi.status === 'pending_review' || pi.status === 'flagged') ? (
+                            {(pi.status === 'pending_review' || pi.status === 'flagged') ? (
                             <div className="flex gap-1 justify-end">
                               <Button size="sm" variant="default" onClick={() => handleApproveIntent(pi.id)} disabled={paymentIntentActionLoading}>
-                                Approve
+                                Confirm
                               </Button>
                               <Button size="sm" variant="outline" onClick={() => handleRejectIntent(pi.id)} disabled={paymentIntentActionLoading}>
-                                Reject
+                                Deny
                               </Button>
                             </div>
                           ) : pi.status === 'draft' ? (
                             <Button size="sm" variant="outline" className="text-destructive" onClick={() => handleRejectIntent(pi.id)} disabled={paymentIntentActionLoading}>
-                              Reject
+                              Deny
                             </Button>
                           ) : (
                             <span className="text-xs text-muted-foreground">—</span>
@@ -2155,7 +2125,7 @@ export function Admin() {
                 Open Safe <Link2 className="size-3" />
               </a>
               <div className="flex items-center gap-2">
-                <Label className="text-muted-foreground text-xs">Note (for Approve/Reject):</Label>
+                <Label className="text-muted-foreground text-xs">Note (for Confirm/Deny):</Label>
                 <Input placeholder="Optional note" className="max-w-xs h-8" value={paymentIntentActionNote} onChange={(e) => setPaymentIntentActionNote(e.target.value)} />
               </div>
             </div>

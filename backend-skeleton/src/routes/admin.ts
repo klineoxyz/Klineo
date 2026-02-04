@@ -32,6 +32,12 @@ function generateSystemCouponCode(): string {
   return code;
 }
 
+/** Generate prefixed coupon: OB (onboarding), 100/200/500 (packages). One coupon = one scope. */
+function generatePrefixedCouponCode(prefix: string): string {
+  const suffix = generateSystemCouponCode().slice(0, 8);
+  return prefix + suffix;
+}
+
 export const adminRouter: Router = Router();
 
 // All admin routes require authentication + admin role
@@ -876,11 +882,12 @@ adminRouter.get('/coupons', async (req, res) => {
  */
 adminRouter.post('/coupons', 
   validate([
-    body('code').optional().trim().isString().isLength({ min: 0, max: 20 }).matches(/^[A-Z0-9]*$/).withMessage('code must be empty or 3-20 uppercase alphanumeric characters'),
+    body('code').optional().trim().isString().isLength({ min: 0, max: 32 }).matches(/^[A-Z0-9]*$/).withMessage('code must be empty or uppercase alphanumeric'),
     body('discount').isFloat({ min: 0, max: 100 }).withMessage('discount must be between 0 and 100'),
     body('appliesTo').optional().isIn(['onboarding', 'trading_packages', 'both']).withMessage('appliesTo must be onboarding, trading_packages, or both'),
     body('packageIds').optional().isArray().withMessage('packageIds must be an array'),
     body('packageIds.*').optional().isString().isIn(['entry_100', 'pro_200', 'elite_500']).withMessage('packageIds must be entry_100, pro_200, or elite_500'),
+    body('couponScope').optional().isIn(['OB', '100', '200', '500']).withMessage('couponScope for auto-generated code: OB=onboarding, 100/200/500=package'),
     body('maxRedemptions').optional().isInt({ min: 1 }).withMessage('maxRedemptions must be a positive integer'),
     body('durationMonths').isInt({ min: 1, max: 12 }).withMessage('durationMonths must be between 1 and 12'),
     body('expiresAt').optional().isISO8601().withMessage('expiresAt must be a valid ISO date'),
@@ -893,10 +900,11 @@ adminRouter.post('/coupons',
     }
 
     try {
-      let { code, discount, appliesTo, packageIds, maxRedemptions, durationMonths, expiresAt, description } = req.body;
+      let { code, discount, appliesTo, packageIds, maxRedemptions, durationMonths, expiresAt, description, couponScope } = req.body;
       if (!code || (code as string).trim() === '') {
+        const prefix = couponScope && ['OB', '100', '200', '500'].includes(couponScope) ? couponScope : 'OB';
         for (let attempt = 0; attempt < 15; attempt++) {
-          code = generateSystemCouponCode();
+          code = generatePrefixedCouponCode(prefix);
           const [{ data: existingCoupon }, { data: existingUd }] = await Promise.all([
             client.from('coupons').select('id').eq('code', code).maybeSingle(),
             client.from('user_discounts').select('id').eq('code', code).maybeSingle(),
@@ -913,13 +921,20 @@ adminRouter.post('/coupons',
         }
       }
 
+    const finalAppliesTo = appliesTo || (couponScope === 'OB' ? 'onboarding' : 'trading_packages');
+    const finalPackageIds = Array.isArray(packageIds) && packageIds.length > 0 ? packageIds
+      : couponScope === '100' ? ['entry_100']
+      : couponScope === '200' ? ['pro_200']
+      : couponScope === '500' ? ['elite_500']
+      : null;
+
     const { data, error } = await client
       .from('coupons')
       .insert({
         code: (code as string).toUpperCase(),
         discount_percent: parseFloat(discount),
-        applies_to: appliesTo || 'both',
-        package_ids: Array.isArray(packageIds) && packageIds.length > 0 ? packageIds : null,
+        applies_to: finalAppliesTo,
+        package_ids: finalPackageIds,
         max_redemptions: maxRedemptions ? parseInt(maxRedemptions) : null,
         duration_months: parseInt(durationMonths),
         expires_at: expiresAt || null,
