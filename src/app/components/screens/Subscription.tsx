@@ -84,15 +84,18 @@ export function Subscription({ onNavigate }: SubscriptionProps) {
         treasury_address: string;
         amount_usdt: number;
         safe_link: string;
+        coupon_applied?: { code: string; discount_percent: number };
       }>("/api/payments/intents", body);
+      const couponResp = (data as { coupon_applied?: { code: string; discount_percent: number } }).coupon_applied;
       const newIntent = {
         id: data.intent.id,
         amount_usdt: data.amount_usdt,
         treasury_address: data.treasury_address,
         safe_link: data.safe_link,
         status: data.intent.status,
+        ...(couponResp && { coupon_code: couponResp.code, discount_percent: couponResp.discount_percent }),
       };
-      onNavigate("payments", { newIntent, couponCode: couponFromUrl ?? undefined, couponKind: "joining_fee" });
+      onNavigate("payments", { newIntent, couponCode: couponFromUrl ?? couponResp?.code, couponKind: "joining_fee" });
       toast.success("Go to Payments", {
         description: "Send USDT (BEP20) to the Safe address, then submit your transaction hash.",
       });
@@ -135,15 +138,18 @@ export function Subscription({ onNavigate }: SubscriptionProps) {
         treasury_address: string;
         amount_usdt: number;
         safe_link: string;
+        coupon_applied?: { code: string; discount_percent: number };
       }>("/api/payments/intents", body);
+      const couponResp = (data as { coupon_applied?: { code: string; discount_percent: number } }).coupon_applied;
       const newIntent = {
         id: data.intent.id,
         amount_usdt: data.amount_usdt,
         treasury_address: data.treasury_address,
         safe_link: data.safe_link,
         status: data.intent.status,
+        ...(couponResp && { coupon_code: couponResp.code, discount_percent: couponResp.discount_percent }),
       };
-      onNavigate("payments", { newIntent, couponCode: couponFromUrl ?? undefined, couponKind: "package", couponPackageCode: packageCode });
+      onNavigate("payments", { newIntent, couponCode: couponFromUrl ?? couponResp?.code, couponKind: "package", couponPackageCode: packageCode });
       toast.success("Go to Payments", {
         description: "Send USDT (BEP20) to the Safe address, then submit your transaction hash.",
       });

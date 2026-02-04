@@ -482,6 +482,7 @@ export function Payments({ onNavigate, viewData }: PaymentsProps) {
               ) : (
                 <>
                   <h3 className="text-lg font-semibold">Deposit instructions</h3>
+                  <p className="text-sm text-muted-foreground">Send USDT (BEP20) on BSC network to the Safe address below.</p>
                   {(currentIntent.coupon_code ?? currentIntent.discount_percent != null) && (
                     <p className="text-sm font-medium">
                       {currentIntent.discount_percent != null && `${currentIntent.discount_percent}% off`}
@@ -491,37 +492,46 @@ export function Payments({ onNavigate, viewData }: PaymentsProps) {
                     </p>
                   )}
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-muted-foreground">Amount:</span>
-                    <span className="font-mono font-semibold">{currentIntent.amount_usdt} USDT</span>
+                    <span className="text-muted-foreground">Send exactly:</span>
+                    <span className="font-mono font-semibold text-lg">{currentIntent.amount_usdt} USDT</span>
                     <Button
-                      variant="ghost"
+                      variant="outline"
                       size="sm"
                       onClick={() => {
                         copyToClipboard(String(currentIntent.amount_usdt));
-                        toast.success("Copied");
+                        toast.success("Amount copied");
                       }}
                     >
-                      <Copy className="size-4" />
+                      <Copy className="size-4 mr-1" />
+                      Copy amount
                     </Button>
                   </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-muted-foreground">Treasury Safe:</span>
-                    <span className="font-mono text-sm break-all">{currentIntent.treasury_address}</span>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        copyToClipboard(currentIntent.treasury_address);
-                        toast.success("Copied");
-                      }}
-                    >
-                      <Copy className="size-4" />
-                    </Button>
-                    <a href={currentIntent.safe_link} target="_blank" rel="noopener noreferrer" className="text-primary inline-flex items-center gap-1 text-sm">
-                      Open Safe <ExternalLink className="size-3" />
-                    </a>
-                    <div className="size-[120px] rounded border border-border flex items-center justify-center bg-white p-1">
-                      <QRCodeSVG value={currentIntent.treasury_address} size={108} level="M" />
+                  <div className="space-y-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-muted-foreground">Treasury Safe address:</span>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          copyToClipboard(currentIntent.treasury_address);
+                          toast.success("Address copied");
+                        }}
+                      >
+                        <Copy className="size-4 mr-1" />
+                        Copy address
+                      </Button>
+                      <a href={currentIntent.safe_link} target="_blank" rel="noopener noreferrer" className="text-primary inline-flex items-center gap-1 text-sm">
+                        Open Safe <ExternalLink className="size-3" />
+                      </a>
+                    </div>
+                    <span className="font-mono text-sm break-all block text-muted-foreground">{currentIntent.treasury_address}</span>
+                    <div className="flex items-center gap-4 flex-wrap">
+                      <div className="flex flex-col gap-1">
+                        <span className="text-xs text-muted-foreground">Scan to pay</span>
+                        <div className="size-[140px] rounded-lg border border-border flex items-center justify-center bg-white p-2 shrink-0">
+                          <QRCodeSVG value={currentIntent.treasury_address} size={124} level="M" includeMargin={false} />
+                        </div>
+                      </div>
                     </div>
                   </div>
                   <div className="pt-4 border-t space-y-3">
