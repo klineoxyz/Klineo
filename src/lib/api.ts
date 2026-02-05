@@ -21,12 +21,26 @@ export function sanitizeExchangeError(message: string | undefined | null): strin
   return out.slice(0, 500);
 }
 
+/** Check if error indicates backend unreachable (502, network, CORS preflight failure). */
+export function isBackendUnreachableError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err ?? '').toLowerCase();
+  return (
+    /failed to fetch|networkerror|load failed|network request failed|connection refused/i.test(msg) ||
+    /502|bad gateway/i.test(msg)
+  );
+}
+
+/** User-facing message when backend is unreachable. */
+export const BACKEND_UNREACHABLE_MESSAGE =
+  'Backend unreachable. The API may be down (502) or temporarily unavailable. Check Railway dashboard or try again later.';
+
 /**
  * Extract user-facing message from an API error. Handles raw JSON body thrown by apiRequest
  * (e.g. "403: {\"error\":\"...\", \"message\":\"...\"}" or plain "{\"message\":\"...\"}").
  */
 export function getApiErrorMessage(err: unknown): string {
   const msg = err instanceof Error ? err.message : String(err ?? 'Something went wrong');
+  if (isBackendUnreachableError(err)) return BACKEND_UNREACHABLE_MESSAGE;
   const toParse = msg.replace(/^\d+\s*:\s*/, '').trim();
   if (toParse.startsWith('{')) {
     try {

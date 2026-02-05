@@ -10,7 +10,7 @@ import { Alert, AlertDescription } from "@/app/components/ui/alert";
 import { AlertTriangle, Key, Shield, Wifi, Trash2, CheckCircle2, XCircle, Loader2, Plus, KeyRound, RefreshCw, Upload } from "lucide-react";
 import { useAuth } from "@/app/contexts/AuthContext";
 import { useDemo } from "@/app/contexts/DemoContext";
-import { api, exchangeConnections, getApiErrorMessage, sanitizeExchangeError, type ExchangeConnection } from "@/lib/api";
+import { api, exchangeConnections, getApiErrorMessage, isBackendUnreachableError, sanitizeExchangeError, type ExchangeConnection } from "@/lib/api";
 import { supabase } from "@/lib/supabase";
 import { toast } from "@/app/lib/toast";
 import { Badge } from "@/app/components/ui/badge";
@@ -153,7 +153,7 @@ export function Settings({ onNavigate }: SettingsProps) {
         setProfileLoading(false);
       })
       .catch((err: any) => {
-        setProfileError(err?.message || "Failed to load profile");
+        setProfileError(getApiErrorMessage(err) || "Failed to load profile");
         setProfileLoading(false);
       });
   }, [user?.id]);
@@ -619,7 +619,12 @@ export function Settings({ onNavigate }: SettingsProps) {
           {profileError && (
             <Alert variant="destructive" className="border-red-500/20 bg-red-500/10">
               <AlertTriangle className="size-4" />
-              <AlertDescription>{profileError}</AlertDescription>
+              <AlertDescription>
+                {profileError}
+                {isBackendUnreachableError(profileError) && (
+                  <span className="block mt-2 text-xs opacity-90">CORS errors in the console often indicate the backend is down (502). Check Railway dashboard.</span>
+                )}
+              </AlertDescription>
             </Alert>
           )}
 
