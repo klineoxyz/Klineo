@@ -144,11 +144,12 @@ export function ConnectExchangeModal({
     <Dialog open={open} onOpenChange={(next) => handleClose(!!next)}>
       <DialogContent
         className={cn(
-          "max-w-[1100px] max-h-[80vh] w-[calc(100%-2rem)] p-0 gap-0 overflow-hidden",
-          "rounded-2xl shadow-2xl",
+          "max-w-[1100px] w-[calc(100vw-1rem)] sm:w-[calc(100vw-2rem)] max-h-[90vh] sm:max-h-[85vh] p-0 gap-0 overflow-hidden",
+          "rounded-xl sm:rounded-2xl shadow-2xl",
           "bg-gradient-to-br from-slate-900 via-slate-900 to-slate-800",
           "border border-slate-700/50",
-          "[&>button]:top-4 [&>button]:right-4 [&>button]:text-slate-400 [&>button]:hover:text-white [&>button]:hover:bg-slate-700/50"
+          "flex flex-col",
+          "[&>button]:top-3 [&>button]:right-3 sm:[&>button]:top-4 sm:[&>button]:right-4 [&>button]:rounded-md [&>button]:p-2 [&>button]:text-slate-400 [&>button]:hover:text-white [&>button]:hover:bg-slate-700/50 [&>button]:touch-manipulation"
         )}
         onPointerDownOutside={(e) => loading && e.preventDefault()}
         onEscapeKeyDown={(e) => loading && e.preventDefault()}
@@ -162,11 +163,11 @@ export function ConnectExchangeModal({
             : 'Klineo will help you set up and connect your exchange'}
         </DialogDescription>
         {/* Header */}
-        <div className="px-8 pt-8 pb-4 text-center">
-          <h2 className="text-xl font-semibold text-white">
+        <div className="shrink-0 px-4 sm:px-6 md:px-8 pt-4 sm:pt-6 md:pt-8 pb-3 sm:pb-4 text-center">
+          <h2 className="text-lg sm:text-xl font-semibold text-white">
             {exchangeOnly === 'bybit' ? 'Connect Bybit' : 'Select an exchange'}
           </h2>
-          <p className="text-sm text-slate-400 mt-1">
+          <p className="text-xs sm:text-sm text-slate-400 mt-1 max-w-md mx-auto">
             {exchangeOnly === 'bybit'
               ? 'Klineo will guide you through connecting your Bybit account'
               : 'Klineo will help you set up and connect your exchange'}
@@ -174,8 +175,8 @@ export function ConnectExchangeModal({
         </div>
 
         {/* Exchange selector row */}
-        <div className="px-8 pb-4 overflow-x-auto">
-          <div className="flex flex-wrap gap-2 justify-center">
+        <div className="shrink-0 px-4 sm:px-6 md:px-8 pb-3 sm:pb-4 overflow-x-auto -mx-1">
+          <div className="flex flex-wrap gap-1.5 sm:gap-2 justify-center min-w-0">
             {(['binance', 'bybit', 'okx', 'gate', 'kucoin', 'mexc', 'bitget', 'bingx', 'wallet'] as ExchangeId[]).map(
               (id) => {
                 const isMuted = exchangeOnly === 'bybit' && id !== 'bybit';
@@ -191,7 +192,7 @@ export function ConnectExchangeModal({
                     }}
                     disabled={isMuted}
                     className={cn(
-                      "px-4 py-2 rounded-full text-sm font-medium transition-all",
+                      "px-3 sm:px-4 py-2 rounded-full text-xs sm:text-sm font-medium transition-all shrink-0 touch-manipulation",
                       exchange === id
                         ? "bg-primary text-primary-foreground"
                         : "bg-slate-700/50 text-slate-300 hover:bg-slate-700 hover:text-white",
@@ -210,19 +211,19 @@ export function ConnectExchangeModal({
           </div>
         </div>
 
-          {/* Main content: two columns */}
-          <div className="px-8 pb-8 flex flex-col lg:flex-row gap-6 min-h-0">
+        {/* Main content: two columns - scrollable on mobile */}
+        <div className="flex-1 min-h-0 flex flex-col lg:flex-row gap-4 sm:gap-6 px-4 sm:px-6 md:px-8 pb-4 sm:pb-6 md:pb-8 overflow-y-auto">
             {/* LEFT: Create Account form */}
-            <div className="flex-shrink-0 lg:w-[420px]">
-              <Card className="p-6 bg-slate-800/50 border-slate-700">
-                <h3 className="text-base font-semibold text-white mb-4">Create Account</h3>
+            <div className="flex-shrink-0 w-full lg:w-[380px] xl:w-[420px] lg:max-h-[calc(90vh-12rem)] lg:overflow-y-auto">
+              <Card className="p-4 sm:p-6 bg-slate-800/50 border-slate-700">
+                <h3 className="text-sm sm:text-base font-semibold text-white mb-3 sm:mb-4">Create Account</h3>
 
                 {!supported ? (
                   <p className="text-sm text-slate-400">
                     {EXCHANGE_NAMES[exchange]} support is coming soon. Use Binance or Bybit for now.
                   </p>
                 ) : (
-                  <div className="space-y-4">
+                  <div className="space-y-3 sm:space-y-4">
                     <div>
                       <Label className="text-slate-300">Account Name</Label>
                       <Input
@@ -315,7 +316,7 @@ export function ConnectExchangeModal({
                             ))}
                           </div>
                         )}
-                        <Button onClick={handleDone} className="w-full mt-2">
+                        <Button onClick={handleDone} className="w-full mt-2 min-h-[44px] touch-manipulation">
                           Done
                         </Button>
                       </div>
@@ -324,7 +325,7 @@ export function ConnectExchangeModal({
                         <div className="rounded-lg bg-red-500/10 border border-red-500/20 p-3 text-sm text-red-300">
                           {errorMessage}
                         </div>
-                        <Button variant="outline" onClick={handleRetry} className="w-full">
+                        <Button variant="outline" onClick={handleRetry} className="w-full min-h-[44px] touch-manipulation">
                           Retry verification
                         </Button>
                       </div>
@@ -332,7 +333,7 @@ export function ConnectExchangeModal({
                       <Button
                         onClick={handleCreateAccount}
                         disabled={!canSubmit || loading}
-                        className="w-full mt-2"
+                        className="w-full mt-2 min-h-[44px] touch-manipulation"
                       >
                         {loading ? "Verifying connection…" : "Create Account"}
                       </Button>
@@ -343,19 +344,19 @@ export function ConnectExchangeModal({
             </div>
 
             {/* RIGHT: Step-by-step guidance */}
-            <div className="flex-1 min-w-0 overflow-y-auto">
-              <div className="space-y-3">
+            <div className="flex-1 min-w-0 min-h-0 overflow-y-auto">
+              <div className="space-y-2 sm:space-y-3">
                 {steps.map((step, i) => (
                   <Card
                     key={i}
-                    className="p-4 bg-slate-800/30 border-slate-700"
+                    className="p-3 sm:p-4 bg-slate-800/30 border-slate-700"
                   >
                     <div className="flex items-start gap-3">
-                      <Badge variant="outline" className="shrink-0 border-slate-600 text-slate-400">
+                      <Badge variant="outline" className="shrink-0 border-slate-600 text-slate-400 text-[10px] sm:text-xs px-1.5 py-0">
                         {step.label}
                       </Badge>
                       <div className="min-w-0 flex-1 space-y-2">
-                        <p className="text-sm text-slate-300">{step.text}</p>
+                        <p className="text-xs sm:text-sm text-slate-300">{step.text}</p>
                         {step.note && (
                           <p className="text-xs text-slate-500">{step.note}</p>
                         )}
@@ -369,7 +370,7 @@ export function ConnectExchangeModal({
                             href={step.linkHref}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1.5 mt-2 text-sm text-primary hover:underline"
+                            className="inline-flex items-center gap-1.5 mt-2 text-xs sm:text-sm text-primary hover:underline touch-manipulation py-1"
                           >
                             {step.linkText}
                             <span className="size-3.5">↗</span>
