@@ -97,7 +97,14 @@ exchangeConnectionsRouter.post(
       }
 
       if (result.ok) {
-        return res.json({ success: true, ok: true, latencyMs: result.latencyMs, message: result.message, requestId });
+        return res.json({
+          success: true,
+          ok: true,
+          latencyMs: result.latencyMs,
+          message: result.message,
+          warnings: result.warnings,
+          requestId,
+        });
       }
       return res.status(400).json({
         success: false,

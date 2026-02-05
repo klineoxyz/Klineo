@@ -112,10 +112,56 @@ Same keys from the Futures testnet UI work with `demo-fapi.binance.com` REST API
 
 ---
 
-## 10. Not Changed (Intentional)
+## 10. Hardening (Feb 2026)
+
+### Capability-based connection test
+
+- **Before:** Single call to `/api/v3/account`.
+- **After:**  
+  1. `GET /api/v3/time` (public) — connectivity check  
+  2. `GET /api/v3/account` (signed) — uses server time to avoid -1021  
+  3. Permission validation (canTrade, canWithdraw, permissions) — returns warnings only  
+
+- **Spot success = overall success.** Futures is never called during connection test.
+- **Futures failure does not affect connection test** — Futures test is a separate endpoint.
+
+### Server time offset
+
+- `getServerTime()` fetches `/api/v3/time`.
+- Connection test uses server time for signed requests to avoid -1021.
+- `buildSignedQuery()` accepts optional `overrideTimestamp`.
+
+### Error classification
+
+- `classifyBinanceError()` maps codes to: permission, timestamp, signature, ip_whitelist, rate_limit, restricted, other.
+- `getBinanceUserMessage()` returns user-safe messages (no secrets).
+- Codes: -2015 (permission), -1021 (timestamp), -1022 (signature), 429, 451.
+
+### Spot-only guarantees
+
+| Path | Endpoint(s) | Gating |
+|------|-------------|--------|
+| POST /test, POST /:id/test | Spot only | Always |
+| GET /balance | Spot only | Always |
+| POST /:id/futures/test | Futures | User-triggered |
+| POST /:id/futures/enable | Futures | User-triggered |
+| POST /futures/order | Futures | `futures_enabled` required |
+| Strategy runner | Futures | `futures_enabled` + kill_switch checked |
+
+### Checklist
+
+- [x] Spot-only EU users succeed (no Futures call in connection test)
+- [x] Futures-enabled users still work (separate test/enable/order endpoints)
+- [x] No regression: balance, orders, strategy runner unchanged
+- [x] Server time used in connection test to avoid -1021
+- [x] User-safe error messages; secrets never logged
+
+---
+
+## 11. Not Changed (Intentional)
 
 - **recvWindow 10000:** Kept for clock drift tolerance.
-- **No server-time sync:** Would add latency; doc suggests sync or server time only when needed.
+- **Server time for general signed requests:** Used in connection test only; other requests use `Date.now()`.
 - **No WebSocket implementation:** Requires larger changes; not part of this audit.
 - **Parameter order:** Doc allows any order; current implementation is fine.
 
