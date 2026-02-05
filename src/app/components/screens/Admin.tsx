@@ -1575,6 +1575,131 @@ export function Admin() {
           </Card>
         </TabsContent>
 
+        <TabsContent value="master-trader-requests" className="space-y-6" onFocus={() => loadMasterTraderApplications()}>
+          <Card>
+            <div className="p-4 border-b border-border">
+              <h3 className="text-lg font-semibold">Master Trader Applications</h3>
+              <p className="text-sm text-muted-foreground">Review and approve or reject applications. Qualified Master Traders get 6 months – 1 year free (configurable via discounts later).</p>
+            </div>
+            {masterTraderApplicationsLoading ? (
+              <div className="p-8 text-center text-muted-foreground">Loading applications...</div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>User</TableHead>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Exchange / Experience</TableHead>
+                    <TableHead>Package Benefit</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Submitted</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {masterTraderApplications.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+                        No Master Trader applications yet.
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    masterTraderApplications.map((app: any) => {
+                      const fd = app.formData || {};
+                      return (
+                        <TableRow key={app.id}>
+                          <TableCell className="font-medium">{app.userEmail}</TableCell>
+                          <TableCell>{fd.fullName || "—"}</TableCell>
+                          <TableCell className="text-xs">
+                            {fd.primaryExchange || "—"} / {fd.yearsExperience != null ? `${fd.yearsExperience} yrs` : "—"}
+                          </TableCell>
+                          <TableCell className="text-xs text-muted-foreground">
+                            6 mo – 1 yr free
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant={app.status === "approved" ? "default" : app.status === "rejected" ? "destructive" : "secondary"}>
+                              {app.status}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-xs text-muted-foreground">
+                            {app.createdAt ? new Date(app.createdAt).toLocaleDateString() : "—"}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {app.status === "pending" && (
+                              <div className="flex justify-end gap-2">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="text-[#10B981] border-[#10B981]/50"
+                                  onClick={() => {
+                                    setMasterTraderReviewApp({ id: app.id, userEmail: app.userEmail });
+                                    setMasterTraderReviewStatus("approved");
+                                    setMasterTraderReviewMessage("");
+                                  }}
+                                >
+                                  Approve
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="text-[#EF4444] border-[#EF4444]/50"
+                                  onClick={() => {
+                                    setMasterTraderReviewApp({ id: app.id, userEmail: app.userEmail });
+                                    setMasterTraderReviewStatus("rejected");
+                                    setMasterTraderReviewMessage("");
+                                  }}
+                                >
+                                  Reject
+                                </Button>
+                              </div>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })
+                  )}
+                </TableBody>
+              </Table>
+            )}
+          </Card>
+
+          <Dialog open={!!masterTraderReviewApp} onOpenChange={(open) => !open && setMasterTraderReviewApp(null)}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>{masterTraderReviewStatus === "approved" ? "Approve" : "Reject"} Application</DialogTitle>
+              </DialogHeader>
+              {masterTraderReviewApp && (
+                <div className="space-y-4">
+                  <p className="text-sm text-muted-foreground">User: {masterTraderReviewApp.userEmail}</p>
+                  {masterTraderReviewStatus === "rejected" && (
+                    <div className="space-y-2">
+                      <Label>Rejection reason (optional)</Label>
+                      <Input
+                        placeholder="e.g., Insufficient trading history"
+                        value={masterTraderReviewMessage}
+                        onChange={(e) => setMasterTraderReviewMessage(e.target.value)}
+                      />
+                    </div>
+                  )}
+                  <p className="text-xs text-muted-foreground">
+                    Approved Master Traders get 6 months – 1 year free. Package duration can be set via Discounts later.
+                  </p>
+                </div>
+              )}
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setMasterTraderReviewApp(null)}>Cancel</Button>
+                <Button
+                  onClick={handleMasterTraderReview}
+                  disabled={masterTraderReviewLoading}
+                  className={masterTraderReviewStatus === "approved" ? "bg-[#10B981] hover:bg-[#10B981]/90" : "bg-[#EF4444] hover:bg-[#EF4444]/90"}
+                >
+                  {masterTraderReviewLoading ? "Processing..." : "Confirm"}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </TabsContent>
+
         <TabsContent value="discounts" className="space-y-6" onFocus={() => { loadCoupons(); loadUserDiscounts(); loadUsers(1, ""); }}>
           {/* Create New Coupon — OB (onboarding) or 100/200/500 (packages) */}
           <Card className="p-6 border-primary/20">
