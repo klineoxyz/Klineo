@@ -1,7 +1,7 @@
 import { TopBarLogo } from "@/app/components/branding/Logo";
 import { Badge } from "@/app/components/ui/badge";
 import { Button } from "@/app/components/ui/button";
-import { Bell, User, Settings, LogOut, Clock, Pause, Menu } from "lucide-react";
+import { Bell, User, Settings, LogOut, Clock, Pause, Menu, Loader2 } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -12,7 +12,8 @@ import {
 import { ConnectionStatus } from "@/app/components/ui/error-state";
 import { useDemo } from "@/app/contexts/DemoContext";
 import { useUnreadNotificationsCount } from "@/app/hooks/useUnreadNotificationsCount";
-import { useState, useEffect } from "react";
+import { useTopBarLiveData } from "@/app/hooks/useTopBarLiveData";
+import { useState, useEffect, useCallback } from "react";
 import {
   Dialog,
   DialogContent,
@@ -21,6 +22,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/app/components/ui/dialog";
+import { api } from "@/lib/api";
+import { toast } from "@/app/lib/toast";
 
 interface TopBarProps {
   activeView?: string;
@@ -28,9 +31,15 @@ interface TopBarProps {
   onLogout?: () => void;
   sidebarCollapsed?: boolean;
   onOpenMobileNav?: () => void;
-  connectionStatus?: "connected" | "connecting" | "disconnected" | "error";
-  activeCopies?: number;
-  exchangeLatency?: number;
+}
+
+function planLabelFromPackage(pkg: string | null): string {
+  if (!pkg) return "—";
+  const c = pkg.toLowerCase();
+  if (/pro|200|level_200/i.test(c)) return "PRO PLAN";
+  if (/elite|500|level_500/i.test(c)) return "ELITE";
+  if (/entry|100/i.test(c)) return "ENTRY";
+  return "Active";
 }
 
 export function TopBar({ 
@@ -39,37 +48,52 @@ export function TopBar({
   onLogout,
   sidebarCollapsed = false,
   onOpenMobileNav,
-  connectionStatus = "connected",
-  activeCopies = 3,
-  exchangeLatency = 45
 }: TopBarProps) {
   const { isDemoMode, setDemoMode, clearDemo, demoCopySetups } = useDemo();
+  const liveData = useTopBarLiveData(isDemoMode);
   const demoActiveCount = demoCopySetups.filter((s) => s.status === "active").length;
-  const displayedActiveCopies = isDemoMode ? demoActiveCount : activeCopies;
+  const displayedActiveCopies = isDemoMode ? demoActiveCount : liveData.activeCopies;
+  const connectionStatus = isDemoMode ? "connected" : liveData.connectionStatus;
+  const exchangeLatency = liveData.exchangeLatency;
   const unreadNotifications = useUnreadNotificationsCount(activeView);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [showPauseModal, setShowPauseModal] = useState(false);
+  const [isPausing, setIsPausing] = useState(false);
 
   useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentTime(new Date());
-    }, 1000);
+    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
 
-  const formatTime = (date: Date) => {
-    return date.toISOString().substr(11, 8);
-  };
+  const formatTime = (date: Date) => date.toISOString().substr(11, 8);
 
-  const handleEmergencyPause = () => {
-    setShowPauseModal(true);
-  };
+  const handleEmergencyPause = () => setShowPauseModal(true);
 
-  const confirmPause = () => {
-    // Implement pause logic here
-    setShowPauseModal(false);
-    // Show success toast
-  };
+  const confirmPause = useCallback(async () => {
+    if (isDemoMode) {
+      setShowPauseModal(false);
+      toast.info("Demo mode", { description: "Pause is not available in demo." });
+      return;
+    }
+    const toPause = liveData.copySetups.filter((s) => s.status === "active");
+    if (toPause.length === 0) {
+      setShowPauseModal(false);
+      toast.info("Already paused", { description: "No active copy setups to pause." });
+      return;
+    }
+    setIsPausing(true);
+    try {
+      await Promise.all(toPause.map((s) => api.put(`/api/copy-setups/${s.id}`, { status: "paused" })));
+      toast.success("All copies paused");
+      liveData.refresh();
+      setShowPauseModal(false);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to pause";
+      toast.error("Pause failed", { description: msg });
+    } finally {
+      setIsPausing(false);
+    }
+  }, [isDemoMode, liveData]);
 
   return (
     <>
@@ -106,14 +130,30 @@ export function TopBar({
           )}
           <TopBarLogo sidebarCollapsed={sidebarCollapsed} />
           <div className="hidden lg:flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <Badge variant="outline" className="bg-secondary text-xs">
-                PRO PLAN
-              </Badge>
-              <span className="text-xs text-muted-foreground">
-                Expires: Mar 15, 2026
-              </span>
-            </div>
+            {!isDemoMode && liveData.entitlement && (
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className="bg-secondary text-xs">
+                  {liveData.entitlement.status === "active"
+                    ? planLabelFromPackage(liveData.entitlement.activePackageId ?? null)
+                    : liveData.entitlement.status === "exhausted"
+                    ? "Exhausted"
+                    : "—"}
+                </Badge>
+                <span className="text-xs text-muted-foreground">
+                  {liveData.entitlement.status === "active"
+                    ? `$${liveData.entitlement.remainingUsd.toFixed(0)} left`
+                    : liveData.entitlement.status === "exhausted"
+                    ? "Buy package"
+                    : "—"}
+                </span>
+              </div>
+            )}
+            {isDemoMode && (
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className="bg-secondary text-xs">PRO PLAN</Badge>
+                <span className="text-xs text-muted-foreground">Expires: Mar 15, 2026</span>
+              </div>
+            )}
             <button
               type="button"
               onClick={() => onNavigate("copy-trading")}
@@ -141,11 +181,8 @@ export function TopBar({
               "bg-red-500"
             }`} />
             <span className="text-muted-foreground">
-              Binance: <span className="font-mono font-medium text-foreground">{exchangeLatency}ms</span>
+              {isDemoMode ? "Binance: 45ms" : exchangeLatency != null ? `${exchangeLatency}ms` : connectionStatus === "connected" ? "Connected" : "Disconnected"}
             </span>
-          </div>
-          <div className="text-muted-foreground">
-            Last Update: <span className="font-mono font-medium text-foreground">2s ago</span>
           </div>
         </div>
 
@@ -235,9 +272,10 @@ export function TopBar({
             <Button 
               variant="default"
               onClick={confirmPause}
+              disabled={isPausing}
               className="bg-amber-500 hover:bg-amber-600"
             >
-              Confirm Pause
+              {isPausing ? <><Loader2 className="size-4 animate-spin mr-2" /> Pausing...</> : "Confirm Pause"}
             </Button>
           </DialogFooter>
         </DialogContent>
