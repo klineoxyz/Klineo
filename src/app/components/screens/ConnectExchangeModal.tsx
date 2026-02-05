@@ -194,10 +194,10 @@ export function ConnectExchangeModal({
           </div>
         </div>
 
-        {/* Main content: 45% left, 55% right - PC side-by-side, mobile stacked */}
+        {/* Main content: fixed left (400px), flexible right - PC side-by-side, mobile stacked */}
         <div className="flex-1 min-h-0 flex flex-col lg:flex-row gap-4 sm:gap-6 px-3 sm:px-6 md:px-8 pb-4 sm:pb-6 md:pb-8 overflow-y-auto overflow-x-hidden">
-            {/* LEFT: Create Account form (45%) */}
-            <div className="flex-shrink-0 w-full lg:w-[45%] lg:min-w-[340px] lg:max-w-[420px] lg:max-h-[calc(88vh-11rem)] lg:overflow-y-auto">
+            {/* LEFT: Create Account form - fixed width on desktop so right gets remaining space */}
+            <div className="flex-shrink-0 w-full lg:w-[400px] lg:max-h-[calc(88vh-11rem)] lg:overflow-y-auto">
             <Card className="p-4 sm:p-6 bg-slate-800/50 border-slate-700/80">
               <h3 className="text-sm sm:text-base font-semibold text-white mb-3 sm:mb-4">Create Account</h3>
 
@@ -310,13 +310,13 @@ export function ConnectExchangeModal({
             </Card>
           </div>
 
-          {/* RIGHT: Step-by-step guide (55%), scrollable */}
-          <div className="flex-1 min-w-0 min-h-[200px] overflow-y-auto overflow-x-hidden">
+          {/* RIGHT: Step-by-step guide - takes remaining space, min 360px so text doesn't squeeze */}
+          <div className="flex-1 min-w-0 lg:min-w-[360px] min-h-[200px] overflow-y-auto overflow-x-hidden">
             <div className="space-y-2.5 sm:space-y-3">
               {steps.map((step, i) => (
                 <Card
                   key={i}
-                  className="p-3 sm:p-4 bg-slate-800/30 border-slate-700/80 relative overflow-hidden"
+                  className="p-3 sm:p-4 bg-slate-800/30 border-slate-700/80 relative"
                 >
                   <Badge
                     variant="outline"
@@ -324,8 +324,8 @@ export function ConnectExchangeModal({
                   >
                     {step.label}
                   </Badge>
-                  <div className="pr-16 sm:pr-20">
-                    <p className="text-xs sm:text-sm text-slate-300">{step.text}</p>
+                  <div className="pr-14 sm:pr-16 min-w-0">
+                    <p className="text-xs sm:text-sm text-slate-300 break-words">{step.text}</p>
                     {(step.linkText && step.linkHref) || (step.linkTextSecondary && step.linkHrefSecondary) ? (
                       <div className="flex flex-wrap gap-2 mt-2">
                         {step.linkText && step.linkHref && (
