@@ -263,27 +263,29 @@ export function CopyTrading({ onNavigate }: CopyTradingProps) {
                               )}
                               Pause
                             </Button>
-                          ) : setup.status === "paused" ? (
+                          ) : (
                             <Button 
                               variant="outline" 
                               size="sm"
                               onClick={() => handleStatusChange(setup.id, "active")}
                               disabled={updatingId === setup.id}
+                              title={setup.status === "stopped" ? "Start copying again" : "Resume"}
                             >
                               {updatingId === setup.id ? (
                                 <Loader2 className="size-3 mr-1 animate-spin" />
                               ) : (
                                 <Activity className="size-3 mr-1" />
                               )}
-                              Resume
+                              {setup.status === "stopped" ? "Start" : "Resume"}
                             </Button>
-                          ) : null}
+                          )}
                           <Button 
                             variant="outline" 
                             size="sm" 
                             className="text-[#EF4444] border-[#EF4444]/50 hover:bg-[#EF4444]/10"
                             onClick={() => handleStatusChange(setup.id, "stopped")}
-                            disabled={updatingId === setup.id}
+                            disabled={updatingId === setup.id || setup.status === "stopped"}
+                            title={setup.status === "stopped" ? "Already stopped" : "Stop copying"}
                           >
                             {updatingId === setup.id ? (
                               <Loader2 className="size-3 mr-1 animate-spin" />
