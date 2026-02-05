@@ -574,6 +574,31 @@ export function Settings({ onNavigate }: SettingsProps) {
         <p className="text-sm text-muted-foreground">Manage your account and preferences</p>
       </div>
 
+      {/* Backend Connection — visible on all tabs */}
+      <Card className="p-4 border-primary/20">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <Wifi className={`size-5 shrink-0 ${backendStatus?.connected ? "text-[#10B981]" : "text-[#EF4444]"}`} />
+            <div className="min-w-0">
+              <div className="font-semibold">Backend Connection</div>
+              <div className="text-sm text-muted-foreground truncate">
+                {backendStatus?.connected
+                  ? `Connected to ${backendStatus.url}${backendStatus.latency ? ` (${backendStatus.latency}ms)` : ""}`
+                  : backendStatus?.url
+                    ? `Disconnected from ${backendStatus.url}`
+                    : "Not configured — VITE_API_BASE_URL missing"}
+              </div>
+            </div>
+          </div>
+          <Button variant="outline" size="sm" onClick={handleConnectionTest} disabled={connectionTestLoading} className="w-full sm:w-auto shrink-0">
+            {connectionTestLoading ? "Testing..." : "Test Connection"}
+          </Button>
+        </div>
+        {typeof import.meta.env.VITE_APP_VERSION === "string" && (
+          <p className="text-xs text-muted-foreground mt-2" title="Build version">App v{import.meta.env.VITE_APP_VERSION}</p>
+        )}
+      </Card>
+
       <Tabs value={activeSettingsTab} onValueChange={handleSettingsTabChange} className="space-y-4 sm:space-y-6">
         <TabsList className="flex-wrap h-auto gap-1 p-1 w-full sm:w-fit">
           <TabsTrigger value="profile">Profile</TabsTrigger>
@@ -597,35 +622,6 @@ export function Settings({ onNavigate }: SettingsProps) {
               <AlertDescription>{profileError}</AlertDescription>
             </Alert>
           )}
-
-          {/* Backend Connection Status */}
-          <Card className="p-4 border-primary/20">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-              <div className="flex items-center gap-3 min-w-0">
-                <Wifi className={`size-5 shrink-0 ${backendStatus?.connected ? 'text-[#10B981]' : 'text-[#EF4444]'}`} />
-                <div className="min-w-0">
-                  <div className="font-semibold">Backend Connection</div>
-                  <div className="text-sm text-muted-foreground truncate">
-                    {backendStatus?.connected 
-                      ? `Connected to ${backendStatus.url}${backendStatus.latency ? ` (${backendStatus.latency}ms)` : ''}`
-                      : backendStatus?.url 
-                        ? `Disconnected from ${backendStatus.url}`
-                        : 'Not configured — VITE_API_BASE_URL missing'
-                    }
-                  </div>
-                </div>
-              </div>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={handleConnectionTest}
-                disabled={connectionTestLoading}
-                className="w-full sm:w-auto shrink-0"
-              >
-                {connectionTestLoading ? "Testing..." : "Test Connection"}
-              </Button>
-            </div>
-          </Card>
 
           <Card className="p-4 sm:p-6 space-y-4 sm:space-y-6">
             <h3 className="text-base sm:text-lg font-semibold">Profile Information</h3>
@@ -915,38 +911,6 @@ export function Settings({ onNavigate }: SettingsProps) {
             >
               Update Wallet
             </Button>
-          </Card>
-
-          {/* Backend Connection Status */}
-          <Card className="p-4 border-primary/20">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-              <div className="flex items-center gap-3 min-w-0">
-                <Wifi className={`size-5 shrink-0 ${backendStatus?.connected ? 'text-[#10B981]' : 'text-[#EF4444]'}`} />
-                <div className="min-w-0">
-                  <div className="font-semibold">Backend Connection</div>
-                  <div className="text-sm text-muted-foreground truncate">
-                    {backendStatus?.connected 
-                      ? `Connected to ${backendStatus.url}${backendStatus.latency ? ` (${backendStatus.latency}ms)` : ''}`
-                      : backendStatus?.url 
-                        ? `Disconnected from ${backendStatus.url}`
-                        : 'Not configured — VITE_API_BASE_URL missing'
-                    }
-                  </div>
-                </div>
-              </div>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={handleConnectionTest}
-                disabled={connectionTestLoading}
-                className="w-full sm:w-auto shrink-0"
-              >
-                {connectionTestLoading ? "Testing..." : "Test Connection"}
-              </Button>
-            </div>
-            {typeof import.meta.env.VITE_APP_VERSION === 'string' && (
-              <p className="text-xs text-muted-foreground mt-2" title="Build version">App v{import.meta.env.VITE_APP_VERSION}</p>
-            )}
           </Card>
 
           <Card className="p-6 space-y-4 border-primary/20 bg-primary/5">

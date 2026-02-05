@@ -1896,10 +1896,10 @@ export function Admin() {
             <div className="pt-4">
               <h4 className="text-sm font-semibold mb-3">All Assigned & Claimed Discounts</h4>
               <p className="text-xs text-muted-foreground mb-4">User-specific (assigned) and global coupons (claimed).</p>
-              {userDiscountsLoading || couponsLoading ? (
+              {userDiscountsLoading ? (
                 <div className="py-6 text-center text-muted-foreground">Loading...</div>
               ) : (() => {
-                const claimedGlobal = coupons.filter((c) => (c.currentRedemptions ?? 0) > 0).map((c) => ({
+                const claimedGlobal = (coupons || []).filter((c) => (c.currentRedemptions ?? 0) > 0).map((c) => ({
                   id: `g-${c.id}`,
                   type: "global" as const,
                   code: c.code,
@@ -1911,7 +1911,7 @@ export function Admin() {
                   status: c.status,
                   raw: c,
                 }));
-                const userRows = userDiscounts.map((d) => ({
+                const userRows = (userDiscounts || []).map((d) => ({
                   id: d.id,
                   type: "user" as const,
                   code: d.code,
