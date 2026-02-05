@@ -8,6 +8,10 @@ export interface ExchangeStep {
   text: string;
   linkText?: string;
   linkHref?: string;
+  /** Optional note or helper text below main text */
+  note?: string;
+  /** Optional warning callout text */
+  warning?: string;
 }
 
 export type SupportedExchange = 'binance' | 'bybit';
@@ -41,25 +45,33 @@ export const EXCHANGE_STEPS: Record<SupportedExchange, ExchangeStep[]> = {
   bybit: [
     {
       label: 'Step 1',
-      text: 'Go to the Bybit API Management page.',
+      text: 'Open the Bybit API Management page from your account dashboard.',
       linkText: 'Open Bybit API Management',
       linkHref: 'https://www.bybit.com/app/user/api-management',
     },
     {
       label: 'Step 2',
-      text: 'Create API key with the Unified Trading Account. Name your key.',
+      text: "Click 'Create New Key' and choose 'System-Generated API Key'.",
+      note: 'Do not use user-generated or legacy keys.',
     },
     {
       label: 'Step 3',
-      text: 'Enable Contract (derivatives) and Read & Write. Do NOT enable Withdrawals.',
+      text: 'Select the subaccount you want to connect and ensure it uses a Unified Trading Account (UTA).',
+      note: 'Klineo supports Unified Trading Accounts only.',
     },
     {
       label: 'Step 4',
-      text: 'Save and copy the API Key and Secret.',
+      text: 'Enable Read and Trade permissions (Spot and Derivatives if supported). Do NOT enable Withdraw permissions.',
+      warning: 'Never enable withdrawals. Klineo will never request them.',
     },
     {
       label: 'Step 5',
-      text: 'Paste your API Key and Secret into the form and click Create Account.',
+      text: 'Save the API key, then copy the API Key and Secret Key.',
+      note: 'The Secret Key is shown only once by Bybit.',
+    },
+    {
+      label: 'Step 6',
+      text: "Paste your API Key and Secret Key into the form on the left and click 'Create Account'.",
     },
   ],
 };

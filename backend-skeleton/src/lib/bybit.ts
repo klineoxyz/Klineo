@@ -86,13 +86,47 @@ async function signedRequest<T>(
   const data = await response.json() as { retCode?: number; retMsg?: string; result?: T };
 
   if (data.retCode !== 0 && data.retCode !== undefined) {
-    throw new Error(`Bybit API error (${data.retCode}): ${data.retMsg || response.statusText}`);
+    const human = mapBybitErrorToHuman(data.retCode, data.retMsg);
+    throw new Error(human);
   }
   if (!response.ok) {
-    throw new Error(`Bybit HTTP ${response.status}: ${data.retMsg || response.statusText}`);
+    const human = mapBybitErrorToHuman(undefined, data.retMsg || `HTTP ${response.status}`);
+    throw new Error(human);
   }
 
   return data.result as T;
+}
+
+/** Map Bybit API errors to human-readable fix instructions */
+function mapBybitErrorToHuman(retCode?: number, retMsg?: string): string {
+  const msg = (retMsg || '').toLowerCase();
+  switch (retCode) {
+    case 10003:
+      return 'Invalid API key or secret. Check that your key and secret are correct and match the environment (mainnet vs testnet).';
+    case 10004:
+      return 'Invalid API key or secret. Ensure you copied the full key and secret correctly.';
+    case 10005:
+      return 'This API key does not have trading permissions enabled. Go to Bybit API Management and enable Read and Trade permissions.';
+    case 10007:
+      return 'Invalid API key or secret. Verify your credentials and try again.';
+    case 10010:
+      return 'API key IP restriction may be blocking this request. If you use IP whitelist, add your server IP, or create a key without IP restriction.';
+    default:
+      break;
+  }
+  if (msg.includes('unified') || msg.includes('uta') || msg.includes('account type')) {
+    return 'The selected account is not a Unified Trading Account (UTA). Klineo supports Unified Trading Accounts only. Create a UTA subaccount and use its API key.';
+  }
+  if (msg.includes('permission') || msg.includes('read') || msg.includes('trade')) {
+    return 'This API key does not have the required permissions. Enable Read and Trade in Bybit API Management.';
+  }
+  if (msg.includes('rate') || msg.includes('limit') || msg.includes('429')) {
+    return 'Bybit API temporarily unavailable. Please retry in a few seconds.';
+  }
+  if (msg.includes('timeout') || msg.includes('unavailable') || msg.includes('502') || msg.includes('503')) {
+    return 'Bybit API temporarily unavailable. Please retry.';
+  }
+  return retMsg || `Bybit API error (${retCode ?? 'unknown'}). Please verify your API key, secret, and permissions.`;
 }
 
 /**
@@ -144,7 +178,8 @@ export async function placeOrder(
 }
 
 /**
- * Test connection by calling account info
+ * Test connection by calling account info.
+ * Uses wallet-balance with accountType=UNIFIED to verify UTA and permissions.
  */
 export async function testConnection(credentials: BybitCredentials): Promise<{
   ok: boolean;
@@ -154,7 +189,7 @@ export async function testConnection(credentials: BybitCredentials): Promise<{
 }> {
   const startTime = Date.now();
   try {
-    await getAccountInfo(credentials);
+    await getWalletBalance(credentials);
     const latencyMs = Date.now() - startTime;
     return { ok: true, latencyMs, message: 'Connection successful' };
   } catch (err) {

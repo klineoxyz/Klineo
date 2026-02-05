@@ -26,6 +26,7 @@ import {
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/app/components/ui/collapsible";
 import { ChevronDown, ChevronRight, CheckSquare } from "lucide-react";
 import { ConnectExchangeModal } from "@/app/components/screens/ConnectExchangeModal";
+import { ConnectBybitModal } from "@/app/components/screens/ConnectBybitModal";
 import { ROUTES } from "@/app/config/routes";
 import { FuturesEnableModal } from "@/app/components/screens/FuturesEnableModal";
 import { Users, DollarSign, Ticket, Package } from "lucide-react";
@@ -39,6 +40,7 @@ export function Settings({ onNavigate }: SettingsProps) {
   const { user } = useAuth();
   const { isDemoMode } = useDemo();
   const [connectWizardOpen, setConnectWizardOpen] = useState(false);
+  const [connectBybitOpen, setConnectBybitOpen] = useState(false);
   const [fullName, setFullName] = useState("");
   const [username, setUsername] = useState("");
   const [timezone, setTimezone] = useState("UTC");
@@ -1073,10 +1075,14 @@ export function Settings({ onNavigate }: SettingsProps) {
               )}
             </div>
             {!isDemoMode && (
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 <Button onClick={() => setConnectWizardOpen(true)} className="gap-2 bg-primary text-primary-foreground">
                   <Key className="size-4" />
                   Connect Exchange
+                </Button>
+                <Button onClick={() => setConnectBybitOpen(true)} variant="outline" className="gap-2">
+                  <Key className="size-4" />
+                  Connect Bybit
                 </Button>
                 {!showAddForm && (
                   <Button variant="outline" onClick={() => setShowAddForm(true)} className="gap-2">
@@ -1091,6 +1097,12 @@ export function Settings({ onNavigate }: SettingsProps) {
           <ConnectExchangeModal
             open={connectWizardOpen}
             onOpenChange={setConnectWizardOpen}
+            onComplete={() => refreshConnections()}
+          />
+
+          <ConnectBybitModal
+            open={connectBybitOpen}
+            onOpenChange={setConnectBybitOpen}
             onComplete={() => refreshConnections()}
           />
 

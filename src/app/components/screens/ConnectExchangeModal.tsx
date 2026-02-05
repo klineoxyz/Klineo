@@ -42,14 +42,18 @@ export interface ConnectExchangeModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onComplete?: (connection?: ExchangeConnection) => void;
+  /** When set to 'bybit', show Bybit-specific title/subtitle and mute other exchanges */
+  exchangeOnly?: 'bybit';
 }
 
 export function ConnectExchangeModal({
   open,
   onOpenChange,
   onComplete,
+  exchangeOnly,
 }: ConnectExchangeModalProps) {
-  const [exchange, setExchange] = useState<ExchangeId>("binance");
+  const initialExchange: ExchangeId = exchangeOnly === 'bybit' ? 'bybit' : 'binance';
+  const [exchange, setExchange] = useState<ExchangeId>(initialExchange);
   const [environment, setEnvironment] = useState<"production" | "testnet">("testnet");
   const [label, setLabel] = useState("");
   const [apiKey, setApiKey] = useState("");
@@ -149,48 +153,62 @@ export function ConnectExchangeModal({
         onPointerDownOutside={(e) => loading && e.preventDefault()}
         onEscapeKeyDown={(e) => loading && e.preventDefault()}
       >
-        <DialogTitle className="sr-only">Select an exchange</DialogTitle>
+        <DialogTitle className="sr-only">
+          {exchangeOnly === 'bybit' ? 'Connect Bybit' : 'Select an exchange'}
+        </DialogTitle>
         <DialogDescription className="sr-only">
-          Klineo will help you set up and connect your exchange
+          {exchangeOnly === 'bybit'
+            ? 'Klineo will guide you through connecting your Bybit account'
+            : 'Klineo will help you set up and connect your exchange'}
         </DialogDescription>
         {/* Header */}
         <div className="px-8 pt-8 pb-4 text-center">
-          <h2 className="text-xl font-semibold text-white">Select an exchange</h2>
+          <h2 className="text-xl font-semibold text-white">
+            {exchangeOnly === 'bybit' ? 'Connect Bybit' : 'Select an exchange'}
+          </h2>
           <p className="text-sm text-slate-400 mt-1">
-            Klineo will help you set up and connect your exchange
+            {exchangeOnly === 'bybit'
+              ? 'Klineo will guide you through connecting your Bybit account'
+              : 'Klineo will help you set up and connect your exchange'}
           </p>
         </div>
 
-          {/* Exchange selector row */}
-          <div className="px-8 pb-4 overflow-x-auto">
-            <div className="flex flex-wrap gap-2 justify-center">
-              {(['binance', 'bybit', 'okx', 'gate', 'kucoin', 'mexc', 'bitget', 'bingx', 'wallet'] as ExchangeId[]).map(
-                (id) => (
+        {/* Exchange selector row */}
+        <div className="px-8 pb-4 overflow-x-auto">
+          <div className="flex flex-wrap gap-2 justify-center">
+            {(['binance', 'bybit', 'okx', 'gate', 'kucoin', 'mexc', 'bitget', 'bingx', 'wallet'] as ExchangeId[]).map(
+              (id) => {
+                const isMuted = exchangeOnly === 'bybit' && id !== 'bybit';
+                return (
                   <button
                     key={id}
                     type="button"
                     onClick={() => {
+                      if (isMuted) return;
                       setExchange(id);
                       setStatus("idle");
                       setErrorMessage("");
                     }}
+                    disabled={isMuted}
                     className={cn(
                       "px-4 py-2 rounded-full text-sm font-medium transition-all",
                       exchange === id
                         ? "bg-primary text-primary-foreground"
                         : "bg-slate-700/50 text-slate-300 hover:bg-slate-700 hover:text-white",
-                      !isSupported(id) && "opacity-60"
+                      !isSupported(id) && "opacity-60",
+                      isMuted && "opacity-50 cursor-not-allowed"
                     )}
                   >
                     {EXCHANGE_NAMES[id]}
-                    {!isSupported(id) && (
+                    {!isSupported(id) && !isMuted && (
                       <span className="ml-1.5 text-xs opacity-80">(soon)</span>
                     )}
                   </button>
-                )
-              )}
-            </div>
+                );
+              }
+            )}
           </div>
+        </div>
 
           {/* Main content: two columns */}
           <div className="px-8 pb-8 flex flex-col lg:flex-row gap-6 min-h-0">
@@ -336,8 +354,16 @@ export function ConnectExchangeModal({
                       <Badge variant="outline" className="shrink-0 border-slate-600 text-slate-400">
                         {step.label}
                       </Badge>
-                      <div className="min-w-0 flex-1">
+                      <div className="min-w-0 flex-1 space-y-2">
                         <p className="text-sm text-slate-300">{step.text}</p>
+                        {step.note && (
+                          <p className="text-xs text-slate-500">{step.note}</p>
+                        )}
+                        {step.warning && (
+                          <div className="rounded-lg bg-amber-500/10 border border-amber-500/20 p-2.5 text-xs text-amber-200">
+                            {step.warning}
+                          </div>
+                        )}
                         {step.linkText && step.linkHref && (
                           <a
                             href={step.linkHref}
