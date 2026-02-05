@@ -136,12 +136,12 @@ export function ConnectExchangeModal({
     <Dialog open={open} onOpenChange={(next) => handleClose(!!next)}>
       <DialogContent
         className={cn(
-          "max-w-[1100px] w-[calc(100vw-1rem)] sm:w-[calc(100vw-2rem)] max-h-[90vh] sm:max-h-[85vh] p-0 gap-0 overflow-hidden",
-          "rounded-2xl shadow-2xl",
+          "max-w-[1100px] w-[calc(100vw-0.5rem)] sm:w-[calc(100vw-2rem)] max-h-[95vh] sm:max-h-[88vh] p-0 gap-0 overflow-hidden",
+          "rounded-xl sm:rounded-2xl shadow-2xl",
           "bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900",
           "border border-slate-700/50",
           "flex flex-col",
-          "[&>button]:top-3 [&>button]:right-3 sm:[&>button]:top-4 sm:[&>button]:right-4 [&>button]:rounded-md [&>button]:p-2 [&>button]:text-slate-400 [&>button]:hover:text-white [&>button]:hover:bg-slate-700/50 [&>button]:touch-manipulation"
+          "[&>button]:top-2.5 [&>button]:right-2.5 sm:[&>button]:top-4 sm:[&>button]:right-4 [&>button]:rounded-md [&>button]:p-2 [&>button]:text-slate-400 [&>button]:hover:text-white [&>button]:hover:bg-slate-700/50 [&>button]:touch-manipulation"
         )}
         onPointerDownOutside={(e) => loading && e.preventDefault()}
         onEscapeKeyDown={(e) => loading && e.preventDefault()}
@@ -152,7 +152,7 @@ export function ConnectExchangeModal({
         </DialogDescription>
 
         {/* Header */}
-        <div className="shrink-0 px-4 sm:px-6 md:px-8 pt-4 sm:pt-6 md:pt-8 pb-3 sm:pb-4 text-center">
+        <div className="shrink-0 px-3 sm:px-6 md:px-8 pt-4 sm:pt-6 md:pt-8 pb-2 sm:pb-4 text-center">
           <h2 className="text-lg sm:text-xl font-semibold text-white">
             Select an exchange
           </h2>
@@ -161,8 +161,8 @@ export function ConnectExchangeModal({
           </p>
         </div>
 
-        {/* Exchange selector row */}
-        <div className="shrink-0 px-4 sm:px-6 md:px-8 pb-3 sm:pb-4 overflow-x-auto -mx-1">
+        {/* Exchange selector row - horizontal scroll on mobile */}
+        <div className="shrink-0 px-3 sm:px-6 md:px-8 pb-3 sm:pb-4 overflow-x-auto overflow-y-hidden -mx-1 scroll-smooth">
           <div className="flex flex-wrap gap-1.5 sm:gap-2 justify-center min-w-0">
             {EXCHANGE_SELECTOR_ORDER.map((id) => {
               const enabled = isSupported(id);
@@ -194,10 +194,10 @@ export function ConnectExchangeModal({
           </div>
         </div>
 
-        {/* Main content: 45% left, 55% right */}
-        <div className="flex-1 min-h-0 flex flex-col lg:flex-row gap-4 sm:gap-6 px-4 sm:px-6 md:px-8 pb-4 sm:pb-6 md:pb-8 overflow-y-auto">
-          {/* LEFT: Create Account form (45%) */}
-          <div className="flex-shrink-0 w-full lg:w-[45%] lg:max-w-[420px] lg:max-h-[calc(90vh-12rem)] lg:overflow-y-auto">
+        {/* Main content: 45% left, 55% right - PC side-by-side, mobile stacked */}
+        <div className="flex-1 min-h-0 flex flex-col lg:flex-row gap-4 sm:gap-6 px-3 sm:px-6 md:px-8 pb-4 sm:pb-6 md:pb-8 overflow-y-auto overflow-x-hidden">
+            {/* LEFT: Create Account form (45%) */}
+            <div className="flex-shrink-0 w-full lg:w-[45%] lg:min-w-[340px] lg:max-w-[420px] lg:max-h-[calc(88vh-11rem)] lg:overflow-y-auto">
             <Card className="p-4 sm:p-6 bg-slate-800/50 border-slate-700/80">
               <h3 className="text-sm sm:text-base font-semibold text-white mb-3 sm:mb-4">Create Account</h3>
 
@@ -311,12 +311,12 @@ export function ConnectExchangeModal({
           </div>
 
           {/* RIGHT: Step-by-step guide (55%), scrollable */}
-          <div className="flex-1 min-w-0 min-h-0 overflow-y-auto">
-            <div className="space-y-2 sm:space-y-3">
+          <div className="flex-1 min-w-0 min-h-[200px] overflow-y-auto overflow-x-hidden">
+            <div className="space-y-2.5 sm:space-y-3">
               {steps.map((step, i) => (
                 <Card
                   key={i}
-                  className="p-3 sm:p-4 bg-slate-800/30 border-slate-700/80 relative"
+                  className="p-3 sm:p-4 bg-slate-800/30 border-slate-700/80 relative overflow-hidden"
                 >
                   <Badge
                     variant="outline"
@@ -369,8 +369,19 @@ export function ConnectExchangeModal({
                       </ul>
                     )}
                     {step.showScreenshot && (
-                      <div className="mt-3 rounded-lg border border-dashed border-slate-600 bg-slate-900/30 h-24 sm:h-28 flex items-center justify-center text-slate-500 text-xs">
-                        Screenshot placeholder
+                      <div className="mt-3 rounded-lg border border-slate-600/60 bg-slate-900/40 overflow-hidden">
+                        {step.screenshotSrc ? (
+                          <img
+                            src={step.screenshotSrc}
+                            alt=""
+                            className="w-full h-auto max-h-[180px] sm:max-h-[220px] md:max-h-[260px] object-contain object-top rounded"
+                            loading="lazy"
+                          />
+                        ) : (
+                          <div className="h-24 sm:h-28 flex items-center justify-center text-slate-500 text-xs border border-dashed border-slate-600">
+                            Screenshot placeholder
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>

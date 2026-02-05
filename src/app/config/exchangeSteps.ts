@@ -11,8 +11,10 @@ export interface ExchangeStep {
   /** Secondary link (e.g. "Create account") */
   linkTextSecondary?: string;
   linkHrefSecondary?: string;
-  /** Show screenshot placeholder */
+  /** Show screenshot - use screenshotSrc for image path, or placeholder if true but no src */
   showScreenshot?: boolean;
+  /** Path to screenshot image (e.g. /connect-exchange/binance-step2.png) */
+  screenshotSrc?: string;
   /** Checklist items */
   checklist?: string[];
   /** Checklist item that must NOT be enabled (warning) */
@@ -72,6 +74,7 @@ export const EXCHANGE_STEPS: Record<SupportedExchange, ExchangeStep[]> = {
       label: 'Step 2',
       text: 'Before pressing Create API, deselect the option that auto-applies restrictions (follow the screenshot).',
       showScreenshot: true,
+      screenshotSrc: '/connect-exchange/binance-step2.png',
     },
     {
       label: 'Step 3',
@@ -88,6 +91,7 @@ export const EXCHANGE_STEPS: Record<SupportedExchange, ExchangeStep[]> = {
       ],
       checklistDoNot: 'Never enable Withdrawals',
       showScreenshot: true,
+      screenshotSrc: '/connect-exchange/binance-step4.png',
     },
     {
       label: 'Step 5',
@@ -109,16 +113,19 @@ export const EXCHANGE_STEPS: Record<SupportedExchange, ExchangeStep[]> = {
       label: 'Step 2',
       text: 'Select System-generated API Keys',
       showScreenshot: true,
+      screenshotSrc: '/connect-exchange/bybit-step2.png',
     },
     {
       label: 'Step 3',
       text: 'Choose API transaction and provide a custom label for your API key',
       showScreenshot: true,
+      screenshotSrc: '/connect-exchange/bybit-step3.png',
     },
     {
       label: 'Step 4',
       text: 'In API Key Permissions, choose Read-Write (not Read-Only)',
       showScreenshot: true,
+      screenshotSrc: '/connect-exchange/bybit-step4.png',
     },
     {
       label: 'Step 5',
@@ -131,6 +138,7 @@ export const EXCHANGE_STEPS: Record<SupportedExchange, ExchangeStep[]> = {
       ],
       checklistDoNot: 'Do NOT enable Withdrawal',
       showScreenshot: true,
+      screenshotSrc: '/connect-exchange/bybit-step5.png',
     },
     {
       label: 'Step 6',
