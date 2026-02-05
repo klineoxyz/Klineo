@@ -1894,111 +1894,125 @@ export function Admin() {
             </div>
 
             <div className="pt-4">
-              <h4 className="text-sm font-semibold mb-3">Assigned User Discounts</h4>
-              {userDiscountsLoading ? (
+              <h4 className="text-sm font-semibold mb-3">All Assigned & Claimed Discounts</h4>
+              <p className="text-xs text-muted-foreground mb-4">User-specific (assigned) and global coupons (claimed).</p>
+              {userDiscountsLoading || couponsLoading ? (
                 <div className="py-6 text-center text-muted-foreground">Loading...</div>
-              ) : userDiscounts.length === 0 ? (
-                <p className="text-sm text-muted-foreground py-4">No user-specific discounts. Assign above.</p>
-              ) : (
+              ) : (() => {
+                const claimedGlobal = coupons.filter((c) => (c.currentRedemptions ?? 0) > 0).map((c) => ({
+                  id: `g-${c.id}`,
+                  type: "global" as const,
+                  code: c.code,
+                  userOrClaimed: (c as { claimedBy?: string[] }).claimedBy?.join(", ") || "—",
+                  scope: c.appliesTo === "onboarding" ? "Onboarding" : "Packages",
+                  discount: `${c.discount}%`,
+                  packagesMax: "—",
+                  usedCount: c.currentRedemptions ?? 0,
+                  status: c.status,
+                  raw: c,
+                }));
+                const userRows = userDiscounts.map((d) => ({
+                  id: d.id,
+                  type: "user" as const,
+                  code: d.code,
+                  userOrClaimed: d.userEmail ?? "—",
+                  scope: d.scope === "onboarding" ? "Onboarding" : "Trading packages",
+                  discount: d.scope === "onboarding"
+                    ? `${d.onboardingDiscountPercent ?? 0}%${d.onboardingDiscountFixedUsd ? ` or $${d.onboardingDiscountFixedUsd}` : ""}`
+                    : `${d.tradingDiscountPercent ?? 0}%`,
+                  packagesMax: d.scope === "trading_packages" ? `${d.tradingPackageIds?.length ? d.tradingPackageIds.join(", ") : "All"} / max ${d.tradingMaxPackages ?? "—"}` : "—",
+                  usedCount: d.tradingUsedCount ?? 0,
+                  status: d.status === "active" ? "Active" : d.status === "paused" ? "Paused" : d.status === "revoked" ? "Revoked" : d.status || "—",
+                  raw: d,
+                }));
+                const combined = [...userRows, ...claimedGlobal];
+                if (combined.length === 0) {
+                  return <p className="text-sm text-muted-foreground py-4">No assigned or claimed discounts yet. Assign above or create global coupons.</p>;
+                }
+                return (
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>User</TableHead>
-                      <TableHead>Code</TableHead>
                       <TableHead>Type</TableHead>
+                      <TableHead>User / Claimed by</TableHead>
+                      <TableHead>Code</TableHead>
+                      <TableHead>Scope</TableHead>
                       <TableHead>Discount</TableHead>
                       <TableHead>Packages / Max</TableHead>
+                      <TableHead>Claimed</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {userDiscounts.map((d) => (
-                      <TableRow key={d.id}>
-                        <TableCell className="font-medium">{d.userEmail}</TableCell>
-                        <TableCell className="font-mono text-sm">
-                          {d.code ?? "—"}
-                        </TableCell>
-                        <TableCell className="capitalize">{d.scope?.replace("_", " ")}</TableCell>
+                    {combined.map((row) => (
+                      <TableRow key={row.id}>
                         <TableCell>
-                          {d.scope === "onboarding"
-                            ? (d.onboardingDiscountPercent != null ? `${d.onboardingDiscountPercent}%` : "") + (d.onboardingDiscountFixedUsd != null ? ` or $${d.onboardingDiscountFixedUsd}` : "")
-                            : d.tradingDiscountPercent != null ? `${d.tradingDiscountPercent}%` : "—"}
+                          <Badge variant="outline" className={row.type === "user" ? "border-primary/50" : ""}>
+                            {row.type === "user" ? "User" : "Global"}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="font-medium font-mono text-sm">{row.userOrClaimed}</TableCell>
+                        <TableCell className="font-mono text-sm">{row.code ?? "—"}</TableCell>
+                        <TableCell className="text-sm">{row.scope}</TableCell>
+                        <TableCell className="text-sm">{row.discount}</TableCell>
+                        <TableCell className="text-sm text-muted-foreground">{row.packagesMax}</TableCell>
+                        <TableCell>
+                          {row.usedCount > 0 ? (
+                            <Badge variant="default" className="bg-[#10B981]/10 text-[#10B981] border-[#10B981]/50">Claimed ({row.usedCount})</Badge>
+                          ) : (
+                            <span className="text-muted-foreground text-sm">—</span>
+                          )}
                         </TableCell>
                         <TableCell>
-                          {d.scope === "trading_packages"
-                            ? (d.tradingPackageIds?.length ? d.tradingPackageIds.join(", ") : "All") + " / max " + (d.tradingMaxPackages ?? "—") + " (used " + (d.tradingUsedCount ?? 0) + ")"
-                            : "—"}
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant={d.status === "active" ? "default" : "secondary"} className={d.status === "active" ? "bg-[#10B981]/10 text-[#10B981] border-[#10B981]/50" : ""}>
-                            {d.status === "active" ? "Active" : d.status === "paused" ? "Paused" : d.status === "revoked" ? "Revoked" : d.status || "—"}
+                          <Badge variant={row.status === "Active" || row.status === "active" ? "default" : "secondary"} className={(row.status === "Active" || row.status === "active") ? "bg-[#10B981]/10 text-[#10B981] border-[#10B981]/50" : ""}>
+                            {row.status}
                           </Badge>
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex flex-wrap gap-2 justify-end">
-                            {d.code && (
+                            {row.code && (
                               <>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => {
-                                    navigator.clipboard.writeText(d.code!).then(() => toast.success("Coupon code copied")).catch(() => toast.error("Copy failed"));
-                                  }}
-                                  title="Copy system-generated coupon code"
-                                >
+                                <Button variant="outline" size="sm" onClick={() => { navigator.clipboard.writeText(row.code!).then(() => toast.success("Code copied")).catch(() => toast.error("Copy failed")); }} title="Copy code">
                                   <Copy className="size-4 mr-1" />
-                                  Copy code
+                                  Copy
                                 </Button>
                                 <Button
                                   variant="outline"
                                   size="sm"
                                   onClick={() => {
                                     const base = typeof window !== "undefined" ? window.location.origin.replace(/\/$/, "") : "https://www.klineo.xyz";
-                                    const link = d.scope === "onboarding" ? `${base}/payments?coupon=${d.code}` : `${base}/packages?coupon=${d.code}`;
-                                    navigator.clipboard.writeText(link).then(() => toast.success("Claim link copied")).catch(() => toast.error("Copy failed"));
+                                    const link = (row.raw as { appliesTo?: string }).appliesTo === "onboarding" || (row.raw as { scope?: string }).scope === "onboarding"
+                                      ? `${base}/payments?coupon=${row.code}`
+                                      : `${base}/packages?coupon=${row.code}`;
+                                    navigator.clipboard.writeText(link).then(() => toast.success("Link copied")).catch(() => toast.error("Copy failed"));
                                   }}
-                                  title="Copy claim link (user opens this to apply the discount)"
+                                  title="Copy claim link"
                                 >
                                   <Link2 className="size-4 mr-1" />
-                                  Copy link
+                                  Link
                                 </Button>
                               </>
                             )}
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => {
-                                const summary = d.scope === "onboarding"
-                                  ? `Onboarding: ${d.onboardingDiscountPercent != null ? `${d.onboardingDiscountPercent}% off` : ""}${d.onboardingDiscountFixedUsd != null ? (d.onboardingDiscountPercent != null ? ` or $${d.onboardingDiscountFixedUsd} off` : `$${d.onboardingDiscountFixedUsd} off`) : ""}`
-                                  : `Trading: ${d.tradingDiscountPercent != null ? `${d.tradingDiscountPercent}% off` : ""} — ${d.tradingPackageIds?.length ? d.tradingPackageIds.join(", ") : "All"} / max ${d.tradingMaxPackages ?? "—"} (used ${d.tradingUsedCount ?? 0})`;
-                                navigator.clipboard.writeText(summary).then(() => toast.success("Discount summary copied")).catch(() => toast.error("Copy failed"));
-                              }}
-                              title="Copy discount summary"
-                            >
-                              <Copy className="size-4 mr-1" />
-                              Copy summary
-                            </Button>
-                            {d.status === "active" && (
-                              <Button variant="outline" size="sm" onClick={() => handleUserDiscountStatus(d.id, "paused")} title="Pause">
-                                Pause
-                              </Button>
+                            {row.type === "user" && (
+                              <>
+                                {(row.raw as { status?: string }).status === "active" && (
+                                  <Button variant="outline" size="sm" onClick={() => handleUserDiscountStatus(row.id, "paused")} title="Pause">Pause</Button>
+                                )}
+                                {(row.raw as { status?: string }).status === "paused" && (
+                                  <Button variant="outline" size="sm" className="text-[#10B981]" onClick={() => handleUserDiscountStatus(row.id, "active")} title="Re-enable">Re-enable</Button>
+                                )}
+                                <Button variant="outline" size="sm" className="text-[#EF4444] hover:text-[#EF4444]" onClick={() => handleRevokeUserDiscount(row.id)} title="Revoke">Revoke</Button>
+                              </>
                             )}
-                            {d.status === "paused" && (
-                              <Button variant="outline" size="sm" className="text-[#10B981]" onClick={() => handleUserDiscountStatus(d.id, "active")} title="Re-enable">
-                                Re-enable
-                              </Button>
-                            )}
-                            <Button variant="outline" size="sm" className="text-[#EF4444] hover:text-[#EF4444]" onClick={() => handleRevokeUserDiscount(d.id)} title="Revoke">
-                              Revoke
-                            </Button>
                           </div>
                         </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
                 </Table>
-              )}
+                );
+              })()}
             </div>
           </Card>
         </TabsContent>
