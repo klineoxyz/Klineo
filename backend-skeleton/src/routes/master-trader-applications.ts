@@ -1,0 +1,126 @@
+/**
+ * Master Trader Application routes.
+ * - POST /api/master-trader-applications — submit application (auth required, no package required)
+ * - Admin: GET/PATCH via /api/admin/master-trader-applications (in admin router)
+ */
+
+import { Router } from 'express';
+import { verifySupabaseJWT, AuthenticatedRequest } from '../middleware/auth.js';
+import { validate } from '../middleware/validation.js';
+import { body } from 'express-validator';
+import { createClient } from '@supabase/supabase-js';
+
+let supabase: ReturnType<typeof createClient> | null = null;
+
+function getSupabase() {
+  if (supabase) return supabase;
+  const url = process.env.SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) return null;
+  supabase = createClient(url, key);
+  return supabase;
+}
+
+export const masterTraderApplicationsRouter = Router();
+
+/**
+ * POST /api/master-trader-applications
+ * Submit Master Trader application. No entitlement/package required.
+ */
+masterTraderApplicationsRouter.post(
+  '/',
+  verifySupabaseJWT,
+  validate([
+    body('fullName').trim().isLength({ min: 1 }).withMessage('Full name required'),
+    body('email').isEmail().withMessage('Valid email required'),
+    body('country').trim().isLength({ min: 1 }).withMessage('Country required'),
+    body('telegram').optional().trim(),
+    body('primaryExchange').trim().isLength({ min: 1 }).withMessage('Primary exchange required'),
+    body('yearsExperience').isInt({ min: 0 }).withMessage('Years of experience required'),
+    body('tradingStyle').trim().isLength({ min: 1 }).withMessage('Trading style required'),
+    body('preferredMarkets').trim().isLength({ min: 1 }).withMessage('Preferred markets required'),
+    body('avgMonthlyReturn').optional(),
+    body('strategyDescription').trim().isLength({ min: 1 }).withMessage('Strategy description required'),
+    body('whyMasterTrader').trim().isLength({ min: 1 }).withMessage('Why Master Trader required'),
+    body('profileUrl').optional().trim(),
+  ]),
+  async (req: AuthenticatedRequest, res) => {
+    const client = getSupabase();
+    if (!client) return res.status(503).json({ error: 'Database unavailable' });
+
+    try {
+      const userId = req.user!.id;
+      const {
+        fullName,
+        email,
+        country,
+        telegram,
+        primaryExchange,
+        yearsExperience,
+        tradingStyle,
+        preferredMarkets,
+        avgMonthlyReturn,
+        strategyDescription,
+        whyMasterTrader,
+        profileUrl,
+      } = req.body;
+
+      // Check if user already has a pending application
+      const { data: existing } = await client
+        .from('master_trader_applications')
+        .select('id, status')
+        .eq('user_id', userId)
+        .eq('status', 'pending')
+        .maybeSingle();
+
+      if (existing) {
+        return res.status(400).json({
+          error: 'You already have a pending application',
+          message: 'Wait for the current application to be reviewed.',
+        });
+      }
+
+      const formData = {
+        fullName,
+        email,
+        country,
+        telegram: telegram || null,
+        primaryExchange,
+        yearsExperience: Number(yearsExperience),
+        tradingStyle,
+        preferredMarkets,
+        avgMonthlyReturn: avgMonthlyReturn != null ? String(avgMonthlyReturn) : null,
+        strategyDescription,
+        whyMasterTrader,
+        profileUrl: profileUrl || null,
+      };
+
+      const { data: row, error } = await client
+        .from('master_trader_applications')
+        .insert({
+          user_id: userId,
+          status: 'pending',
+          form_data: formData,
+          proof_url: null,
+          updated_at: new Date().toISOString(),
+        })
+        .select('id, status, created_at')
+        .single();
+
+      if (error) {
+        console.error('Master trader application insert error:', error);
+        return res.status(500).json({ error: 'Failed to submit application' });
+      }
+
+      res.status(201).json({
+        id: row.id,
+        status: row.status,
+        createdAt: row.created_at,
+        message: 'Application submitted. We will review within 2–5 business days.',
+      });
+    } catch (err) {
+      console.error('Master trader application error:', err);
+      res.status(500).json({ error: 'Failed to submit application' });
+    }
+  }
+);

@@ -124,6 +124,14 @@ export function Admin() {
   const [markPaidTransactionId, setMarkPaidTransactionId] = useState("");
   const [markPaidLoading, setMarkPaidLoading] = useState(false);
 
+  // Master Trader applications
+  const [masterTraderApplications, setMasterTraderApplications] = useState<any[]>([]);
+  const [masterTraderApplicationsLoading, setMasterTraderApplicationsLoading] = useState(false);
+  const [masterTraderReviewApp, setMasterTraderReviewApp] = useState<{ id: string; userEmail: string } | null>(null);
+  const [masterTraderReviewStatus, setMasterTraderReviewStatus] = useState<"approved" | "rejected">("approved");
+  const [masterTraderReviewMessage, setMasterTraderReviewMessage] = useState("");
+  const [masterTraderReviewLoading, setMasterTraderReviewLoading] = useState(false);
+
   // Load stats on mount
   useEffect(() => {
     loadStats();
@@ -174,6 +182,39 @@ export function Admin() {
       toast.error('Failed to load traders');
     } finally {
       setTradersLoading(false);
+    }
+  };
+
+  const loadMasterTraderApplications = async (status?: string) => {
+    setMasterTraderApplicationsLoading(true);
+    try {
+      const params = status ? `?status=${status}` : "";
+      const data = await api.get(`/api/admin/master-trader-applications${params}`);
+      setMasterTraderApplications((data as any).applications || []);
+    } catch (err: any) {
+      console.error('Failed to load Master Trader applications:', err);
+      toast.error('Failed to load applications');
+    } finally {
+      setMasterTraderApplicationsLoading(false);
+    }
+  };
+
+  const handleMasterTraderReview = async () => {
+    if (!masterTraderReviewApp) return;
+    setMasterTraderReviewLoading(true);
+    try {
+      await api.patch(`/api/admin/master-trader-applications/${masterTraderReviewApp.id}`, {
+        status: masterTraderReviewStatus,
+        message: masterTraderReviewMessage || undefined,
+      });
+      toast.success(masterTraderReviewStatus === "approved" ? "Application approved" : "Application rejected");
+      setMasterTraderReviewApp(null);
+      setMasterTraderReviewMessage("");
+      loadMasterTraderApplications();
+    } catch (err: any) {
+      toast.error("Failed to update", { description: err?.message });
+    } finally {
+      setMasterTraderReviewLoading(false);
     }
   };
 
@@ -666,6 +707,7 @@ export function Admin() {
         onValueChange={(v) => {
           setAdminTab(v);
           if (v === "payments") loadPaymentIntents();
+          if (v === "master-trader-requests") loadMasterTraderApplications();
           if (v === "discounts") {
             loadCoupons();
             loadUserDiscounts();
@@ -682,6 +724,7 @@ export function Admin() {
           <TabsTrigger value="referrals">Referrals</TabsTrigger>
           <TabsTrigger value="platform-settings">Platform Settings</TabsTrigger>
           <TabsTrigger value="payments">Payments</TabsTrigger>
+          <TabsTrigger value="master-trader-requests">Master Trader Requests</TabsTrigger>
           <TabsTrigger value="discounts">Discount Coupons</TabsTrigger>
           <TabsTrigger value="financial-ratios">Financial Ratios</TabsTrigger>
           <TabsTrigger value="runner">Runner</TabsTrigger>

@@ -154,7 +154,7 @@ export function Footer({ onNavigate }: FooterProps) {
               </li>
               <li>
                 <button 
-                  onClick={() => onNavigate && onNavigate("master-trader-apply")}
+                  onClick={() => onNavigate && onNavigate("master-trader-application")}
                   className="text-sm text-muted-foreground hover:text-foreground transition"
                 >
                   Become a Master Trader

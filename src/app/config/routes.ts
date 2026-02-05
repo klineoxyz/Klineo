@@ -75,6 +75,7 @@ export const VIEW_TO_PATH: Record<string, string> = {
   marketplace: ROUTES.marketplace,
   "copy-trading": ROUTES.copyTrading,
   "master-trader-application": ROUTES.masterTraderApplication,
+  "master-trader-apply": ROUTES.masterTraderApplication,
   "notifications-center": ROUTES.notificationsCenter,
   "onboarding-wizard": ROUTES.onboardingWizard,
   "smoke-test": ROUTES.smokeTest,

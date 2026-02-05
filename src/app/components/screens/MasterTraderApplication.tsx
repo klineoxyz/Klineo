@@ -4,21 +4,60 @@ import { Badge } from "@/app/components/ui/badge";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import { Textarea } from "@/app/components/ui/textarea";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/app/components/ui/tabs";
-import { ArrowLeft, TrendingUp, Users, Shield, Clock, CheckCircle2, AlertCircle, Upload } from "lucide-react";
+import { ArrowLeft, TrendingUp, Users, Shield, Clock, CheckCircle2, Upload, Loader2 } from "lucide-react";
 import { useState } from "react";
+import { api } from "@/lib/api";
+import { toast } from "@/app/lib/toast";
 
 interface MasterTraderApplicationProps {
   onNavigate: (view: string) => void;
 }
 
 export function MasterTraderApplication({ onNavigate }: MasterTraderApplicationProps) {
-  const [applicationStatus, setApplicationStatus] = useState<"form" | "review" | "approved">("form");
+  const [applicationStatus, setApplicationStatus] = useState<"form" | "review" | "approved" | "rejected">("form");
   const [exchangeProof, setExchangeProof] = useState<File | null>(null);
+  const [submitLoading, setSubmitLoading] = useState(false);
+  const [formData, setFormData] = useState({
+    fullName: "",
+    email: "",
+    country: "",
+    telegram: "",
+    primaryExchange: "",
+    yearsExperience: "",
+    tradingStyle: "",
+    preferredMarkets: "",
+    avgMonthlyReturn: "",
+    strategyDescription: "",
+    whyMasterTrader: "",
+    profileUrl: "",
+  });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setApplicationStatus("review");
+    setSubmitLoading(true);
+    try {
+      await api.post("/api/master-trader-applications", {
+        fullName: formData.fullName,
+        email: formData.email,
+        country: formData.country,
+        telegram: formData.telegram || undefined,
+        primaryExchange: formData.primaryExchange,
+        yearsExperience: parseInt(formData.yearsExperience, 10) || 0,
+        tradingStyle: formData.tradingStyle,
+        preferredMarkets: formData.preferredMarkets,
+        avgMonthlyReturn: formData.avgMonthlyReturn || undefined,
+        strategyDescription: formData.strategyDescription,
+        whyMasterTrader: formData.whyMasterTrader,
+        profileUrl: formData.profileUrl || undefined,
+      });
+      setApplicationStatus("review");
+      toast.success("Application submitted", { description: "We will review within 2–5 business days." });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to submit";
+      toast.error("Submission failed", { description: msg });
+    } finally {
+      setSubmitLoading(false);
+    }
   };
 
   return (
@@ -93,19 +132,19 @@ export function MasterTraderApplication({ onNavigate }: MasterTraderApplicationP
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label>Full Name *</Label>
-                      <Input placeholder="John Doe" required />
+                      <Input placeholder="John Doe" required value={formData.fullName} onChange={(e) => setFormData((f) => ({ ...f, fullName: e.target.value }))} />
                     </div>
                     <div className="space-y-2">
                       <Label>Email Address *</Label>
-                      <Input type="email" placeholder="trader@example.com" required />
+                      <Input type="email" placeholder="trader@example.com" required value={formData.email} onChange={(e) => setFormData((f) => ({ ...f, email: e.target.value }))} />
                     </div>
                     <div className="space-y-2">
                       <Label>Country *</Label>
-                      <Input placeholder="United States" required />
+                      <Input placeholder="United States" required value={formData.country} onChange={(e) => setFormData((f) => ({ ...f, country: e.target.value }))} />
                     </div>
                     <div className="space-y-2">
                       <Label>Telegram Handle</Label>
-                      <Input placeholder="@username" />
+                      <Input placeholder="@username" value={formData.telegram} onChange={(e) => setFormData((f) => ({ ...f, telegram: e.target.value }))} />
                     </div>
                   </div>
                 </div>
@@ -115,16 +154,16 @@ export function MasterTraderApplication({ onNavigate }: MasterTraderApplicationP
                   <div className="space-y-4">
                     <div className="space-y-2">
                       <Label>Primary Exchange *</Label>
-                      <Input placeholder="e.g., Binance, Bybit, OKX" required />
+                      <Input placeholder="e.g., Binance, Bybit, OKX" required value={formData.primaryExchange} onChange={(e) => setFormData((f) => ({ ...f, primaryExchange: e.target.value }))} />
                     </div>
                     <div className="space-y-2">
                       <Label>Years of Trading Experience *</Label>
-                      <Input type="number" placeholder="3" min="1" required />
+                      <Input type="number" placeholder="3" min="1" required value={formData.yearsExperience} onChange={(e) => setFormData((f) => ({ ...f, yearsExperience: e.target.value }))} />
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label>Primary Trading Style *</Label>
-                        <select className="w-full h-10 rounded border border-border bg-background px-3 text-sm" required>
+                        <select className="w-full h-10 rounded border border-border bg-background px-3 text-sm" required value={formData.tradingStyle} onChange={(e) => setFormData((f) => ({ ...f, tradingStyle: e.target.value }))}>
                           <option value="">Select...</option>
                           <option value="day">Day Trading</option>
                           <option value="swing">Swing Trading</option>
@@ -134,7 +173,7 @@ export function MasterTraderApplication({ onNavigate }: MasterTraderApplicationP
                       </div>
                       <div className="space-y-2">
                         <Label>Preferred Markets *</Label>
-                        <select className="w-full h-10 rounded border border-border bg-background px-3 text-sm" required>
+                        <select className="w-full h-10 rounded border border-border bg-background px-3 text-sm" required value={formData.preferredMarkets} onChange={(e) => setFormData((f) => ({ ...f, preferredMarkets: e.target.value }))}>
                           <option value="">Select...</option>
                           <option value="spot">Spot Only</option>
                           <option value="futures">Futures Only</option>
@@ -143,8 +182,8 @@ export function MasterTraderApplication({ onNavigate }: MasterTraderApplicationP
                       </div>
                     </div>
                     <div className="space-y-2">
-                      <Label>Average Monthly Return (%) *</Label>
-                      <Input type="number" placeholder="15" step="0.01" required />
+                      <Label>Average Monthly Return (%)</Label>
+                      <Input type="number" placeholder="15" step="0.01" value={formData.avgMonthlyReturn} onChange={(e) => setFormData((f) => ({ ...f, avgMonthlyReturn: e.target.value }))} />
                     </div>
                   </div>
                 </div>
@@ -175,7 +214,7 @@ export function MasterTraderApplication({ onNavigate }: MasterTraderApplicationP
                     </div>
                     <div className="space-y-2">
                       <Label>TradingView or Exchange Profile URL</Label>
-                      <Input placeholder="https://www.tradingview.com/u/username/" />
+                      <Input placeholder="https://www.tradingview.com/u/username/" value={formData.profileUrl} onChange={(e) => setFormData((f) => ({ ...f, profileUrl: e.target.value }))} />
                     </div>
                   </div>
                 </div>
@@ -189,6 +228,8 @@ export function MasterTraderApplication({ onNavigate }: MasterTraderApplicationP
                         placeholder="Explain your trading approach, risk management, and what makes your strategy unique..."
                         className="min-h-32"
                         required
+                        value={formData.strategyDescription}
+                        onChange={(e) => setFormData((f) => ({ ...f, strategyDescription: e.target.value }))}
                       />
                     </div>
                     <div className="space-y-2">
@@ -197,6 +238,8 @@ export function MasterTraderApplication({ onNavigate }: MasterTraderApplicationP
                         placeholder="Tell us about your goals and what you hope to achieve..."
                         className="min-h-24"
                         required
+                        value={formData.whyMasterTrader}
+                        onChange={(e) => setFormData((f) => ({ ...f, whyMasterTrader: e.target.value }))}
                       />
                     </div>
                   </div>
@@ -220,8 +263,8 @@ export function MasterTraderApplication({ onNavigate }: MasterTraderApplicationP
                   </div>
                 </div>
 
-                <Button type="submit" className="w-full bg-primary text-primary-foreground" size="lg">
-                  Submit Application
+                <Button type="submit" className="w-full bg-primary text-primary-foreground" size="lg" disabled={submitLoading}>
+                  {submitLoading ? <><Loader2 className="size-4 mr-2 animate-spin" /> Submitting...</> : "Submit Application"}
                 </Button>
               </Card>
             </form>
@@ -263,16 +306,17 @@ export function MasterTraderApplication({ onNavigate }: MasterTraderApplicationP
             </Card>
 
             <Card className="p-6">
-              <h4 className="font-semibold mb-3">Referral rewards</h4>
+              <h4 className="font-semibold mb-3">Qualified Master Trader Benefits</h4>
               <div className="p-4 bg-primary/10 rounded border border-primary/20 mb-4">
-                <div className="text-3xl font-bold text-primary mb-1">70%</div>
-                <div className="text-xs text-muted-foreground">of joining fee & package revenue goes to referral pool (7 levels)</div>
+                <div className="text-lg font-bold text-primary mb-1">6–12 months free</div>
+                <div className="text-xs text-muted-foreground">Full platform access at no cost</div>
               </div>
               <div className="text-xs text-muted-foreground space-y-2">
-                <p className="font-semibold text-foreground">Example:</p>
-                <p>Your copier pays joining fee $100 or buys a $200 package</p>
-                <p>→ 70% is distributed across upline (L1–L7)</p>
-                <p className="text-primary">→ You earn according to your level in their referral chain</p>
+                <p className="font-semibold text-foreground">What you get:</p>
+                <p>✓ 6 months to 1 year full platform access — free</p>
+                <p>✓ No onboarding fee</p>
+                <p>✓ Earn from referral pool when your copiers pay or buy packages</p>
+                <p className="text-primary mt-2">Applications are reviewed within 2–5 business days.</p>
               </div>
             </Card>
 

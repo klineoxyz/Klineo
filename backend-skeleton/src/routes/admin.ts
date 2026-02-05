@@ -1201,6 +1201,118 @@ adminRouter.get('/audit-logs', async (req, res) => {
 });
 
 /**
+ * GET /api/admin/master-trader-applications
+ * List Master Trader applications (for admin review)
+ */
+adminRouter.get('/master-trader-applications', async (req, res) => {
+  const client = getSupabase();
+  if (!client) return res.status(503).json({ error: 'Database unavailable' });
+  try {
+    const status = (req.query.status as string) || undefined;
+    let q = client
+      .from('master_trader_applications')
+      .select('id, user_id, status, message, form_data, proof_url, created_at, updated_at')
+      .order('created_at', { ascending: false });
+    if (status && ['pending', 'approved', 'rejected'].includes(status)) {
+      q = q.eq('status', status);
+    }
+    const { data: rows, error } = await q;
+    if (error) {
+      console.error('Master trader applications list error:', error);
+      return res.status(500).json({ error: 'Failed to fetch applications' });
+    }
+    const userIds = [...new Set((rows || []).map((r: any) => r.user_id).filter(Boolean))];
+    const emailMap: Record<string, string> = {};
+    if (userIds.length > 0) {
+      const { data: profiles } = await client.from('user_profiles').select('id, email, full_name').in('id', userIds);
+      (profiles || []).forEach((p: any) => { emailMap[p.id] = p.email || '—'; });
+    }
+    const list = (rows || []).map((r: any) => ({
+      id: r.id,
+      userId: r.user_id,
+      userEmail: emailMap[r.user_id] || '—',
+      status: r.status,
+      message: r.message || null,
+      formData: r.form_data || {},
+      proofUrl: r.proof_url || null,
+      createdAt: r.created_at,
+      updatedAt: r.updated_at,
+    }));
+    res.json({ applications: list });
+  } catch (err) {
+    console.error('Master trader applications error:', err);
+    res.status(500).json({ error: 'Failed to fetch applications' });
+  }
+});
+
+/**
+ * PATCH /api/admin/master-trader-applications/:id
+ * Approve or reject application. Body: { status: 'approved' | 'rejected', message?: string }
+ */
+adminRouter.patch('/master-trader-applications/:id',
+  validate([
+    uuidParam('id'),
+    body('status').isIn(['approved', 'rejected']).withMessage('status must be approved or rejected'),
+    body('message').optional().trim().isString().isLength({ max: 500 }),
+  ]),
+  async (req: AuthenticatedRequest, res) => {
+    const client = getSupabase();
+    if (!client) return res.status(503).json({ error: 'Database unavailable' });
+    try {
+      const { id } = req.params;
+      const { status, message } = req.body;
+      const { data: row, error: fetchErr } = await client
+        .from('master_trader_applications')
+        .select('id, user_id, status, form_data')
+        .eq('id', id)
+        .single();
+      if (fetchErr || !row) return res.status(404).json({ error: 'Application not found' });
+      if (row.status !== 'pending') {
+        return res.status(400).json({ error: `Application is already ${row.status}` });
+      }
+      const { error: updateErr } = await client
+        .from('master_trader_applications')
+        .update({
+          status,
+          message: message || null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', id);
+      if (updateErr) {
+        console.error('Master trader application update error:', updateErr);
+        return res.status(500).json({ error: 'Failed to update application' });
+      }
+      if (status === 'approved') {
+        const { data: existingTrader } = await client.from('traders').select('id').eq('user_id', row.user_id).maybeSingle();
+        if (!existingTrader) {
+          const formData = (row as any).form_data || {};
+          const displayName = formData.fullName || 'New Trader';
+          const slugBase = (displayName.replace(/\s+/g, '-').toLowerCase() || 'trader').slice(0, 20);
+          const { error: traderErr } = await client.from('traders').insert({
+            user_id: row.user_id,
+            display_name: displayName,
+            slug: `${slugBase}-${row.user_id?.slice(0, 8)}`,
+            status: 'approved',
+          }).select('id').single();
+          if (traderErr) console.warn('Could not auto-create trader entry:', traderErr);
+        }
+      }
+      await client.from('audit_logs').insert({
+        admin_id: req.user!.id,
+        action_type: 'master_trader_application_reviewed',
+        entity_type: 'master_trader_application',
+        entity_id: id,
+        details: { status, userId: row.user_id },
+      });
+      res.json({ status, message: status === 'approved' ? 'Application approved' : 'Application rejected' });
+    } catch (err) {
+      console.error('Master trader application patch error:', err);
+      res.status(500).json({ error: 'Failed to update application' });
+    }
+  }
+);
+
+/**
  * GET /api/admin/user-discounts
  * List all user-specific discounts (onboarding / trading packages)
  */

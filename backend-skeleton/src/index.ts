@@ -29,6 +29,7 @@ import { coinpaymentsRouter } from './routes/coinpayments.js';
 import { referralsRouter } from './routes/referrals.js';
 import { paymentIntentsRouter, validateCouponHandler } from './routes/payment-intents.js';
 import { launchRouter } from './routes/launch.js';
+import { masterTraderApplicationsRouter } from './routes/master-trader-applications.js';
 import { verifySupabaseJWT } from './middleware/auth.js';
 import { apiLimiter, authLimiter, adminLimiter } from './middleware/rateLimit.js';
 
@@ -162,6 +163,7 @@ app.get('/api/payments/validate-coupon', verifySupabaseJWT, ...validateCouponHan
 app.use('/api/payments/intents', paymentIntentsRouter);
 app.use('/api/entitlement', entitlementsRouter);
 app.use('/api/entitlements', entitlementsMeRouter);
+app.use('/api/master-trader-applications', masterTraderApplicationsRouter);
 
 // 404 handler
 app.use((req, res) => {
