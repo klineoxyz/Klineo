@@ -256,9 +256,11 @@ export function ConnectExchangeWizard({
                 <p className="text-xs text-muted-foreground">
                   Testnet uses fake funds. Get testnet keys from{" "}
                   {exchange === "binance" ? (
-                    <a href="https://testnet.binance.vision/" target="_blank" rel="noopener noreferrer" className="text-primary underline">
-                      Binance Spot Testnet
-                    </a>
+                    <>
+                      <a href="https://testnet.binance.vision/" target="_blank" rel="noopener noreferrer" className="text-primary underline">Spot</a>
+                      {" · "}
+                      <a href="https://testnet.binancefuture.com/" target="_blank" rel="noopener noreferrer" className="text-primary underline">Futures (USDT-M)</a>
+                    </>
                   ) : (
                     <a href="https://testnet.bybit.com/app/user/api-management" target="_blank" rel="noopener noreferrer" className="text-primary underline">
                       Bybit Testnet
@@ -293,7 +295,7 @@ export function ConnectExchangeWizard({
                 {exchange === "binance" ? (
                   <ul className="text-xs text-muted-foreground space-y-1 list-disc list-inside">
                     <li>Binance: API Management → Create API → enable Reading, Spot & Margin, Futures; leave Withdrawals OFF</li>
-                    <li>Testnet: testnet.binance.vision → same steps</li>
+                    <li>Spot testnet: testnet.binance.vision · Futures testnet: testnet.binancefuture.com</li>
                   </ul>
                 ) : (
                   <ul className="text-xs text-muted-foreground space-y-1 list-disc list-inside">

@@ -99,7 +99,7 @@ Request ID is set by existing middleware (`X-Request-ID`).
    - Enable **Futures** (USD-M) for the key. Spot-only keys will fail Futures endpoints.
 
 3. **Backend env**
-   - When saving the connection, use **environment: testnet**. The backend uses `testnet.binancefuture.com` for Futures when `environment === 'testnet'`.
+   - When saving the connection, use **environment: testnet**. The backend uses `demo-fapi.binance.com` (USDT-M perpetual) for Futures when `environment === 'testnet'`.
 
 4. **Flow**
    - In the app: Settings → Add/update connection → choose **Testnet**, paste API Key and Secret → Save → Test (spot). Then **Test Futures** (if available in UI) or call `POST /api/exchange-connections/:id/futures/test`. Then **Enable Futures** (or `POST .../futures/enable` with optional `default_leverage`, `margin_mode`, `position_mode`).

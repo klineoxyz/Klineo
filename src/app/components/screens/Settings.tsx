@@ -1029,7 +1029,10 @@ export function Settings({ onNavigate }: SettingsProps) {
                         <a href="https://www.binance.com/en/my/settings/api-management" target="_blank" rel="noopener noreferrer">Mainnet API</a>
                       </Button>
                       <Button variant="outline" size="sm" asChild>
-                        <a href="https://testnet.binance.vision/" target="_blank" rel="noopener noreferrer">Testnet</a>
+                        <a href="https://testnet.binance.vision/" target="_blank" rel="noopener noreferrer">Spot Testnet</a>
+                      </Button>
+                      <Button variant="outline" size="sm" asChild>
+                        <a href="https://testnet.binancefuture.com/" target="_blank" rel="noopener noreferrer">Futures Testnet</a>
                       </Button>
                     </div>
                   </div>
@@ -1135,7 +1138,11 @@ export function Settings({ onNavigate }: SettingsProps) {
                   <p className="text-xs text-muted-foreground">
                     Use Testnet for testing with fake funds. Get testnet keys from{" "}
                     {formData.exchange === 'binance' ? (
-                      <a href="https://testnet.binance.vision/" target="_blank" rel="noopener noreferrer" className="text-primary underline">Binance Testnet</a>
+                      <>
+                        <a href="https://testnet.binance.vision/" target="_blank" rel="noopener noreferrer" className="text-primary underline">Spot</a>
+                        {" · "}
+                        <a href="https://testnet.binancefuture.com/" target="_blank" rel="noopener noreferrer" className="text-primary underline">Futures (USDT-M)</a>
+                      </>
                     ) : (
                       <a href="https://testnet.bybit.com/app/user/api-management" target="_blank" rel="noopener noreferrer" className="text-primary underline">Bybit Testnet</a>
                     )}
