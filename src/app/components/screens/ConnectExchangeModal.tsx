@@ -1,40 +1,23 @@
 /**
- * Connect Exchange modal — Origami-style, single popup.
+ * Connect Exchange modal — premium Origami-style popup.
  * Two-column: Create Account form (left 45%) + Step-by-step guide (right 55%).
- * Only Binance and Bybit are clickable; others show (soon).
  */
 
 import { useState } from "react";
-import {
-  Dialog,
-  DialogContent,
-  DialogTitle,
-  DialogDescription,
-} from "@/app/components/ui/dialog";
-import { Button } from "@/app/components/ui/button";
-import { Input } from "@/app/components/ui/input";
-import { Label } from "@/app/components/ui/label";
-import { Card } from "@/app/components/ui/card";
-import { Badge } from "@/app/components/ui/badge";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/app/components/ui/select";
+import * as DialogPrimitive from "@radix-ui/react-dialog";
+import { X } from "lucide-react";
 import { cn } from "@/app/components/ui/utils";
 import { exchangeConnections, sanitizeExchangeError, getApiErrorMessage, type ExchangeConnection } from "@/lib/api";
 import {
   EXCHANGE_STEPS,
-  EXCHANGE_NAMES,
-  EXCHANGE_SELECTOR_ORDER,
   isSupported,
   type ExchangeId,
   type SupportedExchange,
 } from "@/app/config/exchangeSteps";
 import { toast } from "@/app/lib/toast";
-import { ExternalLink } from "lucide-react";
+import { ExchangeSelectorRow } from "@/app/components/connect-exchange/ExchangeSelectorRow";
+import { CreateAccountForm } from "@/app/components/connect-exchange/CreateAccountForm";
+import { ExchangeStepGuide } from "@/app/components/connect-exchange/ExchangeStepGuide";
 
 const MIN_KEY_LEN = 10;
 const MIN_SECRET_LEN = 10;
@@ -132,265 +115,98 @@ export function ConnectExchangeModal({
     handleClose(false);
   };
 
+  const handleExchangeSelect = (id: ExchangeId) => {
+    if (!isSupported(id)) return;
+    setExchange(id);
+    setStatus("idle");
+    setErrorMessage("");
+  };
+
   return (
-    <Dialog open={open} onOpenChange={(next) => handleClose(!!next)}>
-      <DialogContent
-        className={cn(
-          "max-w-[1100px] w-[calc(100vw-0.5rem)] sm:w-[calc(100vw-2rem)] max-h-[95vh] sm:max-h-[88vh] p-0 gap-0 overflow-hidden",
-          "rounded-xl sm:rounded-2xl shadow-2xl",
-          "bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900",
-          "border border-slate-700/50",
-          "flex flex-col",
-          "[&>button]:top-2.5 [&>button]:right-2.5 sm:[&>button]:top-4 sm:[&>button]:right-4 [&>button]:rounded-md [&>button]:p-2 [&>button]:text-slate-400 [&>button]:hover:text-white [&>button]:hover:bg-slate-700/50 [&>button]:touch-manipulation"
-        )}
-        onPointerDownOutside={(e) => loading && e.preventDefault()}
-        onEscapeKeyDown={(e) => loading && e.preventDefault()}
-      >
-        <DialogTitle className="sr-only">Select an exchange</DialogTitle>
-        <DialogDescription className="sr-only">
-          Klineo will help you set up and connect your exchange
-        </DialogDescription>
+    <DialogPrimitive.Root open={open} onOpenChange={(v) => handleClose(!!v)}>
+      <DialogPrimitive.Portal>
+        {/* Overlay: strong backdrop blur + dark */}
+        <DialogPrimitive.Overlay
+          className={cn(
+            "fixed inset-0 z-50 bg-black/60 backdrop-blur-md",
+            "data-[state=open]:animate-in data-[state=closed]:animate-out",
+            "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0"
+          )}
+        />
+        {/* Modal content */}
+        <DialogPrimitive.Content
+          className={cn(
+            "fixed left-[50%] top-[50%] z-50 translate-x-[-50%] translate-y-[-50%]",
+            "w-[calc(100vw-0.5rem)] sm:w-[calc(100vw-2rem)] max-w-[1200px] h-[85vh] sm:h-[80vh] max-h-[820px]",
+            "rounded-2xl sm:rounded-[18px] border border-white/[0.08] shadow-2xl",
+            "bg-gradient-to-br from-slate-900 via-slate-900/95 to-indigo-950/90",
+            "flex flex-col overflow-hidden",
+            "data-[state=open]:animate-in data-[state=closed]:animate-out",
+            "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
+            "data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95"
+          )}
+          onPointerDownOutside={(e) => loading && e.preventDefault()}
+          onEscapeKeyDown={(e) => loading && e.preventDefault()}
+        >
+          {/* Close button */}
+          <DialogPrimitive.Close
+            className={cn(
+              "absolute top-5 right-5 z-10 rounded-lg p-2",
+              "text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
+            )}
+            aria-label="Close"
+          >
+            <X className="size-5" />
+          </DialogPrimitive.Close>
 
-        {/* Header */}
-        <div className="shrink-0 px-3 sm:px-6 md:px-8 pt-4 sm:pt-6 md:pt-8 pb-2 sm:pb-4 text-center">
-          <h2 className="text-lg sm:text-xl font-semibold text-white">
-            Select an exchange
-          </h2>
-          <p className="text-xs sm:text-sm text-slate-400 mt-1 max-w-md mx-auto">
-            Klineo will help you set up and connect your exchange
-          </p>
-        </div>
-
-        {/* Exchange selector row - horizontal scroll on mobile */}
-        <div className="shrink-0 px-3 sm:px-6 md:px-8 pb-3 sm:pb-4 overflow-x-auto overflow-y-hidden -mx-1 scroll-smooth">
-          <div className="flex flex-wrap gap-1.5 sm:gap-2 justify-center min-w-0">
-            {EXCHANGE_SELECTOR_ORDER.map((id) => {
-              const enabled = isSupported(id);
-              return (
-                <button
-                  key={id}
-                  type="button"
-                  onClick={() => {
-                    if (!enabled) return;
-                    setExchange(id);
-                    setStatus("idle");
-                    setErrorMessage("");
-                  }}
-                  disabled={!enabled}
-                  className={cn(
-                    "px-3 sm:px-4 py-2 rounded-full text-xs sm:text-sm font-medium transition-all shrink-0 touch-manipulation",
-                    exchange === id
-                      ? "bg-primary text-primary-foreground ring-2 ring-primary/50"
-                      : enabled
-                        ? "bg-slate-700/50 text-slate-300 hover:bg-slate-700 hover:text-white"
-                        : "bg-slate-800/50 text-slate-500 cursor-not-allowed opacity-60"
-                  )}
-                >
-                  {EXCHANGE_NAMES[id]}
-                  {!enabled && <span className="ml-1 opacity-80">(soon)</span>}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Main content: fixed left (400px), flexible right - PC side-by-side, mobile stacked */}
-        <div className="flex-1 min-h-0 flex flex-col lg:flex-row gap-4 sm:gap-6 px-3 sm:px-6 md:px-8 pb-4 sm:pb-6 md:pb-8 overflow-y-auto overflow-x-hidden">
-            {/* LEFT: Create Account form - fixed width on desktop so right gets remaining space */}
-            <div className="flex-shrink-0 w-full lg:w-[400px] lg:max-h-[calc(88vh-11rem)] lg:overflow-y-auto">
-            <Card className="p-4 sm:p-6 bg-slate-800/50 border-slate-700/80">
-              <h3 className="text-sm sm:text-base font-semibold text-white mb-3 sm:mb-4">Create Account</h3>
-
-              {!supported ? (
-                <p className="text-sm text-slate-400">
-                  {EXCHANGE_NAMES[exchange]} support is coming soon. Use Binance or Bybit for now.
-                </p>
-              ) : (
-                <div className="space-y-3 sm:space-y-4">
-                  <div>
-                    <Label className="text-slate-300">Account Name</Label>
-                    <Input
-                      placeholder="My Trading Account"
-                      value={label}
-                      onChange={(e) => setLabel(e.target.value)}
-                      className="mt-1.5 bg-slate-900/50 border-slate-600 text-white"
-                      disabled={loading}
-                    />
-                  </div>
-
-                  <div>
-                    <Label className="text-slate-300">Environment</Label>
-                    <Select
-                      value={environment}
-                      onValueChange={(v: "production" | "testnet") => setEnvironment(v)}
-                      disabled={loading}
-                    >
-                      <SelectTrigger className="mt-1.5 bg-slate-900/50 border-slate-600 text-white">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="testnet">Testnet</SelectItem>
-                        <SelectItem value="production">Production</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <p className="text-xs text-slate-500 mt-1">
-                      Testnet uses fake funds. Get keys from{" "}
-                      {exchange === "binance" ? (
-                        <a href="https://testnet.binance.vision/" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Binance</a>
-                      ) : (
-                        <a href="https://testnet.bybit.com/app/user/api-management" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Bybit</a>
-                      )}.
-                    </p>
-                  </div>
-
-                  <div>
-                    <Label className="text-slate-300">API Key</Label>
-                    <Input
-                      type="password"
-                      placeholder="Paste your API key"
-                      value={apiKey}
-                      onChange={(e) => setApiKey(e.target.value)}
-                      className="mt-1.5 bg-slate-900/50 border-slate-600 text-white font-mono"
-                      disabled={loading}
-                      autoComplete="off"
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-slate-300">Secret Key</Label>
-                    <Input
-                      type="password"
-                      placeholder="Paste your secret key"
-                      value={apiSecret}
-                      onChange={(e) => setApiSecret(e.target.value)}
-                      className="mt-1.5 bg-slate-900/50 border-slate-600 text-white font-mono"
-                      disabled={loading}
-                      autoComplete="off"
-                    />
-                  </div>
-
-                  {status === "connected" ? (
-                    <div className="space-y-2 pt-2">
-                      <div className="flex items-center gap-2 text-emerald-400">
-                        <span className="size-2 rounded-full bg-emerald-400" />
-                        Connected
-                      </div>
-                      {capabilities.length > 0 && (
-                        <div className="flex flex-wrap gap-2">
-                          {capabilities.map((c) => (
-                            <Badge key={c} variant="secondary" className="bg-slate-700 text-slate-200">
-                              {c}
-                            </Badge>
-                          ))}
-                        </div>
-                      )}
-                      <Button onClick={handleDone} className="w-full mt-2 min-h-[44px] touch-manipulation">
-                        Done
-                      </Button>
-                    </div>
-                  ) : status === "error" ? (
-                    <div className="space-y-2 pt-2">
-                      <div className="rounded-lg bg-red-500/10 border border-red-500/20 p-3 text-sm text-red-300">
-                        {errorMessage}
-                      </div>
-                      <Button variant="outline" onClick={handleRetry} className="w-full min-h-[44px] touch-manipulation">
-                        Retry verification
-                      </Button>
-                    </div>
-                  ) : (
-                    <Button
-                      onClick={handleCreateAccount}
-                      disabled={!canSubmit || loading}
-                      className="w-full mt-2 min-h-[44px] touch-manipulation"
-                    >
-                      {loading ? "Verifying…" : "Create Account"}
-                    </Button>
-                  )}
-                </div>
-              )}
-            </Card>
+          {/* Header */}
+          <div className="shrink-0 px-4 sm:px-8 pt-6 sm:pt-8 pb-4 sm:pb-5 text-center">
+            <h2 className="text-2xl sm:text-[28px] font-bold text-white tracking-tight">
+              Select an exchange
+            </h2>
+            <p className="text-sm sm:text-[15px] text-slate-400 mt-2 max-w-md mx-auto leading-relaxed">
+              Klineo will help you set up and connect your exchange
+            </p>
           </div>
 
-          {/* RIGHT: Step-by-step guide - takes remaining space, min 360px so text doesn't squeeze */}
-          <div className="flex-1 min-w-0 lg:min-w-[360px] min-h-[200px] overflow-y-auto overflow-x-hidden">
-            <div className="space-y-2.5 sm:space-y-3">
-              {steps.map((step, i) => (
-                <Card
-                  key={i}
-                  className="p-3 sm:p-4 bg-slate-800/30 border-slate-700/80 relative"
-                >
-                  <Badge
-                    variant="outline"
-                    className="absolute top-3 right-3 shrink-0 border-slate-600 text-slate-400 text-[10px] sm:text-xs px-1.5 py-0"
-                  >
-                    {step.label}
-                  </Badge>
-                  <div className="pr-14 sm:pr-16 min-w-0">
-                    <p className="text-xs sm:text-sm text-slate-300 break-words">{step.text}</p>
-                    {(step.linkText && step.linkHref) || (step.linkTextSecondary && step.linkHrefSecondary) ? (
-                      <div className="flex flex-wrap gap-2 mt-2">
-                        {step.linkText && step.linkHref && (
-                          <a
-                            href={step.linkHref}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1.5 text-xs sm:text-sm text-primary hover:underline touch-manipulation py-1"
-                          >
-                            {step.linkText}
-                            <ExternalLink className="size-3.5" />
-                          </a>
-                        )}
-                        {step.linkTextSecondary && step.linkHrefSecondary && (
-                          <a
-                            href={step.linkHrefSecondary}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1.5 text-xs text-slate-400 hover:text-slate-300 hover:underline touch-manipulation py-1"
-                          >
-                            {step.linkTextSecondary}
-                            <ExternalLink className="size-3" />
-                          </a>
-                        )}
-                      </div>
-                    ) : null}
-                    {step.checklist && step.checklist.length > 0 && (
-                      <ul className="mt-2 space-y-1 text-xs text-slate-400">
-                        {step.checklist.map((item, j) => (
-                          <li key={j} className="flex items-start gap-2">
-                            <span className="text-emerald-500 mt-0.5">✓</span>
-                            {item}
-                          </li>
-                        ))}
-                        {step.checklistDoNot && (
-                          <li className="flex items-start gap-2 text-amber-400">
-                            <span className="mt-0.5">✗</span>
-                            {step.checklistDoNot}
-                          </li>
-                        )}
-                      </ul>
-                    )}
-                    {step.showScreenshot && (
-                      <div className="mt-3 rounded-lg border border-slate-600/60 bg-slate-900/40 overflow-hidden">
-                        {step.screenshotSrc ? (
-                          <img
-                            src={step.screenshotSrc}
-                            alt=""
-                            className="w-full h-auto max-h-[180px] sm:max-h-[220px] md:max-h-[260px] object-contain object-top rounded"
-                            loading="lazy"
-                          />
-                        ) : (
-                          <div className="h-24 sm:h-28 flex items-center justify-center text-slate-500 text-xs border border-dashed border-slate-600">
-                            Screenshot placeholder
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </Card>
-              ))}
+          {/* Exchange selector row */}
+          <div className="shrink-0 px-4 sm:px-8 pb-4 sm:pb-6 overflow-x-auto">
+            <ExchangeSelectorRow selected={exchange} onSelect={handleExchangeSelect} />
+          </div>
+
+          {/* Main content: 45% left, 55% right — top-aligned */}
+          <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-[45%_1fr] gap-4 sm:gap-6 px-4 sm:px-8 pb-6 sm:pb-8 overflow-hidden items-start">
+            {/* Left column: Create Account form */}
+            <div className="min-w-0 flex flex-col overflow-y-auto max-h-full">
+              <CreateAccountForm
+                exchange={exchange}
+                supported={supported}
+                environment={environment}
+                onEnvironmentChange={setEnvironment}
+                label={label}
+                onLabelChange={setLabel}
+                apiKey={apiKey}
+                onApiKeyChange={setApiKey}
+                apiSecret={apiSecret}
+                onApiSecretChange={setApiSecret}
+                loading={loading}
+                status={status}
+                errorMessage={errorMessage}
+                capabilities={capabilities}
+                canSubmit={canSubmit}
+                onCreateAccount={handleCreateAccount}
+                onRetry={handleRetry}
+                onDone={handleDone}
+              />
+            </div>
+
+            {/* Right column: Step guide — scrollable */}
+            <div className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden">
+              <ExchangeStepGuide steps={steps} />
             </div>
           </div>
-        </div>
-      </DialogContent>
-    </Dialog>
+        </DialogPrimitive.Content>
+      </DialogPrimitive.Portal>
+    </DialogPrimitive.Root>
   );
 }
