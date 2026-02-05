@@ -25,7 +25,7 @@ import {
 } from "@/app/components/ui/dialog";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/app/components/ui/collapsible";
 import { ChevronDown, ChevronRight, CheckSquare } from "lucide-react";
-import { ConnectExchangeWizard } from "@/app/components/screens/ConnectExchangeWizard";
+import { ConnectExchangeModal } from "@/app/components/screens/ConnectExchangeModal";
 import { ROUTES } from "@/app/config/routes";
 import { FuturesEnableModal } from "@/app/components/screens/FuturesEnableModal";
 import { Users, DollarSign, Ticket, Package } from "lucide-react";
@@ -1088,11 +1088,10 @@ export function Settings({ onNavigate }: SettingsProps) {
             )}
           </div>
 
-          <ConnectExchangeWizard
+          <ConnectExchangeModal
             open={connectWizardOpen}
             onOpenChange={setConnectWizardOpen}
             onComplete={() => refreshConnections()}
-            onNavigate={onNavigate}
           />
 
           <FuturesEnableModal
