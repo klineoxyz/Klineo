@@ -4,7 +4,8 @@
  */
 
 const BINANCE_FUTURES_PUBLIC = 'https://fapi.binance.com';
-const BINANCE_FUTURES_TESTNET = 'https://testnet.binancefuture.com';
+// USDT-M perpetual testnet; testnet.binancefuture.com is for Coin-M/delivery
+const BINANCE_FUTURES_TESTNET = (process.env.BINANCE_FUTURES_TESTNET_URL || '').trim() || 'https://demo-fapi.binance.com';
 const BYBIT_PUBLIC = 'https://api.bybit.com';
 const BYBIT_TESTNET = 'https://api-testnet.bybit.com';
 

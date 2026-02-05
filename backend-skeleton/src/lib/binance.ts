@@ -116,8 +116,11 @@ function buildSignedQuery(params: Record<string, string | number | undefined>, s
   return queryParams.toString();
 }
 
+const RETRY_429_MAX = 2;
+const RETRY_429_BASE_MS = 1000;
+
 /**
- * Make signed request to Binance API
+ * Make signed request to Binance API. Retries on 429 (rate limit) with backoff per docs.
  */
 async function signedRequest<T>(
   method: 'GET' | 'POST',
@@ -126,45 +129,70 @@ async function signedRequest<T>(
   params: Record<string, string | number | undefined> = {}
 ): Promise<T> {
   const baseUrl = getBaseUrl(credentials.environment);
-  const queryString = buildSignedQuery(params, credentials.apiSecret);
-  const url = `${baseUrl}${endpoint}?${queryString}`;
+  let lastRawText = '';
+  let lastResponse: Response | null = null;
 
-  const response = await binanceFetch(url, {
-    method,
-    headers: {
-      'X-MBX-APIKEY': credentials.apiKey,
-      'Content-Type': 'application/json',
-    },
-    signal: AbortSignal.timeout(10000),
-  });
+  for (let attempt = 0; attempt <= RETRY_429_MAX; attempt++) {
+    const queryString = buildSignedQuery(params, credentials.apiSecret);
+    const url = `${baseUrl}${endpoint}?${queryString}`;
 
-  const rawText = await response.text();
+    const response = await binanceFetch(url, {
+      method,
+      headers: {
+        'X-MBX-APIKEY': credentials.apiKey,
+        'Content-Type': 'application/json',
+      },
+      signal: AbortSignal.timeout(10000),
+    });
 
-  if (!response.ok) {
-    let errMsg: string;
+    const rawText = await response.text();
+    lastRawText = rawText;
+    lastResponse = response;
+
+    if (response.status === 429 && attempt < RETRY_429_MAX) {
+      const retryAfter = parseInt(response.headers.get('Retry-After') ?? '', 10) || RETRY_429_BASE_MS * (attempt + 1);
+      await new Promise((r) => setTimeout(r, Math.min(retryAfter, 60000)));
+      continue;
+    }
+
+    if (!response.ok) {
+      let errMsg: string;
+      try {
+        const data = JSON.parse(rawText) as BinanceError;
+        errMsg = data.msg ? String(data.msg) : response.statusText;
+        const code = typeof data.code === 'number' ? data.code : response.status;
+        if (code === -1021) {
+          errMsg += ' Sync server clock or use Binance server time for timestamp.';
+        }
+        throw new Error(`Binance API error (${code}): ${errMsg}`);
+      } catch (parseErr) {
+        if (parseErr instanceof Error && parseErr.message.startsWith('Binance API error')) throw parseErr;
+        const snippet = rawText.slice(0, 200).replace(/\s+/g, ' ').trim();
+        const statusMsg = response.status === 451
+          ? (snippet || 'Service unavailable from a restricted location (HTTP 451).')
+          : (snippet || response.statusText || `HTTP ${response.status}`);
+        throw new Error(`Binance API error (${response.status}): ${statusMsg}`);
+      }
+    }
+
+    let data: T;
     try {
-      const data = JSON.parse(rawText) as BinanceError;
-      errMsg = data.msg ? String(data.msg) : response.statusText;
-      const code = typeof data.code === 'number' ? data.code : response.status;
-      throw new Error(`Binance API error (${code}): ${errMsg}`);
-    } catch (parseErr) {
-      if (parseErr instanceof Error && parseErr.message.startsWith('Binance API error')) throw parseErr;
-      // Non-JSON response (e.g. HTML 451 page) — use status and snippet of body so "restricted location" is visible
-      const snippet = rawText.slice(0, 200).replace(/\s+/g, ' ').trim();
-      const statusMsg = response.status === 451
-        ? (snippet || 'Service unavailable from a restricted location (HTTP 451).')
-        : (snippet || response.statusText || `HTTP ${response.status}`);
-      throw new Error(`Binance API error (${response.status}): ${statusMsg}`);
+      data = JSON.parse(rawText) as T;
+    } catch {
+      throw new Error(`Binance API error (${response.status}): Invalid response body`);
+    }
+    return data;
+  }
+
+  if (lastResponse && !lastResponse.ok) {
+    try {
+      const data = JSON.parse(lastRawText) as BinanceError;
+      throw new Error(`Binance API error (${data.code ?? lastResponse.status}): ${data.msg ?? lastResponse.statusText}`);
+    } catch (e) {
+      if (e instanceof Error && e.message.startsWith('Binance API error')) throw e;
     }
   }
-
-  let data: T;
-  try {
-    data = JSON.parse(rawText) as T;
-  } catch {
-    throw new Error(`Binance API error (${response.status}): Invalid response body`);
-  }
-  return data;
+  throw new Error('Binance API error: Too many retries');
 }
 
 /**

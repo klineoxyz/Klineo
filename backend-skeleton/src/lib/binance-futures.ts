@@ -1,10 +1,11 @@
 /**
  * Binance USD-M Futures API adapter.
- * Production: fapi.binance.com | Testnet: testnet.binancefuture.com
+ * Production: fapi.binance.com
+ * Testnet: demo-fapi.binance.com (USDT-M perpetual; testnet.binancefuture.com is for Coin-M/delivery)
  * Uses binanceFetch so BINANCE_HTTP_PROXY / BINANCE_HTTPS_PROXY can route requests from an allowed region.
  */
 
-import { createHmac } from 'crypto';
+import { createHmac, randomBytes } from 'crypto';
 import { binanceFetch } from './binance-fetch.js';
 import type {
   MarginMode,
@@ -19,7 +20,7 @@ import type {
 export type BinanceFuturesEnvironment = 'production' | 'testnet';
 
 const BINANCE_FUTURES_PROD = process.env.BINANCE_FUTURES_BASE_URL?.trim() || 'https://fapi.binance.com';
-const BINANCE_FUTURES_TESTNET = 'https://testnet.binancefuture.com';
+const BINANCE_FUTURES_TESTNET = (process.env.BINANCE_FUTURES_TESTNET_URL || '').trim() || 'https://demo-fapi.binance.com';
 
 export interface BinanceFuturesCredentials {
   apiKey: string;
@@ -49,6 +50,9 @@ function buildSignedQuery(params: Record<string, string | number | undefined>, s
   return queryParams.toString();
 }
 
+const RETRY_429_MAX = 2;
+const RETRY_429_BASE_MS = 1000;
+
 async function signedRequest<T>(
   method: 'GET' | 'POST' | 'DELETE',
   path: string,
@@ -56,40 +60,68 @@ async function signedRequest<T>(
   params: Record<string, string | number | undefined> = {}
 ): Promise<T> {
   const base = getBaseUrl(creds.environment);
-  const query = buildSignedQuery(params, creds.apiSecret);
-  const url = `${base}${path}?${query}`;
-  const res = await binanceFetch(url, {
-    method,
-    headers: { 'X-MBX-APIKEY': creds.apiKey, 'Content-Type': 'application/json' },
-    signal: AbortSignal.timeout(15000),
-  });
-  const rawText = await res.text();
-  if (!res.ok) {
-    let errMsg: string;
+  let lastRawText = '';
+  let lastRes: Response | null = null;
+
+  for (let attempt = 0; attempt <= RETRY_429_MAX; attempt++) {
+    const query = buildSignedQuery(params, creds.apiSecret);
+    const url = `${base}${path}?${query}`;
+    const res = await binanceFetch(url, {
+      method,
+      headers: { 'X-MBX-APIKEY': creds.apiKey, 'Content-Type': 'application/json' },
+      signal: AbortSignal.timeout(15000),
+    });
+    const rawText = await res.text();
+    lastRawText = rawText;
+    lastRes = res;
+
+    if (res.status === 429 && attempt < RETRY_429_MAX) {
+      const retryAfter = parseInt(res.headers.get('Retry-After') ?? '', 10) || RETRY_429_BASE_MS * (attempt + 1);
+      await new Promise((r) => setTimeout(r, Math.min(retryAfter, 60000)));
+      continue;
+    }
+
+    if (!res.ok) {
+      let errMsg: string;
+      try {
+        const data = JSON.parse(rawText) as { code?: number; msg?: string };
+        errMsg = data.msg ? String(data.msg) : res.statusText;
+        const code = data.code != null ? data.code : res.status;
+        if (code === -1021) {
+          errMsg += ' Sync server clock or use Binance server time for timestamp.';
+        }
+        throw new Error(`Binance Futures (${code}): ${errMsg}`);
+      } catch (parseErr) {
+        if (parseErr instanceof Error && parseErr.message.startsWith('Binance Futures')) throw parseErr;
+        const snippet = rawText.slice(0, 200).replace(/\s+/g, ' ').trim();
+        errMsg = res.status === 451
+          ? (snippet || 'Service unavailable from a restricted location (HTTP 451).')
+          : (snippet || res.statusText || `HTTP ${res.status}`);
+        throw new Error(`Binance Futures HTTP ${res.status}: ${errMsg}`);
+      }
+    }
+    let data: { code?: number; msg?: string };
     try {
-      const data = JSON.parse(rawText) as { code?: number; msg?: string };
-      errMsg = data.msg ? String(data.msg) : res.statusText;
-      const code = data.code != null ? data.code : res.status;
-      throw new Error(`Binance Futures (${code}): ${errMsg}`);
-    } catch (parseErr) {
-      if (parseErr instanceof Error && parseErr.message.startsWith('Binance Futures')) throw parseErr;
-      const snippet = rawText.slice(0, 200).replace(/\s+/g, ' ').trim();
-      errMsg = res.status === 451
-        ? (snippet || 'Service unavailable from a restricted location (HTTP 451).')
-        : (snippet || res.statusText || `HTTP ${res.status}`);
-      throw new Error(`Binance Futures HTTP ${res.status}: ${errMsg}`);
+      data = JSON.parse(rawText) as { code?: number; msg?: string };
+    } catch {
+      throw new Error(`Binance Futures HTTP ${res.status}: Invalid response body`);
+    }
+    if (data.code != null && data.code !== 0) {
+      let msg = data.msg || res.statusText;
+      if (data.code === -1021) msg += ' Sync server clock or use Binance server time.';
+      throw new Error(`Binance Futures (${data.code}): ${msg}`);
+    }
+    return data as T;
+  }
+  if (lastRes && !lastRes.ok) {
+    try {
+      const data = JSON.parse(lastRawText) as { code?: number; msg?: string };
+      throw new Error(`Binance Futures (${data.code ?? lastRes.status}): ${data.msg ?? lastRes.statusText}`);
+    } catch (e) {
+      if (e instanceof Error && e.message.startsWith('Binance Futures')) throw e;
     }
   }
-  let data: { code?: number; msg?: string };
-  try {
-    data = JSON.parse(rawText) as { code?: number; msg?: string };
-  } catch {
-    throw new Error(`Binance Futures HTTP ${res.status}: Invalid response body`);
-  }
-  if (data.code != null && data.code !== 0) {
-    throw new Error(`Binance Futures (${data.code}): ${data.msg || res.statusText}`);
-  }
-  return data as T;
+  throw new Error('Binance Futures: Too many retries (429)');
 }
 
 /** Public endpoint: get mark price for symbol (no auth). */
@@ -154,6 +186,8 @@ export async function placeOrder(
   const query: Record<string, string | number> = { symbol, side: params.side, type: params.type, quantity: params.qty };
   if (params.positionSide) query.positionSide = params.positionSide;
   if (params.reduceOnly === true) query.reduceOnly = 'true';
+  // clientOrderId for idempotency (avoids duplicate orders on retry)
+  query.clientOrderId = `klneo_${Date.now()}_${randomBytes(4).toString('hex')}`;
   const res = await signedRequest<{ orderId: number; status: string }>(
     'POST',
     '/fapi/v1/order',

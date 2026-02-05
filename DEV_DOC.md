@@ -20,7 +20,7 @@ Use the in-app **Settings → Connect Exchange** wizard. Never enable withdrawal
 
 1. **Where to create keys**
    - Production: [Binance API Management](https://www.binance.com/en/my/settings/api-management)
-   - Testnet: [Binance Futures Testnet](https://testnet.binancefuture.com) (log in with GitHub; no real funds)
+   - Testnet: [Binance Futures Testnet](https://testnet.binancefuture.com) (log in with GitHub; API uses demo-fapi.binance.com; no real funds)
 
 2. **In Binance API form**
    - Enable "Enable Reading" (read-only account info)
@@ -149,7 +149,7 @@ Phase 1 does not include a built-in cron. Options:
 
 | Item | Binance Testnet | Bybit Testnet |
 |------|-----------------|---------------|
-| URL | testnet.binancefuture.com (Futures) | api-testnet.bybit.com |
+| URL | demo-fapi.binance.com (Futures USDT-M) | api-testnet.bybit.com |
 | Product | USD-M Futures | USDT Perpetual (linear) |
 | Permissions | Futures enabled | Contract read & write |
 | Env in app | `environment: testnet` | `environment: testnet` |
