@@ -85,11 +85,14 @@ async function signedRequest<T>(
       let errMsg: string;
       try {
         const data = JSON.parse(rawText) as { code?: number; msg?: string };
-        errMsg = data.msg ? String(data.msg) : res.statusText;
+        const msg = data.msg ? String(data.msg) : res.statusText;
         const code = data.code != null ? data.code : res.status;
-        if (code === -1021) {
-          errMsg += ' Sync server clock or use Binance server time for timestamp.';
-        }
+        const isRestricted = res.status === 451 || /restricted location|eligibility|service unavailable.*restricted/i.test(msg);
+        errMsg = isRestricted
+          ? 'Your server IP (Railway) is in a region Binance restricts. Set BINANCE_HTTPS_PROXY in Railway Variables to an HTTP(S) proxy in an allowed region. See TROUBLESHOOT_BINANCE_RESTRICTED.md.'
+          : code === -1021
+            ? msg + ' Sync server clock or use Binance server time for timestamp.'
+            : msg;
         throw new Error(`Binance Futures (${code}): ${errMsg}`);
       } catch (parseErr) {
         if (parseErr instanceof Error && parseErr.message.startsWith('Binance Futures')) throw parseErr;

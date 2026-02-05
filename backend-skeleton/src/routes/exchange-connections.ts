@@ -79,7 +79,7 @@ exchangeConnectionsRouter.post(
     const { exchange, environment = 'production', apiKey, apiSecret } = req.body;
 
     try {
-      let result: { ok: boolean; latencyMs: number; message: string; error?: string };
+      let result: { ok: boolean; latencyMs: number; message: string; error?: string; warnings?: string[] };
       if (exchange === 'binance') {
         result = await binanceTestConnection({
           apiKey,

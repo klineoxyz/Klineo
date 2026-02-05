@@ -95,6 +95,8 @@ export function classifyBinanceError(code: number, msg: string, httpStatus?: num
   if (code === -1022) return 'signature';
   if (code === -1015) return 'rate_limit';
   if (/ip|whitelist|permission|invalid.*key/i.test(msg)) return 'permission';
+  // Geographic restriction (can be 403, 451, or JSON with code 0)
+  if (/restricted location|eligibility|service unavailable.*restricted|not available.*region/i.test(msg)) return 'restricted';
   return 'other';
 }
 
@@ -110,7 +112,7 @@ export function getBinanceUserMessage(code: number, msg: string, errorType: Bina
     case 'rate_limit':
       return 'Rate limit exceeded. Wait a moment and try again.';
     case 'restricted':
-      return 'Binance is not available from this region (HTTP 451). Use a proxy in an allowed region if needed.';
+      return 'Your server IP (Railway) is in a region Binance restricts. Set BINANCE_HTTPS_PROXY in Railway Variables to an HTTP(S) proxy in an allowed region (e.g. Singapore, Hong Kong). See project TROUBLESHOOT_BINANCE_RESTRICTED.md.';
     default:
       return msg || 'Connection failed. Check API key, secret, and permissions.';
   }
@@ -137,7 +139,20 @@ export async function getServerTime(credentials: BinanceCredentials): Promise<nu
   const baseUrl = getBaseUrl(credentials.environment);
   const res = await binanceFetch(`${baseUrl}/api/v3/time`, { signal: AbortSignal.timeout(5000) });
   const raw = await res.text();
-  if (!res.ok) throw new Error(`Binance time: ${res.status} ${raw.slice(0, 100)}`);
+  if (!res.ok) {
+    try {
+      const parsed = JSON.parse(raw) as { code?: number; msg?: string };
+      const code = parsed.code ?? res.status;
+      const msg = parsed.msg ?? raw.slice(0, 200);
+      const errType = classifyBinanceError(code, msg, res.status);
+      if (errType === 'restricted') {
+        throw new Error(getBinanceUserMessage(code, msg, 'restricted'));
+      }
+    } catch (e) {
+      if (e instanceof Error && e.message.includes('BINANCE_HTTPS_PROXY')) throw e;
+    }
+    throw new Error(`Binance connectivity: ${res.status} ${raw.slice(0, 100)}`);
+  }
   const data = JSON.parse(raw) as { serverTime?: number };
   const t = data.serverTime;
   if (typeof t !== 'number' || t <= 0) throw new Error('Invalid server time response');
