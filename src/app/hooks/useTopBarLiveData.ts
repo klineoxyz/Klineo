@@ -4,6 +4,7 @@
  */
 import { useState, useEffect, useCallback } from "react";
 import { api, exchangeConnections } from "@/lib/api";
+import { COPY_SETUPS_UPDATED } from "@/lib/copySetupsEvents";
 import type { EntitlementResponse } from "@/lib/api";
 
 interface CopySetup {
@@ -67,7 +68,12 @@ export function useTopBarLiveData(isDemoMode: boolean): TopBarLiveData {
     if (isDemoMode) return;
     load();
     const interval = setInterval(load, 30000);
-    return () => clearInterval(interval);
+    const onUpdated = () => load();
+    window.addEventListener(COPY_SETUPS_UPDATED, onUpdated);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener(COPY_SETUPS_UPDATED, onUpdated);
+    };
   }, [isDemoMode, load]);
 
   return { activeCopies, connectionStatus, exchangeLatency, entitlement, copySetups, refresh: load };

@@ -6,6 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Activity, Pause, StopCircle, AlertTriangle, Loader2 } from "lucide-react";
 import { api } from "@/lib/api";
 import { toast } from "@/app/lib/toast";
+import { notifyCopySetupsUpdated } from "@/lib/copySetupsEvents";
 import { useDemo } from "@/app/contexts/DemoContext";
 import { LoadingWrapper } from "@/app/components/ui/loading-wrapper";
 import { EmptyState } from "@/app/components/ui/empty-state";
@@ -49,6 +50,7 @@ export function CopyTrading({ onNavigate }: CopyTradingProps) {
     try {
       const data = await api.get<{ copySetups: CopySetup[] }>("/api/copy-setups");
       setCopySetups(data.copySetups || []);
+      notifyCopySetupsUpdated();
     } catch (err: any) {
       const message = err?.message || "Failed to load copy setups";
       setError(message);
