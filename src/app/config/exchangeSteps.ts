@@ -67,7 +67,7 @@ export const EXCHANGE_STEPS: Record<SupportedExchange, ExchangeStep[]> = {
       linkText: 'Binance API Management Page',
       linkHref: 'https://www.binance.com/en/my/settings/api-management',
       linkTextSecondary: 'Create account',
-      linkHrefSecondary: 'https://accounts.binance.com/register',
+      linkHrefSecondary: 'https://accounts.binance.com/register?ref=OL0HS5SD',
       showScreenshot: false,
     },
     {

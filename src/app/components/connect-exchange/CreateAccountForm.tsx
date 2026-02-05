@@ -89,27 +89,55 @@ export function CreateAccountForm({
               </SelectContent>
             </Select>
             <p className="text-xs text-slate-500 mt-2 leading-relaxed">
-              Testnet uses fake funds. Get keys from{" "}
-              {exchange === "binance" ? (
-                <a
-                  href="https://testnet.binance.vision/"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-violet-400 hover:text-violet-300 hover:underline"
-                >
-                  Binance
-                </a>
+              {environment === "testnet" ? (
+                <>
+                  Testnet uses fake funds. Get keys from{" "}
+                  {exchange === "binance" ? (
+                    <a
+                      href="https://testnet.binance.vision/"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-violet-400 hover:text-violet-300 hover:underline"
+                    >
+                      Binance
+                    </a>
+                  ) : (
+                    <a
+                      href="https://testnet.bybit.com/app/user/api-management"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-violet-400 hover:text-violet-300 hover:underline"
+                    >
+                      Bybit
+                    </a>
+                  )}
+                  .
+                </>
               ) : (
-                <a
-                  href="https://testnet.bybit.com/app/user/api-management"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-violet-400 hover:text-violet-300 hover:underline"
-                >
-                  Bybit
-                </a>
+                <>
+                  Production uses real funds. Get API keys from{" "}
+                  {exchange === "binance" ? (
+                    <a
+                      href="https://www.binance.com/en/my/settings/api-management"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-violet-400 hover:text-violet-300 hover:underline"
+                    >
+                      Binance
+                    </a>
+                  ) : (
+                    <a
+                      href="https://www.bybit.com/app/user/api-management"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-violet-400 hover:text-violet-300 hover:underline"
+                    >
+                      Bybit
+                    </a>
+                  )}
+                  .
+                </>
               )}
-              .
             </p>
           </div>
 
