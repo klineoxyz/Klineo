@@ -841,14 +841,47 @@ adminRouter.get('/coupons', async (req, res) => {
       return res.status(500).json({ error: 'Failed to fetch coupons' });
     }
 
-    const formatted = coupons?.map((c) => ({
+    // Derive claim count from payment_intents (ground truth)
+    const codeToIntentCount = new Map<string, number>();
+    const codeToClaimedBy = new Map<string, string[]>();
+    try {
+      const codes = (coupons || []).map((c) => (c.code || '').toUpperCase()).filter(Boolean);
+      if (codes.length > 0) {
+        const { data: intents } = await client
+          .from('payment_intents')
+          .select('user_id, coupon_code')
+          .not('coupon_code', 'is', null);
+        const list = (intents || []) as { user_id?: string; coupon_code?: string }[];
+        for (const i of list) {
+          const raw = (i.coupon_code || '').toUpperCase().trim();
+          if (!raw || !codes.includes(raw)) continue;
+          const prev = codeToIntentCount.get(raw) || 0;
+          codeToIntentCount.set(raw, prev + 1);
+          const mask = i.user_id && i.user_id.length >= 8 ? 'user_****' + i.user_id.slice(-4) : 'user_****';
+          const arr = codeToClaimedBy.get(raw) || [];
+          if (!arr.includes(mask)) arr.push(mask);
+          codeToClaimedBy.set(raw, arr);
+        }
+      }
+    } catch {
+      /* skip */
+    }
+
+    const formatted = coupons?.map((c) => {
+      const codeUpper = (c.code || '').toUpperCase();
+      const intentCount = codeToIntentCount.get(codeUpper) ?? 0;
+      const dbCount = c.current_redemptions || 0;
+      const effectiveCount = Math.max(dbCount, intentCount);
+      const claimedBy = codeToClaimedBy.get(codeUpper) || [];
+      return {
       id: c.id,
       code: c.code,
       discount: parseFloat(c.discount_percent?.toString() || '0'),
       appliesTo: c.applies_to || 'both',
       packageIds: c.package_ids || [],
       maxRedemptions: c.max_redemptions,
-      currentRedemptions: c.current_redemptions || 0,
+      currentRedemptions: effectiveCount,
+      claimedBy,
       durationMonths: c.duration_months,
       expiresAt: c.expires_at 
         ? new Date(c.expires_at).toLocaleDateString('en-US', {
@@ -867,7 +900,8 @@ adminRouter.get('/coupons', async (req, res) => {
         year: 'numeric',
       }),
       description: c.description || '',
-    }));
+    };
+    });
 
     res.json({ coupons: formatted || [] });
   } catch (err) {

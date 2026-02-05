@@ -30,11 +30,11 @@ export const authLimiter = rateLimit({
 
 /**
  * Rate limiter for admin endpoints (dashboard: many tabs × multiple requests per tab)
- * 200 requests per 15 minutes per IP so admins can use Discounts, Users, etc. without 429
+ * Default 500/15min; override with ADMIN_RATE_LIMIT_MAX env. Discounts tab alone triggers 4+ parallel calls.
  */
 export const adminLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 200,
+  max: Math.min(2000, Math.max(100, parseInt(process.env.ADMIN_RATE_LIMIT_MAX || '500', 10) || 500)),
   message: 'Too many admin requests, please try again later.',
   standardHeaders: true,
   legacyHeaders: false,
