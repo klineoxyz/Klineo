@@ -26,7 +26,6 @@ import {
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/app/components/ui/collapsible";
 import { ChevronDown, ChevronRight, CheckSquare } from "lucide-react";
 import { ConnectExchangeModal } from "@/app/components/screens/ConnectExchangeModal";
-import { ConnectBybitModal } from "@/app/components/screens/ConnectBybitModal";
 import { ROUTES } from "@/app/config/routes";
 import { FuturesEnableModal } from "@/app/components/screens/FuturesEnableModal";
 import { Users, DollarSign, Ticket, Package } from "lucide-react";
@@ -39,8 +38,7 @@ interface SettingsProps {
 export function Settings({ onNavigate }: SettingsProps) {
   const { user } = useAuth();
   const { isDemoMode } = useDemo();
-  const [connectWizardOpen, setConnectWizardOpen] = useState(false);
-  const [connectBybitOpen, setConnectBybitOpen] = useState(false);
+  const [connectModalOpen, setConnectModalOpen] = useState(false);
   const [fullName, setFullName] = useState("");
   const [username, setUsername] = useState("");
   const [timezone, setTimezone] = useState("UTC");
@@ -60,16 +58,6 @@ export function Settings({ onNavigate }: SettingsProps) {
   // Exchange Connections state
   const [exchangeConnectionsList, setExchangeConnectionsList] = useState<ExchangeConnection[]>([]);
   const [exchangeConnectionsLoading, setExchangeConnectionsLoading] = useState(true);
-  const [showAddForm, setShowAddForm] = useState(false);
-  const [formData, setFormData] = useState({
-    exchange: 'binance' as 'binance' | 'bybit',
-    environment: 'production' as 'production' | 'testnet',
-    label: '',
-    apiKey: '',
-    apiSecret: '',
-  });
-  const [formLoading, setFormLoading] = useState(false);
-  const [testBeforeSaveLoading, setTestBeforeSaveLoading] = useState(false);
   const [testingId, setTestingId] = useState<string | null>(null);
   const [reEnableId, setReEnableId] = useState<string | null>(null);
   const [futuresTestId, setFuturesTestId] = useState<string | null>(null);
@@ -399,51 +387,6 @@ export function Settings({ onNavigate }: SettingsProps) {
     if (value === "profile") fetchMyDiscounts();
     if (value === "packages") fetchEntitlement();
   }, [fetchMyDiscounts, fetchEntitlement]);
-
-  const handleTestBeforeSave = async () => {
-    if (!formData.apiKey?.trim() || !formData.apiSecret?.trim()) {
-      toast.error('Enter API Key and API Secret to test');
-      return;
-    }
-    setTestBeforeSaveLoading(true);
-    try {
-      const result = await exchangeConnections.testBeforeSave({
-        exchange: formData.exchange,
-        environment: formData.environment,
-        apiKey: formData.apiKey.trim(),
-        apiSecret: formData.apiSecret.trim(),
-      });
-      if (result.success && result.ok) {
-        toast.success('Connection test passed', { description: `Latency: ${result.latencyMs ?? 0}ms` });
-      } else {
-        toast.error('Connection test failed', { description: result.error || result.message || 'Invalid credentials' });
-      }
-    } catch (err: any) {
-      toast.error('Connection test failed', { description: sanitizeExchangeError(err?.message || 'Test failed') });
-    } finally {
-      setTestBeforeSaveLoading(false);
-    }
-  };
-
-  const handleSaveConnection = async () => {
-    if (!formData.apiKey?.trim() || !formData.apiSecret?.trim()) {
-      toast.error('API Key and API Secret are required');
-      return;
-    }
-    setFormLoading(true);
-    try {
-      await exchangeConnections.create(formData);
-      toast.success('Connection saved');
-      setShowAddForm(false);
-      setFormData({ exchange: 'binance', environment: 'production', label: '', apiKey: '', apiSecret: '' });
-      const data = await exchangeConnections.list();
-      setExchangeConnectionsList(data.connections);
-    } catch (err: any) {
-      toast.error('Failed to save connection', { description: sanitizeExchangeError(err?.message) });
-    } finally {
-      setFormLoading(false);
-    }
-  };
 
   const handleTestConnection = async (id: string) => {
     setTestingId(id);
@@ -1075,34 +1018,16 @@ export function Settings({ onNavigate }: SettingsProps) {
               )}
             </div>
             {!isDemoMode && (
-              <div className="flex flex-wrap gap-2">
-                <Button onClick={() => setConnectWizardOpen(true)} className="gap-2 bg-primary text-primary-foreground">
-                  <Key className="size-4" />
-                  Connect Exchange
-                </Button>
-                <Button onClick={() => setConnectBybitOpen(true)} variant="outline" className="gap-2">
-                  <Key className="size-4" />
-                  Connect Bybit
-                </Button>
-                {!showAddForm && (
-                  <Button variant="outline" onClick={() => setShowAddForm(true)} className="gap-2">
-                    <Plus className="size-4" />
-                    Add Connection
-                  </Button>
-                )}
-              </div>
+              <Button onClick={() => setConnectModalOpen(true)} className="gap-2 bg-primary text-primary-foreground">
+                <Key className="size-4" />
+                Connect Exchange
+              </Button>
             )}
           </div>
 
           <ConnectExchangeModal
-            open={connectWizardOpen}
-            onOpenChange={setConnectWizardOpen}
-            onComplete={() => refreshConnections()}
-          />
-
-          <ConnectBybitModal
-            open={connectBybitOpen}
-            onOpenChange={setConnectBybitOpen}
+            open={connectModalOpen}
+            onOpenChange={setConnectModalOpen}
             onComplete={() => refreshConnections()}
           />
 
@@ -1112,103 +1037,6 @@ export function Settings({ onNavigate }: SettingsProps) {
             connection={manageFuturesConn}
             onSuccess={() => refreshConnections()}
           />
-
-          {showAddForm && !isDemoMode && (
-            <Card className="p-6 space-y-4">
-              <h4 className="font-semibold">Add connection</h4>
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label>Exchange</Label>
-                  <Select
-                    value={formData.exchange}
-                    onValueChange={(value: 'binance' | 'bybit') => setFormData({ ...formData, exchange: value })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="binance">Binance</SelectItem>
-                      <SelectItem value="bybit">Bybit</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Environment</Label>
-                  <Select
-                    value={formData.environment}
-                    onValueChange={(value: 'production' | 'testnet') => setFormData({ ...formData, environment: value })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="production">Production</SelectItem>
-                      <SelectItem value="testnet">Testnet</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <p className="text-xs text-muted-foreground">
-                    Use Testnet for testing with fake funds. Get testnet keys from{" "}
-                    {formData.exchange === 'binance' ? (
-                      <>
-                        <a href="https://testnet.binance.vision/" target="_blank" rel="noopener noreferrer" className="text-primary underline">Spot</a>
-                        {" · "}
-                        <a href="https://testnet.binancefuture.com/" target="_blank" rel="noopener noreferrer" className="text-primary underline">Futures (USDT-M)</a>
-                      </>
-                    ) : (
-                      <a href="https://testnet.bybit.com/app/user/api-management" target="_blank" rel="noopener noreferrer" className="text-primary underline">Bybit Testnet</a>
-                    )}
-                  </p>
-                </div>
-                <div className="space-y-2">
-                  <Label>Label (optional)</Label>
-                  <Input
-                    placeholder={formData.exchange === 'binance' ? 'My Binance Account' : 'My Bybit Account'}
-                    value={formData.label}
-                    onChange={(e) => setFormData({ ...formData, label: e.target.value })}
-                    maxLength={40}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>API Key</Label>
-                  <Input
-                    type="password"
-                    placeholder="Enter your API key"
-                    value={formData.apiKey}
-                    onChange={(e) => setFormData({ ...formData, apiKey: e.target.value })}
-                    className="font-mono"
-                    autoComplete="off"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>API Secret</Label>
-                  <Input
-                    type="password"
-                    placeholder="Enter your API secret"
-                    value={formData.apiSecret}
-                    onChange={(e) => setFormData({ ...formData, apiSecret: e.target.value })}
-                    className="font-mono"
-                    autoComplete="off"
-                  />
-                </div>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <Button variant="outline" onClick={handleTestBeforeSave} disabled={testBeforeSaveLoading || !formData.apiKey?.trim() || !formData.apiSecret?.trim()}>
-                  {testBeforeSaveLoading ? <Loader2 className="size-4 animate-spin mr-2" /> : null}
-                  Test Connection
-                </Button>
-                <Button onClick={handleSaveConnection} disabled={formLoading}>
-                  {formLoading ? <Loader2 className="size-4 animate-spin mr-2" /> : null}
-                  Save Connection
-                </Button>
-                <Button variant="ghost" onClick={() => {
-                  setShowAddForm(false);
-                  setFormData({ exchange: 'binance', environment: 'production', label: '', apiKey: '', apiSecret: '' });
-                }}>
-                  Cancel
-                </Button>
-              </div>
-            </Card>
-          )}
 
           {exchangeConnectionsLoading ? (
             <Card className="p-6">
@@ -1225,9 +1053,9 @@ export function Settings({ onNavigate }: SettingsProps) {
                 In <strong>Live</strong> mode, connect your Binance or Bybit API keys to enable copy trading and portfolio tracking. Switch to Live using the toggle in the top left.
               </p>
               {!isDemoMode && (
-                <Button onClick={() => setShowAddForm(true)} className="gap-2">
-                  <Plus className="size-4" />
-                  Add Your First Connection
+                <Button onClick={() => setConnectModalOpen(true)} className="gap-2">
+                  <Key className="size-4" />
+                  Connect Exchange
                 </Button>
               )}
               <p className="text-xs text-muted-foreground mt-4">

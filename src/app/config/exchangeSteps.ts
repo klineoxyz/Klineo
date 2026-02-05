@@ -1,6 +1,6 @@
 /**
  * Step-by-step guidance for connecting each exchange.
- * Used by ConnectExchangeModal.
+ * Used by ConnectExchangeModal. Origami-style: no IP steps.
  */
 
 export interface ExchangeStep {
@@ -8,84 +8,136 @@ export interface ExchangeStep {
   text: string;
   linkText?: string;
   linkHref?: string;
-  /** Optional note or helper text below main text */
+  /** Secondary link (e.g. "Create account") */
+  linkTextSecondary?: string;
+  linkHrefSecondary?: string;
+  /** Show screenshot placeholder */
+  showScreenshot?: boolean;
+  /** Checklist items */
+  checklist?: string[];
+  /** Checklist item that must NOT be enabled (warning) */
+  checklistDoNot?: string;
   note?: string;
-  /** Optional warning callout text */
   warning?: string;
 }
 
 export type SupportedExchange = 'binance' | 'bybit';
-export type ExchangeId = SupportedExchange | 'okx' | 'gate' | 'kucoin' | 'mexc' | 'bitget' | 'bingx' | 'wallet';
+export type ExchangeId = SupportedExchange | 'hyperliquid' | 'extended' | 'aster' | 'bingx' | 'bitget' | 'gate' | 'kucoin' | 'lighter' | 'mexc' | 'okx' | 'pacifica';
+
+/** Display order for exchange selector row */
+export const EXCHANGE_SELECTOR_ORDER: ExchangeId[] = [
+  'hyperliquid',
+  'extended',
+  'aster',
+  'binance',
+  'bingx',
+  'bitget',
+  'bybit',
+  'gate',
+  'kucoin',
+  'lighter',
+  'mexc',
+  'okx',
+  'pacifica',
+];
+
+export const EXCHANGE_NAMES: Record<ExchangeId, string> = {
+  hyperliquid: 'Hyperliquid',
+  extended: 'Extended',
+  aster: 'ASTER',
+  binance: 'Binance',
+  bingx: 'BingX',
+  bitget: 'Bitget',
+  bybit: 'Bybit',
+  gate: 'Gate.io',
+  kucoin: 'KuCoin',
+  lighter: 'Lighter',
+  mexc: 'MEXC',
+  okx: 'OKX',
+  pacifica: 'Pacifica',
+};
 
 export const EXCHANGE_STEPS: Record<SupportedExchange, ExchangeStep[]> = {
   binance: [
     {
       label: 'Step 1',
-      text: 'Go to the Binance API Management page.',
-      linkText: 'Open Binance API Management',
+      text: 'You need to go to the API Management section',
+      linkText: 'Binance API Management Page',
       linkHref: 'https://www.binance.com/en/my/settings/api-management',
+      linkTextSecondary: 'Create account',
+      linkHrefSecondary: 'https://accounts.binance.com/register',
+      showScreenshot: false,
     },
     {
       label: 'Step 2',
-      text: 'Click Create API, choose System Generated, and name your API key.',
+      text: 'Before pressing Create API, deselect the option that auto-applies restrictions (follow the screenshot).',
+      showScreenshot: true,
     },
     {
       label: 'Step 3',
-      text: 'Enable: Read, Spot & Margin Trading (optional), Futures (if needed). Do NOT enable Withdrawals.',
+      text: 'Click the yellow Create API button, select System Generated, and assign a custom name for your API key.',
+      showScreenshot: false,
     },
     {
       label: 'Step 4',
-      text: 'Save the API key and copy the API Key and Secret.',
+      text: 'Select Edit restrictions and apply the following permissions',
+      checklist: [
+        'Enable Reading',
+        'Enable Spot & Margin Trading (if you use it)',
+        'Enable Futures (if you use it)',
+      ],
+      checklistDoNot: 'Never enable Withdrawals',
+      showScreenshot: true,
     },
     {
       label: 'Step 5',
-      text: 'Paste your API Key and Secret into the form and click Create Account.',
+      text: 'Click Save to confirm your changes, then copy the API Key and Secret and paste them here.',
+      showScreenshot: false,
     },
   ],
   bybit: [
     {
       label: 'Step 1',
-      text: 'Open the Bybit API Management page from your account dashboard.',
-      linkText: 'Open Bybit API Management',
+      text: 'Go to the API Management section and click Create New Key',
+      linkText: 'Bybit API Management Page',
       linkHref: 'https://www.bybit.com/app/user/api-management',
+      linkTextSecondary: 'Create account',
+      linkHrefSecondary: 'https://www.bybit.com/en-US/register',
+      showScreenshot: false,
     },
     {
       label: 'Step 2',
-      text: "Click 'Create New Key' and choose 'System-Generated API Key'.",
-      note: 'Do not use user-generated or legacy keys.',
+      text: 'Select System-generated API Keys',
+      showScreenshot: true,
     },
     {
       label: 'Step 3',
-      text: 'Select the subaccount you want to connect and ensure it uses a Unified Trading Account (UTA).',
-      note: 'Klineo supports Unified Trading Accounts only.',
+      text: 'Choose API transaction and provide a custom label for your API key',
+      showScreenshot: true,
     },
     {
       label: 'Step 4',
-      text: 'Enable Read and Trade permissions (Spot and Derivatives if supported). Do NOT enable Withdraw permissions.',
-      warning: 'Never enable withdrawals. Klineo will never request them.',
+      text: 'In API Key Permissions, choose Read-Write (not Read-Only)',
+      showScreenshot: true,
     },
     {
       label: 'Step 5',
-      text: 'Save the API key, then copy the API Key and Secret Key.',
-      note: 'The Secret Key is shown only once by Bybit.',
+      text: 'Select only the permissions needed for trading and reading data.',
+      checklist: [
+        'Orders (Spot and/or Derivatives)',
+        'Positions (Derivatives)',
+        'Trade (Spot)',
+        'Read account/balance endpoints',
+      ],
+      checklistDoNot: 'Do NOT enable Withdrawal',
+      showScreenshot: true,
     },
     {
       label: 'Step 6',
-      text: "Paste your API Key and Secret Key into the form on the left and click 'Create Account'.",
+      text: 'Press Submit to confirm changes, then copy API Key + Secret and paste them into Klineo.',
+      showScreenshot: false,
     },
   ],
-};
-
-export const EXCHANGE_NAMES: Record<ExchangeId, string> = {
-  binance: 'Binance',
-  bybit: 'Bybit',
-  okx: 'OKX',
-  gate: 'Gate',
-  kucoin: 'KuCoin',
-  mexc: 'MEXC',
-  bitget: 'Bitget',
-  bingx: 'BingX',
-  wallet: 'Wallet (DEX)',
 };
 
 /** Exchanges with full backend support (create + verify). */
@@ -94,6 +146,3 @@ export const SUPPORTED_EXCHANGES: SupportedExchange[] = ['binance', 'bybit'];
 export function isSupported(exchange: ExchangeId): exchange is SupportedExchange {
   return SUPPORTED_EXCHANGES.includes(exchange as SupportedExchange);
 }
-
-/** Exchanges that require passphrase (e.g. OKX). */
-export const EXCHANGES_REQUIRING_PASSPHRASE: ExchangeId[] = ['okx', 'kucoin'];
