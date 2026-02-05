@@ -174,10 +174,10 @@ export function ConnectExchangeModal({
             <ExchangeSelectorRow selected={exchange} onSelect={handleExchangeSelect} />
           </div>
 
-          {/* Main content: 45% left, 55% right — top-aligned */}
-          <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-[45%_1fr] gap-4 sm:gap-6 px-4 sm:px-8 pb-6 sm:pb-8 overflow-hidden items-start">
-            {/* Left column: Create Account form */}
-            <div className="min-w-0 flex flex-col overflow-y-auto max-h-full">
+          {/* Main content: left fits form, right scrolls */}
+          <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-[minmax(280px,45%)_1fr] lg:grid-rows-[minmax(0,1fr)] gap-4 sm:gap-6 px-4 sm:px-8 pb-6 sm:pb-8 overflow-hidden">
+            {/* Left column: Create Account form — fits content */}
+            <div className="min-w-0 flex flex-col self-start lg:max-h-full lg:overflow-y-auto">
               <CreateAccountForm
                 exchange={exchange}
                 supported={supported}
@@ -200,8 +200,8 @@ export function ConnectExchangeModal({
               />
             </div>
 
-            {/* Right column: Step guide — scrollable */}
-            <div className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden">
+            {/* Right column: Step guide — fills space and scrolls */}
+            <div className="min-h-0 min-w-0 h-full overflow-y-auto overflow-x-hidden pr-1">
               <ExchangeStepGuide steps={steps} />
             </div>
           </div>
