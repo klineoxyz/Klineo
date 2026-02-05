@@ -4,15 +4,16 @@
  * - Admin: GET/PATCH via /api/admin/master-trader-applications (in admin router)
  */
 
+import type { Router as ExpressRouter } from 'express';
 import { Router } from 'express';
 import { verifySupabaseJWT, AuthenticatedRequest } from '../middleware/auth.js';
 import { validate } from '../middleware/validation.js';
 import { body } from 'express-validator';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-let supabase: ReturnType<typeof createClient> | null = null;
+let supabase: SupabaseClient | null = null;
 
-function getSupabase() {
+function getSupabase(): SupabaseClient | null {
   if (supabase) return supabase;
   const url = process.env.SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -21,7 +22,7 @@ function getSupabase() {
   return supabase;
 }
 
-export const masterTraderApplicationsRouter = Router();
+export const masterTraderApplicationsRouter: ExpressRouter = Router();
 
 /**
  * POST /api/master-trader-applications
@@ -95,7 +96,7 @@ masterTraderApplicationsRouter.post(
         profileUrl: profileUrl || null,
       };
 
-      const { data: row, error } = await client
+      const { data: row, error } = await (client as any)
         .from('master_trader_applications')
         .insert({
           user_id: userId,
@@ -112,10 +113,11 @@ masterTraderApplicationsRouter.post(
         return res.status(500).json({ error: 'Failed to submit application' });
       }
 
+      const inserted = row as { id: string; status: string; created_at: string };
       res.status(201).json({
-        id: row.id,
-        status: row.status,
-        createdAt: row.created_at,
+        id: inserted.id,
+        status: inserted.status,
+        createdAt: inserted.created_at,
         message: 'Application submitted. We will review within 2–5 business days.',
       });
     } catch (err) {
