@@ -38,9 +38,16 @@ export const BACKEND_UNREACHABLE_MESSAGE =
  * Extract user-facing message from an API error. Handles raw JSON body thrown by apiRequest
  * (e.g. "403: {\"error\":\"...\", \"message\":\"...\"}" or plain "{\"message\":\"...\"}").
  */
+/** Check if error indicates rate limit (429). */
+export function isRateLimitError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err ?? '');
+  return /429|rate limit|too many requests/i.test(msg);
+}
+
 export function getApiErrorMessage(err: unknown): string {
   const msg = err instanceof Error ? err.message : String(err ?? 'Something went wrong');
   if (isBackendUnreachableError(err)) return BACKEND_UNREACHABLE_MESSAGE;
+  if (isRateLimitError(err)) return 'Too many requests. Please wait a minute and try again.';
   const toParse = msg.replace(/^\d+\s*:\s*/, '').trim();
   if (toParse.startsWith('{')) {
     try {
@@ -86,6 +93,11 @@ export async function apiRequest<T = unknown>(
     const text = await res.text();
     const error = text || 'Access denied';
     throw new Error(`403: ${error}`);
+  }
+
+  if (res.status === 429) {
+    const retryAfter = res.headers.get('retry-after') || '60';
+    throw new Error(`429: {"error":"Too many requests","message":"Rate limit exceeded. Please wait ${retryAfter} seconds and try again."}`);
   }
 
   if (!res.ok) {

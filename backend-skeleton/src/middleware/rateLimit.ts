@@ -2,12 +2,13 @@ import rateLimit from 'express-rate-limit';
 
 /**
  * General API rate limiter
- * 100 requests per 15 minutes per IP.
- * Admin routes are excluded so they only count against adminLimiter (higher limit).
+ * 500 requests per 15 minutes per IP (configurable via API_RATE_LIMIT_MAX).
+ * Admin routes are excluded so they only count against adminLimiter.
+ * SPA navigation + TopBar + page data often triggers 10–20 requests per view.
  */
 export const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // Limit each IP to 100 requests per windowMs
+  max: Math.min(2000, Math.max(200, parseInt(process.env.API_RATE_LIMIT_MAX || '500', 10) || 500)),
   message: 'Too many requests from this IP, please try again later.',
   standardHeaders: true,
   legacyHeaders: false,
