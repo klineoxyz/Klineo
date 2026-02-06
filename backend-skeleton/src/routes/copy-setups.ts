@@ -240,7 +240,7 @@ copySetupsRouter.put('/:id',
       // Verify setup belongs to user
       const { data: existing, error: existingError } = await client
         .from('copy_setups')
-        .select('id, user_id')
+        .select('id, user_id, trader_id')
         .eq('id', id)
         .single();
 
@@ -302,6 +302,22 @@ copySetupsRouter.put('/:id',
       if (error) {
         console.error('Error updating copy setup:', error);
         return res.status(500).json({ error: 'Failed to update copy setup' });
+      }
+
+      if (status !== undefined) {
+        if (client) {
+          try {
+            await client.from('audit_logs').insert({
+              admin_id: req.user!.id,
+              action_type: 'copy_setup_status_changed',
+              entity_type: 'copy_setup',
+              entity_id: id,
+              details: { status, trader_id: existing?.trader_id ?? undefined },
+            });
+          } catch {
+            /* non-fatal */
+          }
+        }
       }
 
       // Handle traders relation (can be object or array, but should be single object for this relation)

@@ -1630,7 +1630,7 @@ adminRouter.post('/payments/intents/:id/approve',
       return res.status(400).json({ error: 'Intent not in pending_review or flagged' });
     }
 
-    const { error: updateErr } = await client
+    const { data: updatedRows, error: updateErr } = await client
       .from('payment_intents')
       .update({
         status: 'approved',
@@ -1639,9 +1639,14 @@ adminRouter.post('/payments/intents/:id/approve',
         review_note: note,
         updated_at: new Date().toISOString(),
       })
-      .eq('id', intentId);
+      .eq('id', intentId)
+      .in('status', ['pending_review', 'flagged'])
+      .select('id');
 
     if (updateErr) return res.status(500).json({ error: 'Failed to approve intent' });
+    if (!updatedRows || updatedRows.length === 0) {
+      return res.status(409).json({ error: 'Intent was already approved or status changed. Refresh and retry.' });
+    }
 
     const userId = intent.user_id as string;
     const kind = intent.kind as string;

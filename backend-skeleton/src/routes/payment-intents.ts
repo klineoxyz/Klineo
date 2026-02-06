@@ -435,7 +435,7 @@ paymentIntentsRouter.post(
       mismatchReason = mismatch ? 'Declared from_wallet does not match saved payment_wallet_bsc' : null;
     }
 
-    const { error: updateErr } = await client
+    const { data: updatedRows, error: updateErr } = await client
       .from('payment_intents')
       .update({
         tx_hash: txHashRaw || null,
@@ -444,10 +444,15 @@ paymentIntentsRouter.post(
         mismatch_reason: mismatchReason,
         updated_at: new Date().toISOString(),
       })
-      .eq('id', intentId);
+      .eq('id', intentId)
+      .eq('status', 'draft')
+      .select('id');
 
     if (updateErr) {
       return res.status(500).json({ error: 'Failed to submit intent' });
+    }
+    if (!updatedRows || updatedRows.length === 0) {
+      return res.status(409).json({ error: 'Intent was already submitted or cancelled. Refresh and retry.' });
     }
 
     const { error: evErr } = await client.from('payment_events').insert({

@@ -236,6 +236,18 @@ exchangeConnectionsRouter.post(
         result = data;
       }
 
+      try {
+        await client.from('audit_logs').insert({
+          admin_id: req.user!.id,
+          action_type: existing ? 'exchange_connection_updated' : 'exchange_connection_created',
+          entity_type: 'exchange_connection',
+          entity_id: result.id,
+          details: { exchange: exchange, environment },
+        });
+      } catch {
+        /* non-fatal */
+      }
+
       // Never return secrets
       res.json({
         connection: result,
@@ -720,6 +732,18 @@ exchangeConnectionsRouter.put(
         return res.status(500).json({ error: 'Failed to update credentials', requestId });
       }
 
+      try {
+        await client.from('audit_logs').insert({
+          admin_id: req.user!.id,
+          action_type: 'exchange_connection_credentials_updated',
+          entity_type: 'exchange_connection',
+          entity_id: connectionId,
+          details: {},
+        });
+      } catch {
+        /* non-fatal */
+      }
+
       res.json({ message: 'Credentials updated. Run Test to verify.', requestId });
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Unknown error';
@@ -796,6 +820,18 @@ exchangeConnectionsRouter.delete(
       if (error) {
         console.error(`[${requestId}] Error deleting connection:`, error);
         return res.status(500).json({ error: 'Failed to delete connection', requestId });
+      }
+
+      try {
+        await client.from('audit_logs').insert({
+          admin_id: req.user!.id,
+          action_type: 'exchange_connection_deleted',
+          entity_type: 'exchange_connection',
+          entity_id: connectionId,
+          details: {},
+        });
+      } catch {
+        /* non-fatal */
       }
 
       res.json({ message: 'Connection deleted', requestId });
