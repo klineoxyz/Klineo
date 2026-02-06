@@ -6,7 +6,7 @@ import { Label } from "@/app/components/ui/label";
 import { Input } from "@/app/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/app/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/app/components/ui/table";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { toast } from "@/app/lib/toast";
 import { Download, DollarSign, Users, Activity, Loader2, BarChart3, RefreshCw, TrendingUp, UserPlus, Zap, Link2, Building2 } from "lucide-react";
 
@@ -75,6 +75,22 @@ interface ByExchangeRow {
   volume_usd_in_window: number;
 }
 
+const PLATFORMS = [
+  { value: "all", label: "All (CEX + DEX)" },
+  { value: "cex", label: "CEX only" },
+  { value: "dex", label: "DEX only" },
+] as const;
+
+type PlatformKey = (typeof PLATFORMS)[number]["value"];
+
+interface TimeseriesByExchangeResponse {
+  metric: string;
+  days: number;
+  platform: string;
+  exchangeList: string[];
+  timeseries: Array<Record<string, number | string>>;
+}
+
 function downloadJSON(data: unknown, filename: string) {
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
@@ -103,8 +119,11 @@ function downloadCSV(rows: Record<string, unknown>[], columns: { key: string; he
   URL.revokeObjectURL(url);
 }
 
+const CHART_COLORS = ["hsl(var(--primary))", "#10B981", "#8B5CF6", "#F59E0B", "#EC4899", "#3B82F6"];
+
 export function AdminFinancialRatios() {
   const [windowKey, setWindowKey] = useState<WindowKey>("7d");
+  const [platformKey, setPlatformKey] = useState<PlatformKey>("all");
   const [ratios, setRatios] = useState<RatiosResponse | null>(null);
   const [timeseriesRevenue, setTimeseriesRevenue] = useState<TimeseriesResponse | null>(null);
   const [timeseriesPayingUsers, setTimeseriesPayingUsers] = useState<TimeseriesResponse | null>(null);
@@ -114,6 +133,7 @@ export function AdminFinancialRatios() {
   const [refundsFails, setRefundsFails] = useState<RefundFailRow[]>([]);
   const [marketingSpend, setMarketingSpend] = useState<MarketingSpendRow[]>([]);
   const [byExchange, setByExchange] = useState<ByExchangeRow[]>([]);
+  const [tsByExchange, setTsByExchange] = useState<TimeseriesByExchangeResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [tsLoading, setTsLoading] = useState(false);
   const [marketingForm, setMarketingForm] = useState({ period_start: "", period_end: "", spend_usdt: "", notes: "" });
@@ -175,10 +195,19 @@ export function AdminFinancialRatios() {
 
   const loadByExchange = async () => {
     try {
-      const data = await api.get<{ byExchange: ByExchangeRow[] }>(`/api/admin/financial-ratios/by-exchange?window=${windowKey}`);
+      const data = await api.get<{ byExchange: ByExchangeRow[] }>(`/api/admin/financial-ratios/by-exchange?window=${windowKey}&platform=${platformKey}`);
       setByExchange(data.byExchange || []);
     } catch {
       setByExchange([]);
+    }
+  };
+
+  const loadTimeseriesByExchange = async () => {
+    try {
+      const data = await api.get<TimeseriesByExchangeResponse>("/api/admin/financial-ratios/timeseries-by-exchange?metric=volume&days=90&platform=" + platformKey);
+      setTsByExchange(data);
+    } catch {
+      setTsByExchange(null);
     }
   };
 
@@ -199,8 +228,14 @@ export function AdminFinancialRatios() {
   }, [windowKey]);
 
   useEffect(() => {
+    loadByExchange();
+    loadTimeseriesByExchange();
+  }, [platformKey]);
+
+  useEffect(() => {
     loadTimeseries();
     loadMarketingSpend();
+    loadTimeseriesByExchange();
   }, []);
 
   const handleExportJSON = () => {
@@ -293,7 +328,7 @@ export function AdminFinancialRatios() {
               ))}
             </SelectContent>
           </Select>
-          <Button variant="outline" size="sm" onClick={() => { loadRatios(); loadTopPayers(); loadRefundsFails(); loadByExchange(); }}>
+          <Button variant="outline" size="sm" onClick={() => { loadRatios(); loadTopPayers(); loadRefundsFails(); loadByExchange(); loadTimeseriesByExchange(); }}>
             <RefreshCw className="size-4 mr-2" />
             Refresh
           </Button>
@@ -443,13 +478,29 @@ export function AdminFinancialRatios() {
             </div>
           </div>
 
-          {/* Platform & by exchange: Mix (aggregate) + per-CEX for reporting */}
+          {/* Platform & by exchange: Mix (aggregate) + per-CEX/DEX for reporting */}
           <div>
-            <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
-              <Building2 className="size-4 text-primary" />
-              Platform (mix) & by exchange
-            </h3>
-            <p className="text-xs text-muted-foreground mb-3">Mix = platform aggregate. Per-exchange rows = CEX-specific for reporting (Binance, Bybit, etc.). Window: {ratios?.label ?? windowKey}.</p>
+            <div className="flex flex-wrap items-center justify-between gap-4 mb-3">
+              <div>
+                <h3 className="text-sm font-semibold flex items-center gap-2">
+                  <Building2 className="size-4 text-primary" />
+                  Platform (mix) & by exchange
+                </h3>
+                <p className="text-xs text-muted-foreground mt-1">Mix = platform aggregate. Filter by CEX (Binance, Bybit) or DEX. Window: {ratios?.label ?? windowKey}.</p>
+              </div>
+              <Select value={platformKey} onValueChange={(v: PlatformKey) => setPlatformKey(v)}>
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="Platform" />
+                </SelectTrigger>
+                <SelectContent>
+                  {PLATFORMS.map((p) => (
+                    <SelectItem key={p.value} value={p.value}>
+                      {p.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             <Card className="overflow-hidden">
               <Table>
                 <TableHeader>
@@ -488,6 +539,37 @@ export function AdminFinancialRatios() {
                 </TableBody>
               </Table>
             </Card>
+
+            {/* Volume by exchange (stacked bar chart) */}
+            {tsByExchange?.timeseries?.length ? (
+              <Card className="p-4 mt-4">
+                <h3 className="text-sm font-semibold mb-3">Trading volume by exchange (90 days) — {platformKey === "all" ? "All" : platformKey.toUpperCase()}</h3>
+                <ResponsiveContainer width="100%" height={260}>
+                  <BarChart data={tsByExchange.timeseries} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                    <defs>
+                      {tsByExchange.exchangeList.map((ex, i) => (
+                        <linearGradient key={ex} id={`vol-${ex}`} x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor={CHART_COLORS[i % CHART_COLORS.length]} stopOpacity={0.9} />
+                          <stop offset="100%" stopColor={CHART_COLORS[i % CHART_COLORS.length]} stopOpacity={0.5} />
+                        </linearGradient>
+                      ))}
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                    <XAxis dataKey="date" tick={{ fontSize: 10 }} tickFormatter={(v) => v.slice(5)} />
+                    <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => (v >= 1000 ? `$${(v / 1000).toFixed(0)}k` : `$${v}`)} />
+                    <Tooltip
+                      formatter={(v: number, name: string) => [`$${Number(v).toLocaleString(undefined, { minimumFractionDigits: 2 })}`, name]}
+                      labelFormatter={(l) => l}
+                      contentStyle={{ borderRadius: 8 }}
+                    />
+                    <Legend />
+                    {tsByExchange.exchangeList.map((ex, i) => (
+                      <Bar key={ex} dataKey={ex} stackId="vol" fill={`url(#vol-${ex})`} name={ex.charAt(0).toUpperCase() + ex.slice(1)} radius={[0, 0, 0, 0]} />
+                    ))}
+                  </BarChart>
+                </ResponsiveContainer>
+              </Card>
+            ) : null}
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -499,13 +581,19 @@ export function AdminFinancialRatios() {
                 </div>
               ) : timeseriesRevenue?.timeseries?.length ? (
                 <ResponsiveContainer width="100%" height={220}>
-                  <LineChart data={timeseriesRevenue.timeseries}>
+                  <AreaChart data={timeseriesRevenue.timeseries}>
+                    <defs>
+                      <linearGradient id="revenueGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.4} />
+                        <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
                     <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                     <XAxis dataKey="date" tick={{ fontSize: 10 }} tickFormatter={(v) => v.slice(5)} />
                     <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => `$${v}`} />
-                    <Tooltip formatter={(v: number) => [`$${v.toFixed(2)}`, "Revenue"]} labelFormatter={(l) => l} />
-                    <Line type="monotone" dataKey="value" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} name="Revenue" />
-                  </LineChart>
+                    <Tooltip formatter={(v: number) => [`$${v.toFixed(2)}`, "Revenue"]} labelFormatter={(l) => l} contentStyle={{ borderRadius: 8 }} />
+                    <Area type="monotone" dataKey="value" stroke="hsl(var(--primary))" strokeWidth={2} fill="url(#revenueGrad)" name="Revenue" />
+                  </AreaChart>
                 </ResponsiveContainer>
               ) : (
                 <div className="h-48 flex items-center justify-center text-muted-foreground text-sm">No revenue data</div>
@@ -519,13 +607,19 @@ export function AdminFinancialRatios() {
                 </div>
               ) : timeseriesPayingUsers?.timeseries?.length ? (
                 <ResponsiveContainer width="100%" height={220}>
-                  <LineChart data={timeseriesPayingUsers.timeseries}>
+                  <AreaChart data={timeseriesPayingUsers.timeseries}>
+                    <defs>
+                      <linearGradient id="payingGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#10B981" stopOpacity={0.4} />
+                        <stop offset="95%" stopColor="#10B981" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
                     <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                     <XAxis dataKey="date" tick={{ fontSize: 10 }} tickFormatter={(v) => v.slice(5)} />
                     <YAxis tick={{ fontSize: 10 }} />
-                    <Tooltip />
-                    <Line type="monotone" dataKey="value" stroke="hsl(var(--chart-2))" strokeWidth={2} dot={false} name="Paying users" />
-                  </LineChart>
+                    <Tooltip formatter={(v: number) => [v, "Paying users"]} contentStyle={{ borderRadius: 8 }} />
+                    <Area type="monotone" dataKey="value" stroke="#10B981" strokeWidth={2} fill="url(#payingGrad)" name="Paying users" />
+                  </AreaChart>
                 </ResponsiveContainer>
               ) : (
                 <div className="h-48 flex items-center justify-center text-muted-foreground text-sm">No data</div>
@@ -539,13 +633,19 @@ export function AdminFinancialRatios() {
                 </div>
               ) : timeseriesActiveUsers?.timeseries?.length ? (
                 <ResponsiveContainer width="100%" height={220}>
-                  <LineChart data={timeseriesActiveUsers.timeseries}>
+                  <AreaChart data={timeseriesActiveUsers.timeseries}>
+                    <defs>
+                      <linearGradient id="dauGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#8B5CF6" stopOpacity={0.4} />
+                        <stop offset="95%" stopColor="#8B5CF6" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
                     <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                     <XAxis dataKey="date" tick={{ fontSize: 10 }} tickFormatter={(v) => v.slice(5)} />
                     <YAxis tick={{ fontSize: 10 }} />
-                    <Tooltip formatter={(v: number) => [v, "Active users"]} />
-                    <Line type="monotone" dataKey="value" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} name="DAU" />
-                  </LineChart>
+                    <Tooltip formatter={(v: number) => [v, "Active users"]} contentStyle={{ borderRadius: 8 }} />
+                    <Area type="monotone" dataKey="value" stroke="#8B5CF6" strokeWidth={2} fill="url(#dauGrad)" name="DAU" />
+                  </AreaChart>
                 </ResponsiveContainer>
               ) : (
                 <div className="h-48 flex items-center justify-center text-muted-foreground text-sm">No activity data</div>
@@ -561,13 +661,19 @@ export function AdminFinancialRatios() {
               </div>
             ) : timeseriesTickSuccess?.timeseries?.length ? (
               <ResponsiveContainer width="100%" height={220}>
-                <LineChart data={timeseriesTickSuccess.timeseries}>
+                <AreaChart data={timeseriesTickSuccess.timeseries}>
+                  <defs>
+                    <linearGradient id="tickGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#F59E0B" stopOpacity={0.4} />
+                      <stop offset="95%" stopColor="#F59E0B" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
                   <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                   <XAxis dataKey="date" tick={{ fontSize: 10 }} tickFormatter={(v) => v.slice(5)} />
                   <YAxis tick={{ fontSize: 10 }} domain={[0, 1]} tickFormatter={(v) => `${(v * 100).toFixed(0)}%`} />
-                  <Tooltip formatter={(v: number) => [`${(v * 100).toFixed(2)}%`, "Success rate"]} />
-                  <Line type="monotone" dataKey="value" stroke="hsl(var(--chart-3))" strokeWidth={2} dot={false} name="Success rate" />
-                </LineChart>
+                  <Tooltip formatter={(v: number) => [`${(v * 100).toFixed(2)}%`, "Success rate"]} contentStyle={{ borderRadius: 8 }} />
+                  <Area type="monotone" dataKey="value" stroke="#F59E0B" strokeWidth={2} fill="url(#tickGrad)" name="Success rate" />
+                </AreaChart>
               </ResponsiveContainer>
             ) : (
               <div className="h-48 flex items-center justify-center text-muted-foreground text-sm">No tick data</div>

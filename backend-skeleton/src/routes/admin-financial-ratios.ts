@@ -339,20 +339,26 @@ financialRatiosRouter.get('/timeseries', async (req: Request, res: Response) => 
   res.json(result);
 });
 
+// Platform type mapping: CEX = centralized (Binance, Bybit), DEX = decentralized (future)
+const CEX_EXCHANGES = ['binance', 'bybit'];
+const DEX_EXCHANGES: string[] = []; // Future: uniswap, etc.
+
 /**
- * GET /api/admin/financial-ratios/by-exchange?window=7d
+ * GET /api/admin/financial-ratios/by-exchange?window=7d&platform=all|cex|dex
  * Per-exchange metrics: connections, strategy runs, ticks, orders placed, trades count and volume.
+ * platform=all (default): all exchanges + mix. platform=cex: CEX only. platform=dex: DEX only.
  */
 financialRatiosRouter.get('/by-exchange', async (req: Request, res: Response) => {
   const client = getSupabase();
   if (!client) return res.status(503).json({ error: 'Database unavailable' });
 
   const windowParam = (req.query.window as string) || '30d';
+  const platformFilter = ((req.query.platform as string) || 'all').toLowerCase() as 'all' | 'cex' | 'dex';
   const { from, to } = parseWindow(windowParam);
   const fromIso = from.toISOString();
   const toIso = to.toISOString();
 
-  const cacheKey = `by-exchange:${windowParam}:${Math.floor(from.getTime() / 60000)}`;
+  const cacheKey = `by-exchange:${windowParam}:${platformFilter}:${Math.floor(from.getTime() / 60000)}`;
   const result = await getCached(cacheKey, async () => {
     // Discover exchanges from DB; fallback to known list for future CEX additions
     let exchangeList: string[] = ['binance', 'bybit'];
@@ -365,6 +371,10 @@ financialRatiosRouter.get('/by-exchange', async (req: Request, res: Response) =>
       }
       if (seen.size > 0) exchangeList = [...seen].sort();
     } catch { /* keep default */ }
+
+    // Filter by platform type
+    if (platformFilter === 'cex') exchangeList = exchangeList.filter((e) => CEX_EXCHANGES.includes(e));
+    else if (platformFilter === 'dex') exchangeList = exchangeList.filter((e) => DEX_EXCHANGES.includes(e));
 
     const byExchange: Array<{
       exchange: string;
@@ -466,7 +476,106 @@ financialRatiosRouter.get('/by-exchange', async (req: Request, res: Response) =>
     };
     byExchange.unshift(mixRow);
 
-    return { window: windowParam, from: fromIso, to: toIso, byExchange };
+    return { window: windowParam, platform: platformFilter, from: fromIso, to: toIso, byExchange };
+  });
+
+  res.json(result);
+});
+
+/**
+ * GET /api/admin/financial-ratios/timeseries-by-exchange?metric=volume|connections&days=90&platform=all|cex|dex
+ * Daily timeseries per exchange for volume (USD) or connections count. Used for rich charts.
+ */
+financialRatiosRouter.get('/timeseries-by-exchange', async (req: Request, res: Response) => {
+  const client = getSupabase();
+  if (!client) return res.status(503).json({ error: 'Database unavailable' });
+
+  const metric = (req.query.metric as string) || 'volume';
+  const days = Math.min(180, Math.max(1, parseInt(req.query.days as string) || 90));
+  const platformFilter = ((req.query.platform as string) || 'all').toLowerCase() as 'all' | 'cex' | 'dex';
+  const to = new Date();
+  const from = new Date(to);
+  from.setDate(from.getDate() - days);
+  const fromIso = from.toISOString();
+  const toIso = to.toISOString();
+
+  const cacheKey = `ts-ex:${metric}:${days}:${platformFilter}:${Math.floor(from.getTime() / 60000)}`;
+  const result = await getCached(cacheKey, async () => {
+    let exchangeList: string[] = ['binance', 'bybit'];
+    try {
+      const { data: connExchanges } = await client.from('user_exchange_connections').select('exchange');
+      const seen = new Set<string>();
+      for (const r of connExchanges || []) {
+        const ex = (r as { exchange?: string }).exchange;
+        if (ex && /^[a-z]+$/.test(ex)) seen.add(ex);
+      }
+      if (seen.size > 0) exchangeList = [...seen].sort();
+    } catch { /* keep default */ }
+    if (platformFilter === 'cex') exchangeList = exchangeList.filter((e) => CEX_EXCHANGES.includes(e));
+    else if (platformFilter === 'dex') exchangeList = exchangeList.filter((e) => DEX_EXCHANGES.includes(e));
+
+    const dateKeys: string[] = [];
+    for (let d = new Date(from); d <= to; d.setDate(d.getDate() + 1)) {
+      dateKeys.push(d.toISOString().slice(0, 10));
+    }
+    const byDateEx = new Map<string, Record<string, number>>();
+    for (const d of dateKeys) {
+      const obj: Record<string, number> = {};
+      for (const ex of exchangeList) obj[ex] = 0;
+      byDateEx.set(d, obj);
+    }
+
+    if (metric === 'volume') {
+      try {
+        const { data: trades } = await client
+          .from('trades')
+          .select('exchange, amount, price, executed_at')
+          .gte('executed_at', fromIso)
+          .lte('executed_at', toIso);
+        for (const t of trades || []) {
+          const r = t as { exchange: string; amount: number; price: number; executed_at: string };
+          const ex = r.exchange;
+          if (!ex || !exchangeList.includes(ex)) continue;
+          const date = r.executed_at?.slice(0, 10);
+          if (!date) continue;
+          const vol = Number(r.amount ?? 0) * Number(r.price ?? 0);
+          const row = byDateEx.get(date);
+          if (row) {
+            row[ex] = (row[ex] ?? 0) + vol;
+          }
+        }
+      } catch { /* skip */ }
+    } else if (metric === 'connections') {
+      try {
+        const { data: conns } = await client
+          .from('user_exchange_connections')
+          .select('exchange, created_at');
+        for (const c of conns || []) {
+          const r = c as { exchange: string; created_at: string };
+          const ex = r.exchange;
+          if (!ex || !exchangeList.includes(ex)) continue;
+          const date = r.created_at?.slice(0, 10);
+          if (!date || !dateKeys.includes(date)) continue;
+          const row = byDateEx.get(date);
+          if (row) row[ex] = (row[ex] ?? 0) + 1;
+        }
+      } catch { /* skip */ }
+    }
+
+    const timeseries = dateKeys.map((date) => {
+      const row = byDateEx.get(date) || {};
+      const out: Record<string, number | string> = { date };
+      let total = 0;
+      for (const ex of exchangeList) {
+        const v = Math.round((row[ex] ?? 0) * 100) / 100;
+        out[ex] = v;
+        total += v;
+      }
+      out.total = Math.round(total * 100) / 100;
+      return out;
+    });
+
+    return { metric, days, platform: platformFilter, from: fromIso, to: toIso, exchangeList, timeseries };
   });
 
   res.json(result);
