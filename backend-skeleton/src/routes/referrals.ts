@@ -670,13 +670,15 @@ referralsRouter.put(
     if (error || !data) {
       return res.status(400).json({ error: 'Payout request not found or not approved' });
     }
-    await client.from('audit_logs').insert({
-      admin_id: req.user!.id,
-      action_type: 'payout_request_marked_paid',
-      entity_type: 'payout_requests',
-      entity_id: id,
-      details: { payout_tx_id: payoutTxId ?? null },
-    });
+    try {
+      await client.from('audit_logs').insert({
+        admin_id: req.user!.id,
+        action_type: 'payout_request_marked_paid',
+        entity_type: 'payout_requests',
+        entity_id: id,
+        details: { payout_tx_id: payoutTxId ?? null },
+      });
+    } catch { /* non-fatal */ }
     return res.json(data);
   }
 );

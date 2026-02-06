@@ -62,14 +62,16 @@ entitlementsRouter.post(
         return res.status(500).json({ error: 'Failed to update entitlement', requestId });
       }
 
-      await client.from('audit_logs').insert({
-        admin_id: req.user!.id,
-        action_type: 'entitlement_joining_fee_mark_paid',
-        entity_type: 'user_entitlements',
-        entity_id: userId,
-        details: { reason: reason || null },
-        reason: reason || null,
-      });
+      try {
+        await client.from('audit_logs').insert({
+          admin_id: req.user!.id,
+          action_type: 'entitlement_joining_fee_mark_paid',
+          entity_type: 'user_entitlements',
+          entity_id: userId,
+          details: { reason: reason || null },
+          reason: reason || null,
+        });
+      } catch { /* non-fatal */ }
 
       return res.status(200).json({ status: 'ok', message: 'Joining fee marked paid', requestId });
     } catch (err) {
@@ -153,14 +155,16 @@ entitlementsRouter.post(
       const used = parseFloat(String(row?.profit_used_usd ?? 0));
 
       if (targetUserId !== req.user!.id) {
-        await client.from('audit_logs').insert({
-          admin_id: req.user!.id,
-          action_type: 'entitlement_package_activate',
-          entity_type: 'user_entitlements',
-          entity_id: targetUserId,
-          details: { packageId, reason: reason || null },
-          reason: reason || null,
-        });
+        try {
+          await client.from('audit_logs').insert({
+            admin_id: req.user!.id,
+            action_type: 'entitlement_package_activate',
+            entity_type: 'user_entitlements',
+            entity_id: targetUserId,
+            details: { packageId, reason: reason || null },
+            reason: reason || null,
+          });
+        } catch { /* non-fatal */ }
       }
 
       return res.status(200).json({
@@ -224,7 +228,7 @@ entitlementsRouter.post(
         return res.status(404).json({ error: 'Entitlement not found for user', requestId });
       }
 
-      await client.from('profit_events').insert({
+      const { error: profitErr } = await client.from('profit_events').insert({
         user_id: userId,
         source,
         amount_usd: amount,
@@ -232,6 +236,10 @@ entitlementsRouter.post(
         ref_id: refId || null,
         metadata: metadata || {},
       });
+      if (profitErr) {
+        console.error('profit_events insert error:', profitErr);
+        return res.status(500).json({ error: 'Failed to record profit event', requestId });
+      }
 
       const usedBefore = parseFloat(String(ent.profit_used_usd ?? 0));
       const allowance = parseFloat(String(ent.profit_allowance_usd ?? 0));

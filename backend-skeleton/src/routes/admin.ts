@@ -804,13 +804,15 @@ adminRouter.patch('/referrals/:id/mark-paid',
 
     const adminId = (req as AuthenticatedRequest).user?.id;
     if (adminId) {
-      await client.from('audit_logs').insert({
-        admin_id: adminId,
-        action_type: 'referral_payout_marked_paid',
-        entity_type: 'purchase_referral_earnings',
-        entity_id: id,
-        details: { transaction_id: transactionId },
-      });
+      try {
+        await client.from('audit_logs').insert({
+          admin_id: adminId,
+          action_type: 'referral_payout_marked_paid',
+          entity_type: 'purchase_referral_earnings',
+          entity_id: id,
+          details: { transaction_id: transactionId },
+        });
+      } catch { /* non-fatal */ }
     }
 
     res.json({ ok: true, id: data.id });
@@ -1069,15 +1071,16 @@ adminRouter.put('/users/:id',
       return res.status(500).json({ error: 'Failed to update user' });
     }
 
-    // Log audit
-    await client.from('audit_logs').insert({
-      admin_id: req.user!.id,
-      action_type: status === 'suspended' ? 'suspend_user' : status === 'banned' ? 'ban_user' : 'activate_user',
-      entity_type: 'user',
-      entity_id: id,
-      reason: reason || null,
-      details: { previous_status: data.status, new_status: status },
-    });
+    try {
+      await client.from('audit_logs').insert({
+        admin_id: req.user!.id,
+        action_type: status === 'suspended' ? 'suspend_user' : status === 'banned' ? 'ban_user' : 'activate_user',
+        entity_type: 'user',
+        entity_id: id,
+        reason: reason || null,
+        details: { previous_status: data.status, new_status: status },
+      });
+    } catch { /* non-fatal */ }
 
     res.json({ user: data });
   } catch (err) {
@@ -1135,19 +1138,20 @@ adminRouter.put('/users/:id/role',
         return res.status(500).json({ error: 'Failed to update user role' });
       }
 
-      // Log audit
-      await client.from('audit_logs').insert({
-        admin_id: req.user!.id,
-        action_type: role === 'admin' ? 'promote_admin' : 'demote_admin',
-        entity_type: 'user',
-        entity_id: id,
-        reason: reason || null,
-        details: { 
-          previous_role: currentUser.role, 
-          new_role: role,
-          user_email: currentUser.email 
-        },
-      });
+      try {
+        await client.from('audit_logs').insert({
+          admin_id: req.user!.id,
+          action_type: role === 'admin' ? 'promote_admin' : 'demote_admin',
+          entity_type: 'user',
+          entity_id: id,
+          reason: reason || null,
+          details: { 
+            previous_role: currentUser.role, 
+            new_role: role,
+            user_email: currentUser.email 
+          },
+        });
+      } catch { /* non-fatal */ }
 
       res.json({ user: updated });
     } catch (err) {
@@ -1297,13 +1301,15 @@ adminRouter.patch('/master-trader-applications/:id',
           if (traderErr) console.warn('Could not auto-create trader entry:', traderErr);
         }
       }
-      await client.from('audit_logs').insert({
-        admin_id: req.user!.id,
-        action_type: 'master_trader_application_reviewed',
-        entity_type: 'master_trader_application',
-        entity_id: id,
-        details: { status, userId: row.user_id },
-      });
+      try {
+        await client.from('audit_logs').insert({
+          admin_id: req.user!.id,
+          action_type: 'master_trader_application_reviewed',
+          entity_type: 'master_trader_application',
+          entity_id: id,
+          details: { status, userId: row.user_id },
+        });
+      } catch { /* non-fatal */ }
       res.json({ status, message: status === 'approved' ? 'Application approved' : 'Application rejected' });
     } catch (err) {
       console.error('Master trader application patch error:', err);
@@ -1459,12 +1465,14 @@ adminRouter.post('/user-discounts',
         code: data.code,
         claimUrl,
       });
-      await client.from('notifications').insert({
-        user_id: data.user_id,
-        type: 'discount_assigned',
-        title: 'You have a new discount',
-        body: notifBody,
-      });
+      try {
+        await client.from('notifications').insert({
+          user_id: data.user_id,
+          type: 'discount_assigned',
+          title: 'You have a new discount',
+          body: notifBody,
+        });
+      } catch { /* non-fatal */ }
 
       res.json({ userDiscount: data });
     } catch (err) {
@@ -1712,19 +1720,21 @@ adminRouter.post('/payments/intents/:id/approve',
       // log but don't fail the approve
     }
 
-    await client.from('payment_events').insert({
-      intent_id: intentId,
-      event_type: 'approved',
-      details: { reviewed_by: adminId, note },
-    });
-    await client.from('audit_logs').insert({
-      admin_id: adminId,
-      action_type: 'payment_intent_approved',
-      entity_type: 'payment_intent',
-      entity_id: intentId,
-      details: { user_id: userId, kind, package_code: packageCode },
-      reason: note,
-    });
+    try {
+      await client.from('payment_events').insert({
+        intent_id: intentId,
+        event_type: 'approved',
+        details: { reviewed_by: adminId, note },
+      });
+      await client.from('audit_logs').insert({
+        admin_id: adminId,
+        action_type: 'payment_intent_approved',
+        entity_type: 'payment_intent',
+        entity_id: intentId,
+        details: { user_id: userId, kind, package_code: packageCode },
+        reason: note,
+      });
+    } catch { /* non-fatal */ }
 
     const { data: updated } = await client.from('payment_intents').select('id, status, reviewed_at, review_note').eq('id', intentId).single();
     res.json(updated);
@@ -1771,19 +1781,21 @@ adminRouter.post('/payments/intents/:id/reject',
 
     if (updateErr) return res.status(500).json({ error: 'Failed to reject intent' });
 
-    await client.from('payment_events').insert({
-      intent_id: intentId,
-      event_type: 'rejected',
-      details: { reviewed_by: adminId, note },
-    });
-    await client.from('audit_logs').insert({
-      admin_id: adminId,
-      action_type: 'payment_intent_rejected',
-      entity_type: 'payment_intent',
-      entity_id: intentId,
-      details: { user_id: intent.user_id, kind: intent.kind, package_code: intent.package_code },
-      reason: note,
-    });
+    try {
+      await client.from('payment_events').insert({
+        intent_id: intentId,
+        event_type: 'rejected',
+        details: { reviewed_by: adminId, note },
+      });
+      await client.from('audit_logs').insert({
+        admin_id: adminId,
+        action_type: 'payment_intent_rejected',
+        entity_type: 'payment_intent',
+        entity_id: intentId,
+        details: { user_id: intent.user_id, kind: intent.kind, package_code: intent.package_code },
+        reason: note,
+      });
+    } catch { /* non-fatal */ }
 
     const { data: updated } = await client.from('payment_intents').select('id, status, reviewed_at, review_note').eq('id', intentId).single();
     res.json(updated);

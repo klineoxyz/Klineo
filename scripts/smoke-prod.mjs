@@ -162,6 +162,78 @@ if (TEST_USER_EMAIL && TEST_USER_PASSWORD) {
       if (typeof data.totalEquity !== 'number') throw new Error('Invalid response');
     });
 
+    // Payment intent flow: create -> submit (test user; admin approves later)
+    await test('POST /api/payments/intents (create joining_fee)', async () => {
+      const res = await fetch(`${BACKEND_URL}/api/payments/intents`, {
+        method: 'POST',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ kind: 'joining_fee' }),
+      });
+      if (res.status === 503) throw new Error('Manual payments disabled');
+      if (!res.ok) throw new Error(`Status ${res.status}: ${await res.text()}`);
+      const data = await res.json();
+      if (!data.intent?.id) throw new Error('Invalid response');
+      global.__smokeIntentId = data.intent.id;
+    });
+
+    await test('POST /api/payments/intents/:id/submit', async () => {
+      const id = global.__smokeIntentId;
+      if (!id) throw new Error('No intent from create step');
+      const res = await fetch(`${BACKEND_URL}/api/payments/intents/${id}/submit`, {
+        method: 'POST',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tx_hash: '0x0000000000000000000000000000000000000000000000000000000000000001', from_wallet: '0x0000000000000000000000000000000000000001' }),
+      });
+      if (res.status === 503) throw new Error('Manual payments disabled');
+      if (!res.ok) throw new Error(`Status ${res.status}: ${await res.text()}`);
+      const data = await res.json();
+      if (data.status !== 'pending_review' && data.status !== 'flagged') throw new Error(`Expected pending_review, got ${data.status}`);
+    });
+
+    // Copy setup: create -> pause -> resume (requires trader + allowance)
+    const tradersRes = await fetch(`${BACKEND_URL}/api/traders?limit=1`);
+    const tradersData = tradersRes.ok ? await tradersRes.json() : { traders: [] };
+    const traderId = tradersData.traders?.[0]?.id;
+    if (traderId) {
+      await test('POST /api/copy-setups (create)', async () => {
+        const res = await fetch(`${BACKEND_URL}/api/copy-setups`, {
+          method: 'POST',
+          headers: { ...headers, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ traderId, allocationPct: 50 }),
+        });
+        if (res.status === 402) {
+          global.__smokeCopySetupId = null;
+          throw new Error('Allowance required (expected for new user; skip pause/resume)');
+        }
+        if (!res.ok) throw new Error(`Status ${res.status}: ${await res.text()}`);
+        const data = await res.json();
+        if (!data.id) throw new Error('Invalid response');
+        global.__smokeCopySetupId = data.id;
+      });
+      const setupId = global.__smokeCopySetupId;
+      if (setupId) {
+        await test('PUT /api/copy-setups/:id (pause)', async () => {
+          const res = await fetch(`${BACKEND_URL}/api/copy-setups/${setupId}`, {
+            method: 'PUT',
+            headers: { ...headers, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: 'paused' }),
+          });
+          if (!res.ok) throw new Error(`Status ${res.status}: ${await res.text()}`);
+        });
+        await test('PUT /api/copy-setups/:id (resume)', async () => {
+          const res = await fetch(`${BACKEND_URL}/api/copy-setups/${setupId}`, {
+            method: 'PUT',
+            headers: { ...headers, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: 'active' }),
+          });
+          if (res.status === 402) throw new Error('Allowance exhausted (expected)');
+          if (!res.ok) throw new Error(`Status ${res.status}: ${await res.text()}`);
+        });
+      }
+    } else {
+      await skip('Copy setup flow', 'No approved trader');
+    }
+
     // Test 403 for non-admin accessing admin endpoint
     await test('GET /api/admin/users (should 403 for non-admin)', async () => {
       const res = await fetch(`${BACKEND_URL}/api/admin/users`, { headers });
@@ -207,6 +279,29 @@ if (ADMIN_EMAIL && ADMIN_PASSWORD) {
       if (!res.ok) throw new Error(`Status ${res.status}`);
       const data = await res.json();
       if (typeof data.totalUsers !== 'number') throw new Error('Invalid response');
+    });
+
+    // Admin approve payment intent (created by test user above; requires ENABLE_MANUAL_PAYMENTS)
+    const intentId = global.__smokeIntentId;
+    if (intentId) {
+      await test('POST /api/admin/payments/intents/:id/approve', async () => {
+        const res = await fetch(`${BACKEND_URL}/api/admin/payments/intents/${intentId}/approve`, {
+          method: 'POST',
+          headers: { ...headers, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ note: 'Smoke test' }),
+        });
+        if (res.status === 503) throw new Error('Manual payments disabled');
+        if (res.status === 409) throw new Error('Intent already approved (race)');
+        if (!res.ok) throw new Error(`Status ${res.status}: ${await res.text()}`);
+      });
+    }
+
+    // Exchange connections (admin can list for self; full flow uses test user)
+    await test('GET /api/exchange-connections (admin)', async () => {
+      const res = await fetch(`${BACKEND_URL}/api/exchange-connections`, { headers });
+      if (!res.ok) throw new Error(`Status ${res.status}`);
+      const data = await res.json();
+      if (!Array.isArray(data.connections)) throw new Error('Invalid response');
     });
   }
 } else {
