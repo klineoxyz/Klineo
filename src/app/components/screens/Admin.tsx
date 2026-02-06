@@ -119,7 +119,7 @@ export function Admin() {
   const [userDiscountTradingMax, setUserDiscountTradingMax] = useState("");
   const [userDiscountEditId, setUserDiscountEditId] = useState<string | null>(null);
   const [masterTraderDiscountUserId, setMasterTraderDiscountUserId] = useState("");
-  const [masterTraderDiscountDuration, setMasterTraderDiscountDuration] = useState<"6mo" | "1yr">("1yr");
+  const [masterTraderDiscountDuration, setMasterTraderDiscountDuration] = useState<"6mo" | "1yr" | "lifetime">("1yr");
   const [masterTraderDiscountLoading, setMasterTraderDiscountLoading] = useState(false);
 
   // Mark referral payout as paid
@@ -587,10 +587,11 @@ export function Admin() {
         userId: masterTraderDiscountUserId,
         scope: "trading_packages",
         tradingDiscountPercent: 100,
-        tradingMaxPackages: masterTraderDiscountDuration === "6mo" ? 2 : 4,
+        tradingMaxPackages: masterTraderDiscountDuration === "lifetime" ? undefined : masterTraderDiscountDuration === "6mo" ? 2 : 4,
       });
+      const durationLabel = masterTraderDiscountDuration === "6mo" ? "6 months" : masterTraderDiscountDuration === "1yr" ? "1 year" : "lifetime";
       toast.success("Master Trader discount created", {
-        description: `100% onboarding + 100% packages (${masterTraderDiscountDuration === "6mo" ? "6 months" : "1 year"}). Share claim links from the list below.`,
+        description: `100% onboarding + 100% packages (${durationLabel}). Share claim links from the list below.`,
       });
       setMasterTraderDiscountUserId("");
       loadUserDiscounts();
@@ -2021,7 +2022,7 @@ export function Admin() {
             {/* Master Trader preset — 100% onboarding + 100% packages for 6mo or 1yr */}
             <div className="mb-6 p-4 rounded-lg border border-primary/20 bg-primary/5">
               <h4 className="text-sm font-semibold mb-2">Master Trader Benefits</h4>
-              <p className="text-xs text-muted-foreground mb-4">Create full platform free for approved Master Traders: 100% off onboarding + 100% off packages for 6 months or 1 year.</p>
+              <p className="text-xs text-muted-foreground mb-4">Create full platform free for approved Master Traders: 100% off onboarding + 100% off packages for 6 months, 1 year, or lifetime.</p>
               <div className="flex flex-wrap items-end gap-4">
                 <div className="space-y-1 min-w-[200px]">
                   <Label className="text-xs">User (Master Trader)</Label>
@@ -2039,13 +2040,14 @@ export function Admin() {
                 </div>
                 <div className="space-y-1 min-w-[120px]">
                   <Label className="text-xs">Duration</Label>
-                  <Select value={masterTraderDiscountDuration} onValueChange={(v: "6mo" | "1yr") => setMasterTraderDiscountDuration(v)}>
+                  <Select value={masterTraderDiscountDuration} onValueChange={(v: "6mo" | "1yr" | "lifetime") => setMasterTraderDiscountDuration(v)}>
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="6mo">6 months</SelectItem>
                       <SelectItem value="1yr">1 year</SelectItem>
+                      <SelectItem value="lifetime">Lifetime</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
