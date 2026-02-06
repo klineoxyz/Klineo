@@ -118,6 +118,9 @@ export function Admin() {
   const [userDiscountTradingPackages, setUserDiscountTradingPackages] = useState<string[]>([]);
   const [userDiscountTradingMax, setUserDiscountTradingMax] = useState("");
   const [userDiscountEditId, setUserDiscountEditId] = useState<string | null>(null);
+  const [masterTraderDiscountUserId, setMasterTraderDiscountUserId] = useState("");
+  const [masterTraderDiscountDuration, setMasterTraderDiscountDuration] = useState<"6mo" | "1yr">("1yr");
+  const [masterTraderDiscountLoading, setMasterTraderDiscountLoading] = useState(false);
 
   // Mark referral payout as paid
   const [markPaidPayout, setMarkPaidPayout] = useState<{ id: string; referrer: string; amount: number } | null>(null);
@@ -567,6 +570,36 @@ export function Admin() {
     { id: "pro_200", label: "Pro $200" },
     { id: "elite_500", label: "Elite $500" },
   ];
+
+  const handleCreateMasterTraderDiscount = async () => {
+    if (!masterTraderDiscountUserId) {
+      toast.error("Select a user");
+      return;
+    }
+    setMasterTraderDiscountLoading(true);
+    try {
+      await api.post("/api/admin/user-discounts", {
+        userId: masterTraderDiscountUserId,
+        scope: "onboarding",
+        onboardingDiscountPercent: 100,
+      });
+      await api.post("/api/admin/user-discounts", {
+        userId: masterTraderDiscountUserId,
+        scope: "trading_packages",
+        tradingDiscountPercent: 100,
+        tradingMaxPackages: masterTraderDiscountDuration === "6mo" ? 2 : 4,
+      });
+      toast.success("Master Trader discount created", {
+        description: `100% onboarding + 100% packages (${masterTraderDiscountDuration === "6mo" ? "6 months" : "1 year"}). Share claim links from the list below.`,
+      });
+      setMasterTraderDiscountUserId("");
+      loadUserDiscounts();
+    } catch (err: any) {
+      toast.error("Failed to create Master Trader discount", { description: err?.message });
+    } finally {
+      setMasterTraderDiscountLoading(false);
+    }
+  };
 
   const handleCreateUserDiscount = async () => {
     if (!userDiscountUserId) {
@@ -1982,6 +2015,43 @@ export function Admin() {
               <div>
                 <h3 className="text-lg font-semibold">User-Specific Discounts</h3>
                 <p className="text-sm text-muted-foreground">Assign onboarding or trading package discounts to specific users. A <strong>system-generated coupon code</strong> is created for each assignment; share the code or claim link with the user. Change, pause, or revoke anytime.</p>
+              </div>
+            </div>
+
+            {/* Master Trader preset — 100% onboarding + 100% packages for 6mo or 1yr */}
+            <div className="mb-6 p-4 rounded-lg border border-primary/20 bg-primary/5">
+              <h4 className="text-sm font-semibold mb-2">Master Trader Benefits</h4>
+              <p className="text-xs text-muted-foreground mb-4">Create full platform free for approved Master Traders: 100% off onboarding + 100% off packages for 6 months or 1 year.</p>
+              <div className="flex flex-wrap items-end gap-4">
+                <div className="space-y-1 min-w-[200px]">
+                  <Label className="text-xs">User (Master Trader)</Label>
+                  <Select value={masterTraderDiscountUserId} onValueChange={setMasterTraderDiscountUserId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select user" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {users.map((u) => (
+                        <SelectItem key={u.id} value={u.id}>{u.email ?? u.id}</SelectItem>
+                      ))}
+                      {users.length === 0 && <SelectItem value="_" disabled>Load Users tab first</SelectItem>}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1 min-w-[120px]">
+                  <Label className="text-xs">Duration</Label>
+                  <Select value={masterTraderDiscountDuration} onValueChange={(v: "6mo" | "1yr") => setMasterTraderDiscountDuration(v)}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="6mo">6 months</SelectItem>
+                      <SelectItem value="1yr">1 year</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button onClick={handleCreateMasterTraderDiscount} disabled={masterTraderDiscountLoading} className="bg-primary text-primary-foreground shrink-0">
+                  {masterTraderDiscountLoading ? "Creating..." : "Create Master Trader Discount"}
+                </Button>
               </div>
             </div>
 
