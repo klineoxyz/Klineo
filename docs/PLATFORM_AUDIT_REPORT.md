@@ -114,7 +114,7 @@ The platform demonstrates solid security foundations: JWT verification on protec
 ### B) Payments + Packages + Entitlements
 
 - **Payment intent lifecycle:** draft → submitted (pending_review/flagged) → approved/rejected. Conditional update on submit (`.eq('status','draft')`) and approve (`.in('status', ['pending_review','flagged'])`).
-- **tx_hash:** UNIQUE in DB. **Missing:** format/length validation (P0-1).
+- **tx_hash:** UNIQUE in DB. **Implemented (P0-1):** format/length validation in `POST /api/payments/intents/:id/submit` — max length 66, regex `^0x[a-fA-F0-9]{64}$` (BSC chain).
 - **CoinPayments IPN:** HMAC verified; idempotent (checks `purchase.status === 'completed'` before allocation).
 - **Entitlements:** Atomic upsert on approve; `allocatePurchaseRevenue` is idempotent.
 - **Refunds:** Admin-gated; no automated flow.
