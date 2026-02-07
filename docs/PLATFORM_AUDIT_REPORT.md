@@ -10,7 +10,7 @@
 
 **Verdict: GO (with P0 fixes applied)**
 
-The platform demonstrates solid security foundations: JWT verification on protected routes, admin gating, AES-256-GCM encrypted API keys, HMAC-verified CoinPayments IPN, idempotent purchase allocation, per-connection kill switch, strategy locking, risk gates (daily loss, max trades, consecutive losses), and FORCE RLS on 19 tables. Apply the P0 fixes below, run the smoke test, then proceed with onboarding.
+The platform demonstrates solid security foundations: JWT verification on protected routes, admin gating, AES-256-GCM encrypted API keys, HMAC-verified CoinPayments IPN, idempotent purchase allocation, per-connection and global platform kill switch, strategy locking, risk gates (daily loss, max trades, consecutive losses), and FORCE RLS on 19 tables. All P0 fixes have been applied. Run the smoke test, then proceed with onboarding.
 
 ---
 
@@ -72,13 +72,13 @@ The platform demonstrates solid security foundations: JWT verification on protec
 
 ---
 
-## P0 Issues (Must-Fix Before Onboarding)
+## P0 Issues (All Applied)
 
-| ID | Issue | Fix |
-|----|-------|-----|
-| P0-1 | tx_hash no format validation | Add BSC tx hash pattern (0x + 64 hex) and max length |
-| P0-2 | Logs might contain secrets | Sanitize error handler; never log `req.body` or full `err` |
-| P0-3 | No global kill switch | Add `platform_settings.kill_switch_global` and enforce before placing orders |
+| ID | Issue | Status |
+|----|-------|--------|
+| P0-1 | tx_hash no format validation | ✅ Implemented |
+| P0-2 | Logs might contain secrets | ✅ Implemented |
+| P0-3 | Global kill switch | ✅ Implemented (platform_settings.kill_switch_global, enforced in strategy runner, execute-tick, futures order) |
 
 ---
 
@@ -134,7 +134,7 @@ The platform demonstrates solid security foundations: JWT verification on protec
 - **Idempotency:** `clientOrderId` for Binance; `strategy_locks` prevent concurrent ticks.
 - **Retry:** Bounded; no infinite loops.
 - **Error handling:** Insufficient balance, min notional, leverage limits, order rejects handled; 429 not explicitly retried.
-- **Kill switch:** Per-connection enforced in `strategy-engine.ts`. **Missing:** Global platform kill switch (P0-3).
+- **Kill switch:** Per-connection enforced in `strategy-engine.ts`. Global platform kill switch enforced in strategy runner, execute-tick, and futures order routes (fail-closed on lookup error).
 - **Risk gates:** Daily max loss, max trades/day, consecutive losses, cooldown.
 - **Locking:** `strategyLock.ts` per strategy_run; cooldown between runs.
 
@@ -148,7 +148,7 @@ The platform demonstrates solid security foundations: JWT verification on protec
 
 - **Admin actions logged:** User suspend/ban, payment approve/reject, referral mark-paid, master trader application, coupon create/update.
 - **Admin capabilities:** Approve payments, pause user, update copy setup status (via user), disable trader, view connections.
-- **Emergency stop:** Per-connection kill switch exists. **Missing:** Global platform kill switch (P0-3).
+- **Emergency stop:** Per-connection kill switch and global platform kill switch (`GET/PATCH /api/admin/platform-settings/kill-switch-global`).
 - **Monitoring:** `/health` returns status; no runner/last-tick in health yet.
 
 ### G) Frontend Onboarding Flow
@@ -183,7 +183,8 @@ The platform demonstrates solid security foundations: JWT verification on protec
 6. [ ] Entitlement: `GET /api/me/entitlement` → joining_fee_paid, package
 7. [ ] Exchange connect: `POST /api/exchange-connections` (apiKey, apiSecret) → 201
 8. [ ] Copy setup: `POST /api/copy-setups` (traderId) → 201 or 402 if allowance exhausted
-9. [ ] Kill switch: `PATCH /api/exchange-connections/:id/kill-switch` { enabled: true } → 200
+9. [ ] Kill switch (per-connection): `PATCH /api/exchange-connections/:id/kill-switch` { enabled: true } → 200
+10. [ ] Kill switch (global): `GET /api/admin/platform-settings/kill-switch-global` → { enabled: boolean }; `PATCH` to toggle
 
 ---
 
@@ -206,7 +207,7 @@ The script tests: health, public traders, login, profile, copy-setups, positions
 | Manual futures order | `backend-skeleton/src/routes/futures.ts` | 118–120 | ✅ Yes |
 | runRsiTick (per-connection) | `backend-skeleton/src/lib/strategy-engine.ts` | 81–83 | ✅ Per-connection only |
 
-Shared helper: `backend-skeleton/src/lib/platformSettings.ts` – `isPlatformKillSwitchOn(client)`.
+Shared helper: `backend-skeleton/src/lib/platformSettings.ts` – `isPlatformKillSwitchOn(client)`. Cached (5s TTL), with DB query timeout. **Fail-closed:** on lookup error or timeout, treats kill switch as ON (blocks orders).
 
 **Copy trading:** There is no copy-trading order placement engine in the codebase. `copy_setups` are configuration; no code mirrors master trades to followers. If a copy engine is added later, it must call `isPlatformKillSwitchOn(client)` before placing any order.
 

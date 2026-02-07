@@ -6,6 +6,7 @@ import { body } from 'express-validator';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { financialRatiosRouter, getMarketingSpend, postMarketingSpend } from './admin-financial-ratios.js';
 import { getPackageProfitAllowanceUsd } from './payment-intents.js';
+import { invalidateKillSwitchCache } from '../lib/platformSettings.js';
 
 let supabase: SupabaseClient | null = null;
 
@@ -55,6 +56,48 @@ adminRouter.post('/marketing-spend',
     body('notes').optional().isString(),
   ]),
   postMarketingSpend
+);
+
+/**
+ * GET /api/admin/platform-settings/kill-switch-global
+ * Returns { enabled: boolean }.
+ */
+adminRouter.get('/platform-settings/kill-switch-global', async (req, res) => {
+  const client = getSupabase();
+  if (!client) return res.status(503).json({ error: 'Database unavailable' });
+  try {
+    const { data } = await client.from('platform_settings').select('value').eq('key', 'kill_switch_global').maybeSingle();
+    const enabled = data != null && String((data as { value: string }).value).toLowerCase() === 'true';
+    res.json({ enabled });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch kill switch' });
+  }
+});
+
+/**
+ * PATCH /api/admin/platform-settings/kill-switch-global
+ * Body: { enabled: boolean }. Writes 'true'/'false' to platform_settings. Returns { enabled: boolean }.
+ */
+adminRouter.patch('/platform-settings/kill-switch-global',
+  validate([body('enabled').isBoolean().withMessage('enabled must be boolean')]),
+  async (req, res) => {
+    const client = getSupabase();
+    if (!client) return res.status(503).json({ error: 'Database unavailable' });
+    const enabled = req.body?.enabled === true;
+    try {
+      const { error } = await client.from('platform_settings').upsert(
+        { key: 'kill_switch_global', value: enabled ? 'true' : 'false', updated_at: new Date().toISOString() },
+        { onConflict: 'key' }
+      );
+      if (error) {
+        return res.status(500).json({ error: 'Failed to update kill switch' });
+      }
+      invalidateKillSwitchCache();
+      res.json({ enabled });
+    } catch (err) {
+      res.status(500).json({ error: 'Failed to update kill switch' });
+    }
+  }
 );
 
 /**

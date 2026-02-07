@@ -303,6 +303,76 @@ if (ADMIN_EMAIL && ADMIN_PASSWORD) {
       const data = await res.json();
       if (!Array.isArray(data.connections)) throw new Error('Invalid response');
     });
+
+    // Global kill switch: GET, PATCH enable, verify 423 on order path, PATCH disable, verify no 423
+    await test('GET /api/admin/platform-settings/kill-switch-global', async () => {
+      const res = await fetch(`${BACKEND_URL}/api/admin/platform-settings/kill-switch-global`, { headers });
+      if (!res.ok) throw new Error(`Status ${res.status}`);
+      const data = await res.json();
+      if (typeof data.enabled !== 'boolean') throw new Error('Invalid response');
+    });
+
+    await test('PATCH /api/admin/platform-settings/kill-switch-global (enable)', async () => {
+      const res = await fetch(`${BACKEND_URL}/api/admin/platform-settings/kill-switch-global`, {
+        method: 'PATCH',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled: true }),
+      });
+      if (!res.ok) throw new Error(`Status ${res.status}: ${await res.text()}`);
+      const data = await res.json();
+      if (data.enabled !== true) throw new Error('Expected enabled true');
+    });
+
+    if (testUserToken) {
+      await test('Order path returns 423 when kill switch ON (test user)', async () => {
+        const userHeaders = { Authorization: `Bearer ${testUserToken}` };
+        const connRes = await fetch(`${BACKEND_URL}/api/exchange-connections`, { headers: userHeaders });
+        const connData = connRes.ok ? await connRes.json() : { connections: [] };
+        const connId = connData.connections?.[0]?.id;
+        if (!connId) {
+          throw new Error('No exchange connection (need one to test 423)');
+        }
+        const res = await fetch(`${BACKEND_URL}/api/futures/order`, {
+          method: 'POST',
+          headers: { ...userHeaders, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ connectionId: connId, symbol: 'BTCUSDT', side: 'BUY', type: 'MARKET', quoteSizeUsdt: 1 }),
+        });
+        if (res.status !== 423) throw new Error(`Expected 423 when kill switch ON, got ${res.status}`);
+      });
+    } else {
+      await skip('Order path 423 when kill switch ON', 'TEST_USER credentials not set');
+    }
+
+    await test('PATCH /api/admin/platform-settings/kill-switch-global (disable)', async () => {
+      const res = await fetch(`${BACKEND_URL}/api/admin/platform-settings/kill-switch-global`, {
+        method: 'PATCH',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled: false }),
+      });
+      if (!res.ok) throw new Error(`Status ${res.status}: ${await res.text()}`);
+      const data = await res.json();
+      if (data.enabled !== false) throw new Error('Expected enabled false');
+    });
+
+    if (testUserToken) {
+      await test('Order path no longer returns 423 when kill switch OFF', async () => {
+        const userHeaders = { Authorization: `Bearer ${testUserToken}` };
+        const connRes = await fetch(`${BACKEND_URL}/api/exchange-connections`, { headers: userHeaders });
+        const connData = connRes.ok ? await connRes.json() : { connections: [] };
+        const connId = connData.connections?.[0]?.id;
+        if (!connId) {
+          throw new Error('No exchange connection');
+        }
+        const res = await fetch(`${BACKEND_URL}/api/futures/order`, {
+          method: 'POST',
+          headers: { ...userHeaders, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ connectionId: connId, symbol: 'BTCUSDT', side: 'BUY', type: 'MARKET', quoteSizeUsdt: 1 }),
+        });
+        if (res.status === 423) throw new Error('Unexpected 423 when kill switch OFF');
+      });
+    } else {
+      await skip('Order path no 423 when kill switch OFF', 'TEST_USER credentials not set');
+    }
   }
 } else {
   await skip('Admin endpoints', 'ADMIN_EMAIL and ADMIN_PASSWORD not set');
