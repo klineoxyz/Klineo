@@ -415,6 +415,15 @@ paymentIntentsRouter.post(
     if (!isZeroAmount && !txHashRaw) {
       return res.status(400).json({ error: 'tx_hash is required when amount is greater than 0' });
     }
+    // P0: Validate tx_hash format (BSC: 0x + 64 hex chars, max 66 chars)
+    if (txHashRaw) {
+      if (txHashRaw.length > 66) {
+        return res.status(400).json({ error: 'tx_hash too long' });
+      }
+      if (!/^0x[a-fA-F0-9]{64}$/.test(txHashRaw)) {
+        return res.status(400).json({ error: 'tx_hash must be 0x followed by 64 hex characters (BSC format)' });
+      }
+    }
 
     const declaredFrom = (from_wallet as string)?.trim() || null;
     let status: string;

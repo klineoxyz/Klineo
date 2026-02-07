@@ -98,6 +98,13 @@ export async function runStrategyTick(
       return { status: 'blocked', reason: risk.blockReason, signal: 'hold' };
     }
 
+    // P0: Global platform kill switch (platform_settings.kill_switch_global = 'true')
+    const { data: killRow } = await client.from('platform_settings').select('value').eq('key', 'kill_switch_global').maybeSingle();
+    if (killRow && String((killRow as { value: string }).value).toLowerCase() === 'true') {
+      await recordRun(client, strategyRunId, row.user_id, now, 'blocked', 'platform_kill_switch', 'hold', null, { requestId });
+      return { status: 'blocked', reason: 'platform_kill_switch', signal: 'hold' };
+    }
+
     const lastRunAt = row.last_run_at ? new Date(row.last_run_at) : null;
     if (lastRunAt) {
       const elapsed = now.getTime() - lastRunAt.getTime();

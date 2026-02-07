@@ -170,13 +170,14 @@ app.use((req, res) => {
   res.status(404).json({ error: 'Not found' });
 });
 
-// Error handler
+// Error handler (P0: never log req.body, tokens, or full err object)
 app.use((err: Error, req: express.Request, res: express.Response, next: express.NextFunction) => {
   const requestId = (req as any).requestId || 'unknown';
-  // Log sanitized error (no sensitive data) with request ID
+  const msg = err?.message || 'Unknown error';
+  const sanitized = msg.replace(/api[_-]?key/gi, '[REDACTED]').replace(/secret/gi, '[REDACTED]').replace(/bearer\s+\S+/gi, '[REDACTED]');
   console.error(`[${requestId}] Error:`, {
-    message: err.message,
-    stack: process.env.NODE_ENV === 'development' ? err.stack : undefined,
+    message: sanitized,
+    stack: process.env.NODE_ENV === 'development' ? err?.stack : undefined,
     path: req.path,
     method: req.method,
     timestamp: new Date().toISOString(),

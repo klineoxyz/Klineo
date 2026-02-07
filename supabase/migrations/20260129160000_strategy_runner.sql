@@ -53,7 +53,13 @@ CREATE TABLE IF NOT EXISTS public.strategy_tick_runs (
   meta JSONB NOT NULL DEFAULT '{}'::jsonb
 );
 
-CREATE INDEX IF NOT EXISTS idx_strategy_tick_runs_strategy_id ON public.strategy_tick_runs(strategy_id);
+-- Index on strategy_id only if column exists (20260129170000 may have already migrated to strategy_run_id)
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'strategy_tick_runs' AND column_name = 'strategy_id') THEN
+    CREATE INDEX IF NOT EXISTS idx_strategy_tick_runs_strategy_id ON public.strategy_tick_runs(strategy_id);
+  END IF;
+END $$;
 CREATE INDEX IF NOT EXISTS idx_strategy_tick_runs_user_id ON public.strategy_tick_runs(user_id);
 CREATE INDEX IF NOT EXISTS idx_strategy_tick_runs_scheduled_at ON public.strategy_tick_runs(scheduled_at DESC);
 

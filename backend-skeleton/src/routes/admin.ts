@@ -124,6 +124,7 @@ adminRouter.get('/settings', async (req, res) => {
       feeEntryPct: map.get('fee_entry_pct') ?? '20',
       feeProPct: map.get('fee_pro_pct') ?? '15',
       feeElitePct: map.get('fee_elite_pct') ?? '10',
+      killSwitchGlobal: map.get('kill_switch_global') === 'true',
     });
   } catch (err) {
     console.error('Admin settings get error:', err);
@@ -140,18 +141,20 @@ adminRouter.put('/settings',
     body('feeEntryPct').optional().isFloat({ min: 0, max: 100 }).withMessage('feeEntryPct must be 0-100'),
     body('feeProPct').optional().isFloat({ min: 0, max: 100 }).withMessage('feeProPct must be 0-100'),
     body('feeElitePct').optional().isFloat({ min: 0, max: 100 }).withMessage('feeElitePct must be 0-100'),
+    body('killSwitchGlobal').optional().isBoolean().withMessage('killSwitchGlobal must be boolean'),
   ]),
   async (req: AuthenticatedRequest, res) => {
     const client = getSupabase();
     if (!client) {
       return res.status(503).json({ error: 'Database unavailable' });
     }
-    const { feeEntryPct, feeProPct, feeElitePct } = req.body as { feeEntryPct?: string | number; feeProPct?: string | number; feeElitePct?: string | number };
+    const { feeEntryPct, feeProPct, feeElitePct, killSwitchGlobal } = req.body as { feeEntryPct?: string | number; feeProPct?: string | number; feeElitePct?: string | number; killSwitchGlobal?: boolean };
     try {
       const updates: Array<{ key: string; value: string }> = [];
       if (feeEntryPct != null) updates.push({ key: 'fee_entry_pct', value: String(feeEntryPct) });
       if (feeProPct != null) updates.push({ key: 'fee_pro_pct', value: String(feeProPct) });
       if (feeElitePct != null) updates.push({ key: 'fee_elite_pct', value: String(feeElitePct) });
+      if (killSwitchGlobal != null) updates.push({ key: 'kill_switch_global', value: killSwitchGlobal ? 'true' : 'false' });
       if (updates.length === 0) {
         return res.status(400).json({ error: 'No settings to update' });
       }
@@ -170,6 +173,7 @@ adminRouter.put('/settings',
         feeEntryPct: map.get('fee_entry_pct') ?? '20',
         feeProPct: map.get('fee_pro_pct') ?? '15',
         feeElitePct: map.get('fee_elite_pct') ?? '10',
+        killSwitchGlobal: map.get('kill_switch_global') === 'true',
       });
     } catch (err) {
       console.error('Admin settings put error:', err);
