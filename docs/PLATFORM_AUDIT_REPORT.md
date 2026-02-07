@@ -197,12 +197,31 @@ The script tests: health, public traders, login, profile, copy-setups, positions
 
 ---
 
+## Global Kill Switch – Enforcement Locations
+
+| Path | File | Lines | Blocks orders? |
+|------|------|-------|----------------|
+| Strategy Runner (scheduler) | `backend-skeleton/src/lib/strategyRunner.ts` | 101–105 | ✅ Yes |
+| Manual execute-tick | `backend-skeleton/src/routes/strategies.ts` | 267–269 | ✅ Yes |
+| Manual futures order | `backend-skeleton/src/routes/futures.ts` | 118–120 | ✅ Yes |
+| runRsiTick (per-connection) | `backend-skeleton/src/lib/strategy-engine.ts` | 81–83 | ✅ Per-connection only |
+
+Shared helper: `backend-skeleton/src/lib/platformSettings.ts` – `isPlatformKillSwitchOn(client)`.
+
+**Copy trading:** There is no copy-trading order placement engine in the codebase. `copy_setups` are configuration; no code mirrors master trades to followers. If a copy engine is added later, it must call `isPlatformKillSwitchOn(client)` before placing any order.
+
+## platform_settings UNIQUE(key)
+
+`platform_settings` is defined in `20260129180000_platform_settings.sql` with `key TEXT PRIMARY KEY`. PRIMARY KEY implies UNIQUE. The migration `20260203130000_platform_kill_switch_global.sql` uses `ON CONFLICT (key) DO NOTHING`, which requires a unique constraint on `key` and is satisfied by the existing PRIMARY KEY. No additional constraint is needed.
+
 ## P0 Fixes Implemented
 
 See diffs in:
 
 1. `backend-skeleton/src/routes/payment-intents.ts` – tx_hash validation
 2. `backend-skeleton/src/index.ts` – error handler sanitization
-3. `backend-skeleton/src/lib/strategy-engine.ts` – global kill switch check
-4. `backend-skeleton/src/lib/strategyRunner.ts` – load platform kill switch
-5. `supabase/migrations/20260203130000_platform_kill_switch_global.sql` – platform_settings key
+3. `backend-skeleton/src/lib/platformSettings.ts` – `isPlatformKillSwitchOn()` helper
+4. `backend-skeleton/src/lib/strategyRunner.ts` – global kill switch check
+5. `backend-skeleton/src/routes/strategies.ts` – global kill switch on execute-tick
+6. `backend-skeleton/src/routes/futures.ts` – global kill switch on manual futures order
+7. `supabase/migrations/20260203130000_platform_kill_switch_global.sql` – platform_settings key

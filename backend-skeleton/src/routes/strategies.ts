@@ -13,6 +13,7 @@ import { verifySupabaseJWT, AuthenticatedRequest } from '../middleware/auth.js';
 import { validate, uuidParam } from '../middleware/validation.js';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { decrypt } from '../lib/crypto.js';
+import { isPlatformKillSwitchOn } from '../lib/platformSettings.js';
 import { createBinanceFuturesAdapter } from '../lib/binance-futures.js';
 import { createBybitFuturesAdapter } from '../lib/bybit-futures.js';
 import { runRsiTick, MAX_CONSECUTIVE_FAILURES } from '../lib/strategy-engine.js';
@@ -264,6 +265,9 @@ strategiesRouter.post('/:id/execute-tick', uuidParam('id'), async (req: Authenti
     if (runErr || !run) return res.status(404).json({ error: 'Strategy not found', requestId });
     if (run.status !== 'active') {
       return res.status(400).json({ error: 'Strategy is not active', requestId });
+    }
+    if (await isPlatformKillSwitchOn(client)) {
+      return res.status(423).json({ error: 'Platform kill switch enabled.', requestId });
     }
 
     const { data: conn, error: connErr } = await client

@@ -11,6 +11,7 @@ import { validate } from '../middleware/validation.js';
 import { body } from 'express-validator';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { decrypt } from '../lib/crypto.js';
+import { isPlatformKillSwitchOn } from '../lib/platformSettings.js';
 import * as binanceFutures from '../lib/binance-futures.js';
 import * as bybitFutures from '../lib/bybit-futures.js';
 
@@ -116,6 +117,9 @@ futuresRouter.post(
       }
       if (connection.kill_switch) {
         return res.status(423).json({ error: 'Kill switch enabled.', requestId });
+      }
+      if (await isPlatformKillSwitchOn(client)) {
+        return res.status(423).json({ error: 'Platform kill switch enabled.', requestId });
       }
 
       const hasB64 = typeof connection.encrypted_config_b64 === 'string' && connection.encrypted_config_b64.length > 0;

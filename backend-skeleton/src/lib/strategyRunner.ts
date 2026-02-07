@@ -7,6 +7,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { shouldRunNow, getTimeframeMs } from './timeframes.js';
 import { checkUserRiskGate } from './strategyRisk.js';
+import { isPlatformKillSwitchOn } from './platformSettings.js';
 import { acquireStrategyLock, releaseStrategyLock } from './strategyLock.js';
 import { decrypt } from './crypto.js';
 import { createBinanceFuturesAdapter } from './binance-futures.js';
@@ -99,8 +100,7 @@ export async function runStrategyTick(
     }
 
     // P0: Global platform kill switch (platform_settings.kill_switch_global = 'true')
-    const { data: killRow } = await client.from('platform_settings').select('value').eq('key', 'kill_switch_global').maybeSingle();
-    if (killRow && String((killRow as { value: string }).value).toLowerCase() === 'true') {
+    if (await isPlatformKillSwitchOn(client)) {
       await recordRun(client, strategyRunId, row.user_id, now, 'blocked', 'platform_kill_switch', 'hold', null, { requestId });
       return { status: 'blocked', reason: 'platform_kill_switch', signal: 'hold' };
     }
