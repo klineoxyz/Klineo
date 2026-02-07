@@ -304,7 +304,7 @@ if (ADMIN_EMAIL && ADMIN_PASSWORD) {
       if (!Array.isArray(data.connections)) throw new Error('Invalid response');
     });
 
-    // Global kill switch: GET, PATCH enable, verify 423 on order path, PATCH disable, verify no 423
+    // --- Kill switch E2E: admin enable → order/execute-tick return 423 → admin disable → no 423 ---
     await test('GET /api/admin/platform-settings/kill-switch-global', async () => {
       const res = await fetch(`${BACKEND_URL}/api/admin/platform-settings/kill-switch-global`, { headers });
       if (!res.ok) throw new Error(`Status ${res.status}`);
@@ -324,14 +324,12 @@ if (ADMIN_EMAIL && ADMIN_PASSWORD) {
     });
 
     if (testUserToken) {
-      await test('Order path returns 423 when kill switch ON (test user)', async () => {
+      await test('Futures order returns 423 when kill switch ON', async () => {
         const userHeaders = { Authorization: `Bearer ${testUserToken}` };
         const connRes = await fetch(`${BACKEND_URL}/api/exchange-connections`, { headers: userHeaders });
         const connData = connRes.ok ? await connRes.json() : { connections: [] };
         const connId = connData.connections?.[0]?.id;
-        if (!connId) {
-          throw new Error('No exchange connection (need one to test 423)');
-        }
+        if (!connId) throw new Error('No exchange connection (need one to assert 423)');
         const res = await fetch(`${BACKEND_URL}/api/futures/order`, {
           method: 'POST',
           headers: { ...userHeaders, 'Content-Type': 'application/json' },
@@ -339,8 +337,22 @@ if (ADMIN_EMAIL && ADMIN_PASSWORD) {
         });
         if (res.status !== 423) throw new Error(`Expected 423 when kill switch ON, got ${res.status}`);
       });
+
+      await test('Execute-tick returns 423 when kill switch ON (or skip if no active strategy)', async () => {
+        const userHeaders = { Authorization: `Bearer ${testUserToken}` };
+        const listRes = await fetch(`${BACKEND_URL}/api/strategies`, { headers: userHeaders });
+        const listData = listRes.ok ? await listRes.json() : { strategies: [] };
+        const active = (listData.strategies || []).find((s) => s.status === 'active');
+        const runId = active?.id;
+        if (!runId) return;
+        const res = await fetch(`${BACKEND_URL}/api/strategies/${runId}/execute-tick`, {
+          method: 'POST',
+          headers: userHeaders,
+        });
+        if (res.status !== 423) throw new Error(`Expected 423 when kill switch ON, got ${res.status}`);
+      });
     } else {
-      await skip('Order path 423 when kill switch ON', 'TEST_USER credentials not set');
+      await skip('Kill switch 423 (futures/execute-tick)', 'TEST_USER credentials not set');
     }
 
     await test('PATCH /api/admin/platform-settings/kill-switch-global (disable)', async () => {
@@ -355,14 +367,12 @@ if (ADMIN_EMAIL && ADMIN_PASSWORD) {
     });
 
     if (testUserToken) {
-      await test('Order path no longer returns 423 when kill switch OFF', async () => {
+      await test('Futures order no longer returns 423 when kill switch OFF', async () => {
         const userHeaders = { Authorization: `Bearer ${testUserToken}` };
         const connRes = await fetch(`${BACKEND_URL}/api/exchange-connections`, { headers: userHeaders });
         const connData = connRes.ok ? await connRes.json() : { connections: [] };
         const connId = connData.connections?.[0]?.id;
-        if (!connId) {
-          throw new Error('No exchange connection');
-        }
+        if (!connId) throw new Error('No exchange connection');
         const res = await fetch(`${BACKEND_URL}/api/futures/order`, {
           method: 'POST',
           headers: { ...userHeaders, 'Content-Type': 'application/json' },
@@ -370,8 +380,22 @@ if (ADMIN_EMAIL && ADMIN_PASSWORD) {
         });
         if (res.status === 423) throw new Error('Unexpected 423 when kill switch OFF');
       });
+
+      await test('Execute-tick no longer returns 423 when kill switch OFF (or skip if no active strategy)', async () => {
+        const userHeaders = { Authorization: `Bearer ${testUserToken}` };
+        const listRes = await fetch(`${BACKEND_URL}/api/strategies`, { headers: userHeaders });
+        const listData = listRes.ok ? await listRes.json() : { strategies: [] };
+        const active = (listData.strategies || []).find((s) => s.status === 'active');
+        const runId = active?.id;
+        if (!runId) return;
+        const res = await fetch(`${BACKEND_URL}/api/strategies/${runId}/execute-tick`, {
+          method: 'POST',
+          headers: userHeaders,
+        });
+        if (res.status === 423) throw new Error('Unexpected 423 when kill switch OFF');
+      });
     } else {
-      await skip('Order path no 423 when kill switch OFF', 'TEST_USER credentials not set');
+      await skip('Kill switch no 423 (futures/execute-tick)', 'TEST_USER credentials not set');
     }
   }
 } else {
