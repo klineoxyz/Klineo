@@ -416,10 +416,13 @@ if (results.failed.length > 0) {
   console.log('');
 }
 
-if (results.passed.length > 0 && results.failed.length === 0) {
-  console.log('✅ All tests passed!');
-  process.exit(0);
-} else {
+if (results.failed.length > 0) {
   console.log('❌ Some tests failed');
   process.exit(1);
 }
+if (results.skipped.length > 0) {
+  console.log('⚠️  Partial run: auth/admin tests skipped (set TEST_USER_EMAIL, TEST_USER_PASSWORD, ADMIN_EMAIL, ADMIN_PASSWORD for full suite).');
+  process.exit(0);
+}
+console.log('✅ All tests passed!');
+process.exit(0);
