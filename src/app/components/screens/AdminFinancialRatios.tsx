@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectGroup, SelectLabel, SelectTrig
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/app/components/ui/table";
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { toast } from "@/app/lib/toast";
-import { Download, DollarSign, Users, Activity, Loader2, BarChart3, RefreshCw, TrendingUp, UserPlus, Zap, Link2, Building2 } from "lucide-react";
+import { Download, DollarSign, Users, Activity, Loader2, BarChart3, RefreshCw, TrendingUp, UserPlus, Zap, Link2 } from "lucide-react";
 
 const WINDOWS = [
   { value: "24h", label: "Last 24h" },
@@ -692,58 +692,12 @@ export function AdminFinancialRatios() {
             </div>
           </div>
 
-          {/* Platform & by exchange: table and volume chart use Window + Platform + Exchange from header */}
-          <div>
-            <div className="mb-3">
-              <h3 className="text-sm font-semibold flex items-center gap-2">
-                <Building2 className="size-4 text-primary" />
-                Platform & by exchange
-              </h3>
-              <p className="text-xs text-muted-foreground mt-1">Mix = platform aggregate. Window: {ratios?.label ?? windowKey}. Use the filters above to show All, CEX only, DEX only, or a single exchange.</p>
-            </div>
-            <Card className="overflow-hidden">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Exchange</TableHead>
-                    <TableHead className="text-right">Connections</TableHead>
-                    <TableHead className="text-right">OK</TableHead>
-                    <TableHead className="text-right">Strategy runs</TableHead>
-                    <TableHead className="text-right">Active</TableHead>
-                    <TableHead className="text-right">Ticks (window)</TableHead>
-                    <TableHead className="text-right">Orders placed</TableHead>
-                    <TableHead className="text-right">Trades</TableHead>
-                    <TableHead className="text-right">Volume USD</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {byExchange.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={9} className="text-center text-muted-foreground text-sm py-4">No exchange data</TableCell>
-                    </TableRow>
-                  ) : (
-                    byExchange.map((r) => (
-                      <TableRow key={r.exchange} className={r.exchange === "mix" ? "bg-primary/5 font-medium" : ""}>
-                        <TableCell className="font-medium">{r.exchange === "mix" ? "Mix (all)" : (r.exchange.charAt(0).toUpperCase() + r.exchange.slice(1))}</TableCell>
-                        <TableCell className="text-right font-mono">{r.connections}</TableCell>
-                        <TableCell className="text-right font-mono text-primary">{r.connections_ok}</TableCell>
-                        <TableCell className="text-right font-mono">{r.strategy_runs_total}</TableCell>
-                        <TableCell className="text-right font-mono">{r.strategy_runs_active}</TableCell>
-                        <TableCell className="text-right font-mono">{r.ticks_in_window}</TableCell>
-                        <TableCell className="text-right font-mono">{r.orders_placed_in_window}</TableCell>
-                        <TableCell className="text-right font-mono">{r.trades_count_in_window}</TableCell>
-                        <TableCell className="text-right font-mono font-semibold">${r.volume_usd_in_window.toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-            </Card>
-
-            {/* Volume by exchange (stacked bar chart) */}
-            {tsByExchange?.timeseries?.length ? (
-              <Card className="p-4 mt-4">
-                <h3 className="text-sm font-semibold mb-3">Trading volume by exchange (90 days) — {platformKey === "all" ? "All" : platformKey.toUpperCase()}</h3>
+          {/* Trading volume by exchange — follows Time window, Platform, and Exchange filters above */}
+          {tsByExchange?.timeseries?.length ? (
+              <Card className="p-4">
+                <h3 className="text-sm font-semibold mb-3">
+                  Trading volume (90 days) — {exchangeKey === "all" ? (platformKey === "all" ? "All exchanges" : platformKey === "cex" ? "CEX only" : "DEX only") : exchangeKey.charAt(0).toUpperCase() + exchangeKey.slice(1)}
+                </h3>
                 <ResponsiveContainer width="100%" height={260}>
                   <BarChart data={tsByExchange.timeseries} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                     <defs>
@@ -770,7 +724,6 @@ export function AdminFinancialRatios() {
                 </ResponsiveContainer>
               </Card>
             ) : null}
-          </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <Card className="p-4">
