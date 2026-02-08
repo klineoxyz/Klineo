@@ -4,7 +4,7 @@ import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
 import { Label } from "@/app/components/ui/label";
 import { Input } from "@/app/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/app/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectGroup, SelectLabel, SelectTrigger, SelectValue } from "@/app/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/app/components/ui/table";
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { toast } from "@/app/lib/toast";
@@ -83,6 +83,10 @@ const PLATFORMS = [
 
 type PlatformKey = (typeof PLATFORMS)[number]["value"];
 
+/** Known CEX/DEX so the Exchange dropdown always shows filter options even with no connections yet. */
+const KNOWN_CEX = ["binance", "bybit"];
+const KNOWN_DEX: string[] = [];
+
 /** Exchange filter: "all" = all connected exchanges; otherwise single exchange (e.g. binance, bybit). */
 type ExchangeFilterKey = "all" | string;
 
@@ -137,8 +141,12 @@ export function AdminFinancialRatios() {
   const [refundsFails, setRefundsFails] = useState<RefundFailRow[]>([]);
   const [marketingSpend, setMarketingSpend] = useState<MarketingSpendRow[]>([]);
   const [byExchange, setByExchange] = useState<ByExchangeRow[]>([]);
-  /** Full list of connected exchanges (for dropdown); populated when loading with exchange=all */
+  /** Full list of exchanges for dropdown: from API (connected) merged with known CEX/DEX so filters are always visible */
   const [availableExchanges, setAvailableExchanges] = useState<string[]>([]);
+  const exchangeOptions = Array.from(new Set([...KNOWN_CEX, ...KNOWN_DEX, ...availableExchanges])).sort();
+  const cexOptions = exchangeOptions.filter((ex) => KNOWN_CEX.includes(ex));
+  const dexOptions = exchangeOptions.filter((ex) => KNOWN_DEX.includes(ex));
+  const otherOptions = exchangeOptions.filter((ex) => !KNOWN_CEX.includes(ex) && !KNOWN_DEX.includes(ex));
   const [tsByExchange, setTsByExchange] = useState<TimeseriesByExchangeResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [tsLoading, setTsLoading] = useState(false);
@@ -327,21 +335,9 @@ export function AdminFinancialRatios() {
             <BarChart3 className="size-5 text-primary" />
             Financial Ratios
           </h2>
-          <p className="text-sm text-muted-foreground">Platform KPIs, revenue, growth, and ops (no PII)</p>
+          <p className="text-sm text-muted-foreground">Platform KPIs, revenue, growth, and ops (no PII).</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Select value={windowKey} onValueChange={(v: WindowKey) => setWindowKey(v)}>
-            <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="Window" />
-            </SelectTrigger>
-            <SelectContent>
-              {WINDOWS.map((w) => (
-                <SelectItem key={w.value} value={w.value}>
-                  {w.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
           <Button variant="outline" size="sm" onClick={() => { loadRatios(); loadTopPayers(); loadRefundsFails(); loadByExchange(); loadTimeseriesByExchange(); }}>
             <RefreshCw className="size-4 mr-2" />
             Refresh
@@ -360,6 +356,85 @@ export function AdminFinancialRatios() {
           </Button>
         </div>
       </div>
+
+      {/* Filter bar: Window, Platform (All CEX+DEX / CEX only / DEX only), Exchange (All or per CEX/DEX) */}
+      <Card className="p-4">
+        <div className="flex flex-wrap items-end gap-6">
+          <div className="space-y-2">
+            <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Time window</Label>
+            <Select value={windowKey} onValueChange={(v: WindowKey) => setWindowKey(v)}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Window" />
+              </SelectTrigger>
+              <SelectContent>
+                {WINDOWS.map((w) => (
+                  <SelectItem key={w.value} value={w.value}>
+                    {w.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Platform</Label>
+            <Select value={platformKey} onValueChange={(v: PlatformKey) => setPlatformKey(v)}>
+              <SelectTrigger className="w-[200px]">
+                <SelectValue placeholder="Platform" />
+              </SelectTrigger>
+              <SelectContent>
+                {PLATFORMS.map((p) => (
+                  <SelectItem key={p.value} value={p.value}>
+                    {p.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-[11px] text-muted-foreground mt-1">All CEX+DEX, CEX only, or DEX only</p>
+          </div>
+          <div className="space-y-2">
+            <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Exchange</Label>
+            <Select value={exchangeKey} onValueChange={(v: ExchangeFilterKey) => setExchangeKey(v)}>
+              <SelectTrigger className="w-[200px]">
+                <SelectValue placeholder="Exchange" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All exchanges</SelectItem>
+                {cexOptions.length > 0 && (
+                  <SelectGroup>
+                    <SelectLabel className="text-muted-foreground">Centralized (CEX)</SelectLabel>
+                    {cexOptions.map((ex) => (
+                      <SelectItem key={ex} value={ex}>
+                        {ex.charAt(0).toUpperCase() + ex.slice(1)}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                )}
+                {dexOptions.length > 0 && (
+                  <SelectGroup>
+                    <SelectLabel className="text-muted-foreground">Decentralized (DEX)</SelectLabel>
+                    {dexOptions.map((ex) => (
+                      <SelectItem key={ex} value={ex}>
+                        {ex.charAt(0).toUpperCase() + ex.slice(1)}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                )}
+                {otherOptions.length > 0 && (
+                  <SelectGroup>
+                    <SelectLabel className="text-muted-foreground">Other</SelectLabel>
+                    {otherOptions.map((ex) => (
+                      <SelectItem key={ex} value={ex}>
+                        {ex.charAt(0).toUpperCase() + ex.slice(1)}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                )}
+              </SelectContent>
+            </Select>
+            <p className="text-[11px] text-muted-foreground mt-1">All or a single CEX/DEX</p>
+          </div>
+        </div>
+      </Card>
 
       {ratios?.notes?.length ? (
         <Card className="p-3 border-amber-500/20 bg-amber-500/5">
@@ -607,43 +682,14 @@ export function AdminFinancialRatios() {
             </div>
           </div>
 
-          {/* Platform & by exchange: Mix (aggregate) + per-exchange; filter by platform and single exchange */}
+          {/* Platform & by exchange: table and volume chart use Window + Platform + Exchange from header */}
           <div>
-            <div className="flex flex-wrap items-center justify-between gap-4 mb-3">
-              <div>
-                <h3 className="text-sm font-semibold flex items-center gap-2">
-                  <Building2 className="size-4 text-primary" />
-                  Platform & by exchange
-                </h3>
-                <p className="text-xs text-muted-foreground mt-1">Mix = platform aggregate. Filter by platform (CEX/DEX) and by connected exchange. Window: {ratios?.label ?? windowKey}.</p>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <Select value={platformKey} onValueChange={(v: PlatformKey) => setPlatformKey(v)}>
-                  <SelectTrigger className="w-[160px]">
-                    <SelectValue placeholder="Platform" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {PLATFORMS.map((p) => (
-                      <SelectItem key={p.value} value={p.value}>
-                        {p.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Select value={exchangeKey} onValueChange={(v: ExchangeFilterKey) => setExchangeKey(v)}>
-                  <SelectTrigger className="w-[160px]">
-                    <SelectValue placeholder="Exchange" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All exchanges</SelectItem>
-                    {availableExchanges.map((ex) => (
-                      <SelectItem key={ex} value={ex}>
-                        {ex.charAt(0).toUpperCase() + ex.slice(1)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+            <div className="mb-3">
+              <h3 className="text-sm font-semibold flex items-center gap-2">
+                <Building2 className="size-4 text-primary" />
+                Platform & by exchange
+              </h3>
+              <p className="text-xs text-muted-foreground mt-1">Mix = platform aggregate. Window: {ratios?.label ?? windowKey}. Use the filters above to show All, CEX only, DEX only, or a single exchange.</p>
             </div>
             <Card className="overflow-hidden">
               <Table>
