@@ -128,6 +128,16 @@ function downloadCSV(rows: Record<string, unknown>[], columns: { key: string; he
 
 const CHART_COLORS = ["hsl(var(--primary))", "#10B981", "#8B5CF6", "#F59E0B", "#EC4899", "#3B82F6"];
 
+/** Tooltip styles so text is always visible (dark text on light background) */
+const CHART_TOOLTIP_STYLE = {
+  borderRadius: 8,
+  backgroundColor: "#ffffff",
+  color: "#171717",
+  border: "1px solid #e5e5e5",
+  padding: "8px 12px",
+  fontSize: 12,
+};
+
 export function AdminFinancialRatios() {
   const [windowKey, setWindowKey] = useState<WindowKey>("7d");
   const [platformKey, setPlatformKey] = useState<PlatformKey>("all");
@@ -593,7 +603,7 @@ export function AdminFinancialRatios() {
                       <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                       <XAxis dataKey="date" tick={{ fontSize: 10 }} tickFormatter={(v) => v.slice(5)} />
                       <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => `$${v}`} />
-                      <Tooltip formatter={(v: number) => [`$${v.toFixed(2)}`, "Revenue"]} labelFormatter={(l) => l} contentStyle={{ borderRadius: 8 }} />
+                      <Tooltip formatter={(v: number) => [`$${v.toFixed(2)}`, "Revenue"]} labelFormatter={(l) => l} contentStyle={CHART_TOOLTIP_STYLE} />
                       <Area type="monotone" dataKey="value" stroke="hsl(var(--primary))" strokeWidth={2} fill="url(#revenueGrad)" name="Revenue" />
                     </AreaChart>
                   </ResponsiveContainer>
@@ -619,7 +629,7 @@ export function AdminFinancialRatios() {
                       <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                       <XAxis dataKey="date" tick={{ fontSize: 10 }} tickFormatter={(v) => v.slice(5)} />
                       <YAxis tick={{ fontSize: 10 }} />
-                      <Tooltip formatter={(v: number) => [v, "Paying users"]} contentStyle={{ borderRadius: 8 }} />
+                      <Tooltip formatter={(v: number) => [v, "Paying users"]} contentStyle={CHART_TOOLTIP_STYLE} />
                       <Area type="monotone" dataKey="value" stroke="#10B981" strokeWidth={2} fill="url(#payingGrad)" name="Paying users" />
                     </AreaChart>
                   </ResponsiveContainer>
@@ -645,7 +655,7 @@ export function AdminFinancialRatios() {
                       <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                       <XAxis dataKey="date" tick={{ fontSize: 10 }} tickFormatter={(v) => v.slice(5)} />
                       <YAxis tick={{ fontSize: 10 }} />
-                      <Tooltip formatter={(v: number) => [v, "Active users"]} contentStyle={{ borderRadius: 8 }} />
+                      <Tooltip formatter={(v: number) => [v, "Active users"]} contentStyle={CHART_TOOLTIP_STYLE} />
                       <Area type="monotone" dataKey="value" stroke="#8B5CF6" strokeWidth={2} fill="url(#dauGrad)" name="DAU" />
                     </AreaChart>
                   </ResponsiveContainer>
@@ -671,7 +681,7 @@ export function AdminFinancialRatios() {
                       <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                       <XAxis dataKey="date" tick={{ fontSize: 10 }} tickFormatter={(v) => v.slice(5)} />
                       <YAxis tick={{ fontSize: 10 }} domain={[0, 1]} tickFormatter={(v) => `${(v * 100).toFixed(0)}%`} />
-                      <Tooltip formatter={(v: number) => [`${(v * 100).toFixed(2)}%`, "Success rate"]} contentStyle={{ borderRadius: 8 }} />
+                      <Tooltip formatter={(v: number) => [`${(v * 100).toFixed(2)}%`, "Success rate"]} contentStyle={CHART_TOOLTIP_STYLE} />
                       <Area type="monotone" dataKey="value" stroke="#F59E0B" strokeWidth={2} fill="url(#tickGrad)" name="Success rate" />
                     </AreaChart>
                   </ResponsiveContainer>
@@ -750,7 +760,7 @@ export function AdminFinancialRatios() {
                     <Tooltip
                       formatter={(v: number, name: string) => [`$${Number(v).toLocaleString(undefined, { minimumFractionDigits: 2 })}`, name]}
                       labelFormatter={(l) => l}
-                      contentStyle={{ borderRadius: 8 }}
+                      contentStyle={CHART_TOOLTIP_STYLE}
                     />
                     <Legend />
                     {tsByExchange.exchangeList.map((ex, i) => (
