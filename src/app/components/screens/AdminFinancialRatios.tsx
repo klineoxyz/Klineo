@@ -83,6 +83,9 @@ const PLATFORMS = [
 
 type PlatformKey = (typeof PLATFORMS)[number]["value"];
 
+/** Exchange filter: "all" = all connected exchanges; otherwise single exchange (e.g. binance, bybit). */
+type ExchangeFilterKey = "all" | string;
+
 interface TimeseriesByExchangeResponse {
   metric: string;
   days: number;
@@ -124,6 +127,7 @@ const CHART_COLORS = ["hsl(var(--primary))", "#10B981", "#8B5CF6", "#F59E0B", "#
 export function AdminFinancialRatios() {
   const [windowKey, setWindowKey] = useState<WindowKey>("7d");
   const [platformKey, setPlatformKey] = useState<PlatformKey>("all");
+  const [exchangeKey, setExchangeKey] = useState<ExchangeFilterKey>("all");
   const [ratios, setRatios] = useState<RatiosResponse | null>(null);
   const [timeseriesRevenue, setTimeseriesRevenue] = useState<TimeseriesResponse | null>(null);
   const [timeseriesPayingUsers, setTimeseriesPayingUsers] = useState<TimeseriesResponse | null>(null);
@@ -133,6 +137,8 @@ export function AdminFinancialRatios() {
   const [refundsFails, setRefundsFails] = useState<RefundFailRow[]>([]);
   const [marketingSpend, setMarketingSpend] = useState<MarketingSpendRow[]>([]);
   const [byExchange, setByExchange] = useState<ByExchangeRow[]>([]);
+  /** Full list of connected exchanges (for dropdown); populated when loading with exchange=all */
+  const [availableExchanges, setAvailableExchanges] = useState<string[]>([]);
   const [tsByExchange, setTsByExchange] = useState<TimeseriesByExchangeResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [tsLoading, setTsLoading] = useState(false);
@@ -195,8 +201,14 @@ export function AdminFinancialRatios() {
 
   const loadByExchange = async () => {
     try {
-      const data = await api.get<{ byExchange: ByExchangeRow[] }>(`/api/admin/financial-ratios/by-exchange?window=${windowKey}&platform=${platformKey}`);
-      setByExchange(data.byExchange || []);
+      const params = new URLSearchParams({ window: windowKey, platform: platformKey });
+      if (exchangeKey !== "all") params.set("exchange", exchangeKey);
+      const data = await api.get<{ byExchange: ByExchangeRow[] }>(`/api/admin/financial-ratios/by-exchange?${params}`);
+      const list = data.byExchange || [];
+      setByExchange(list);
+      if (exchangeKey === "all") {
+        setAvailableExchanges(list.filter((r) => r.exchange !== "mix").map((r) => r.exchange));
+      }
     } catch {
       setByExchange([]);
     }
@@ -204,7 +216,9 @@ export function AdminFinancialRatios() {
 
   const loadTimeseriesByExchange = async () => {
     try {
-      const data = await api.get<TimeseriesByExchangeResponse>("/api/admin/financial-ratios/timeseries-by-exchange?metric=volume&days=90&platform=" + platformKey);
+      const params = new URLSearchParams({ metric: "volume", days: "90", platform: platformKey });
+      if (exchangeKey !== "all") params.set("exchange", exchangeKey);
+      const data = await api.get<TimeseriesByExchangeResponse>(`/api/admin/financial-ratios/timeseries-by-exchange?${params}`);
       setTsByExchange(data);
     } catch {
       setTsByExchange(null);
@@ -230,7 +244,7 @@ export function AdminFinancialRatios() {
   useEffect(() => {
     loadByExchange();
     loadTimeseriesByExchange();
-  }, [platformKey]);
+  }, [platformKey, exchangeKey]);
 
   useEffect(() => {
     loadTimeseries();
@@ -478,28 +492,158 @@ export function AdminFinancialRatios() {
             </div>
           </div>
 
-          {/* Platform & by exchange: Mix (aggregate) + per-CEX/DEX for reporting */}
+          {/* Trends & charts: rich charts for revenue, users, activity, tick success */}
+          <div>
+            <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
+              <TrendingUp className="size-4 text-primary" />
+              Trends & charts (90 days)
+            </h3>
+            <p className="text-xs text-muted-foreground mb-4">Revenue, paying users, daily active users, and tick success rate over time.</p>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <Card className="p-4">
+                <h4 className="text-sm font-medium mb-3">Revenue trend</h4>
+                {tsLoading ? (
+                  <div className="h-48 flex items-center justify-center">
+                    <Loader2 className="size-6 animate-spin text-muted-foreground" />
+                  </div>
+                ) : timeseriesRevenue?.timeseries?.length ? (
+                  <ResponsiveContainer width="100%" height={220}>
+                    <AreaChart data={timeseriesRevenue.timeseries}>
+                      <defs>
+                        <linearGradient id="revenueGrad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.4} />
+                          <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                      <XAxis dataKey="date" tick={{ fontSize: 10 }} tickFormatter={(v) => v.slice(5)} />
+                      <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => `$${v}`} />
+                      <Tooltip formatter={(v: number) => [`$${v.toFixed(2)}`, "Revenue"]} labelFormatter={(l) => l} contentStyle={{ borderRadius: 8 }} />
+                      <Area type="monotone" dataKey="value" stroke="hsl(var(--primary))" strokeWidth={2} fill="url(#revenueGrad)" name="Revenue" />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="h-48 flex items-center justify-center text-muted-foreground text-sm">No revenue data</div>
+                )}
+              </Card>
+              <Card className="p-4">
+                <h4 className="text-sm font-medium mb-3">Paying users trend</h4>
+                {tsLoading ? (
+                  <div className="h-48 flex items-center justify-center">
+                    <Loader2 className="size-6 animate-spin text-muted-foreground" />
+                  </div>
+                ) : timeseriesPayingUsers?.timeseries?.length ? (
+                  <ResponsiveContainer width="100%" height={220}>
+                    <AreaChart data={timeseriesPayingUsers.timeseries}>
+                      <defs>
+                        <linearGradient id="payingGrad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#10B981" stopOpacity={0.4} />
+                          <stop offset="95%" stopColor="#10B981" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                      <XAxis dataKey="date" tick={{ fontSize: 10 }} tickFormatter={(v) => v.slice(5)} />
+                      <YAxis tick={{ fontSize: 10 }} />
+                      <Tooltip formatter={(v: number) => [v, "Paying users"]} contentStyle={{ borderRadius: 8 }} />
+                      <Area type="monotone" dataKey="value" stroke="#10B981" strokeWidth={2} fill="url(#payingGrad)" name="Paying users" />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="h-48 flex items-center justify-center text-muted-foreground text-sm">No data</div>
+                )}
+              </Card>
+              <Card className="p-4">
+                <h4 className="text-sm font-medium mb-3">Daily active users</h4>
+                {tsLoading ? (
+                  <div className="h-48 flex items-center justify-center">
+                    <Loader2 className="size-6 animate-spin text-muted-foreground" />
+                  </div>
+                ) : timeseriesActiveUsers?.timeseries?.length ? (
+                  <ResponsiveContainer width="100%" height={220}>
+                    <AreaChart data={timeseriesActiveUsers.timeseries}>
+                      <defs>
+                        <linearGradient id="dauGrad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#8B5CF6" stopOpacity={0.4} />
+                          <stop offset="95%" stopColor="#8B5CF6" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                      <XAxis dataKey="date" tick={{ fontSize: 10 }} tickFormatter={(v) => v.slice(5)} />
+                      <YAxis tick={{ fontSize: 10 }} />
+                      <Tooltip formatter={(v: number) => [v, "Active users"]} contentStyle={{ borderRadius: 8 }} />
+                      <Area type="monotone" dataKey="value" stroke="#8B5CF6" strokeWidth={2} fill="url(#dauGrad)" name="DAU" />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="h-48 flex items-center justify-center text-muted-foreground text-sm">No activity data</div>
+                )}
+              </Card>
+              <Card className="p-4">
+                <h4 className="text-sm font-medium mb-3">Tick success rate</h4>
+                {tsLoading ? (
+                  <div className="h-48 flex items-center justify-center">
+                    <Loader2 className="size-6 animate-spin text-muted-foreground" />
+                  </div>
+                ) : timeseriesTickSuccess?.timeseries?.length ? (
+                  <ResponsiveContainer width="100%" height={220}>
+                    <AreaChart data={timeseriesTickSuccess.timeseries}>
+                      <defs>
+                        <linearGradient id="tickGrad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#F59E0B" stopOpacity={0.4} />
+                          <stop offset="95%" stopColor="#F59E0B" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                      <XAxis dataKey="date" tick={{ fontSize: 10 }} tickFormatter={(v) => v.slice(5)} />
+                      <YAxis tick={{ fontSize: 10 }} domain={[0, 1]} tickFormatter={(v) => `${(v * 100).toFixed(0)}%`} />
+                      <Tooltip formatter={(v: number) => [`${(v * 100).toFixed(2)}%`, "Success rate"]} contentStyle={{ borderRadius: 8 }} />
+                      <Area type="monotone" dataKey="value" stroke="#F59E0B" strokeWidth={2} fill="url(#tickGrad)" name="Success rate" />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="h-48 flex items-center justify-center text-muted-foreground text-sm">No tick data</div>
+                )}
+              </Card>
+            </div>
+          </div>
+
+          {/* Platform & by exchange: Mix (aggregate) + per-exchange; filter by platform and single exchange */}
           <div>
             <div className="flex flex-wrap items-center justify-between gap-4 mb-3">
               <div>
                 <h3 className="text-sm font-semibold flex items-center gap-2">
                   <Building2 className="size-4 text-primary" />
-                  Platform (mix) & by exchange
+                  Platform & by exchange
                 </h3>
-                <p className="text-xs text-muted-foreground mt-1">Mix = platform aggregate. Filter by CEX (Binance, Bybit) or DEX. Window: {ratios?.label ?? windowKey}.</p>
+                <p className="text-xs text-muted-foreground mt-1">Mix = platform aggregate. Filter by platform (CEX/DEX) and by connected exchange. Window: {ratios?.label ?? windowKey}.</p>
               </div>
-              <Select value={platformKey} onValueChange={(v: PlatformKey) => setPlatformKey(v)}>
-                <SelectTrigger className="w-[180px]">
-                  <SelectValue placeholder="Platform" />
-                </SelectTrigger>
-                <SelectContent>
-                  {PLATFORMS.map((p) => (
-                    <SelectItem key={p.value} value={p.value}>
-                      {p.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="flex flex-wrap items-center gap-2">
+                <Select value={platformKey} onValueChange={(v: PlatformKey) => setPlatformKey(v)}>
+                  <SelectTrigger className="w-[160px]">
+                    <SelectValue placeholder="Platform" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PLATFORMS.map((p) => (
+                      <SelectItem key={p.value} value={p.value}>
+                        {p.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select value={exchangeKey} onValueChange={(v: ExchangeFilterKey) => setExchangeKey(v)}>
+                  <SelectTrigger className="w-[160px]">
+                    <SelectValue placeholder="Exchange" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All exchanges</SelectItem>
+                    {availableExchanges.map((ex) => (
+                      <SelectItem key={ex} value={ex}>
+                        {ex.charAt(0).toUpperCase() + ex.slice(1)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
             <Card className="overflow-hidden">
               <Table>
@@ -571,114 +715,6 @@ export function AdminFinancialRatios() {
               </Card>
             ) : null}
           </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <Card className="p-4">
-              <h3 className="text-sm font-semibold mb-3">Revenue trend (90 days)</h3>
-              {tsLoading ? (
-                <div className="h-48 flex items-center justify-center">
-                  <Loader2 className="size-6 animate-spin text-muted-foreground" />
-                </div>
-              ) : timeseriesRevenue?.timeseries?.length ? (
-                <ResponsiveContainer width="100%" height={220}>
-                  <AreaChart data={timeseriesRevenue.timeseries}>
-                    <defs>
-                      <linearGradient id="revenueGrad" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.4} />
-                        <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                    <XAxis dataKey="date" tick={{ fontSize: 10 }} tickFormatter={(v) => v.slice(5)} />
-                    <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => `$${v}`} />
-                    <Tooltip formatter={(v: number) => [`$${v.toFixed(2)}`, "Revenue"]} labelFormatter={(l) => l} contentStyle={{ borderRadius: 8 }} />
-                    <Area type="monotone" dataKey="value" stroke="hsl(var(--primary))" strokeWidth={2} fill="url(#revenueGrad)" name="Revenue" />
-                  </AreaChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="h-48 flex items-center justify-center text-muted-foreground text-sm">No revenue data</div>
-              )}
-            </Card>
-            <Card className="p-4">
-              <h3 className="text-sm font-semibold mb-3">Paying users trend (90 days)</h3>
-              {tsLoading ? (
-                <div className="h-48 flex items-center justify-center">
-                  <Loader2 className="size-6 animate-spin text-muted-foreground" />
-                </div>
-              ) : timeseriesPayingUsers?.timeseries?.length ? (
-                <ResponsiveContainer width="100%" height={220}>
-                  <AreaChart data={timeseriesPayingUsers.timeseries}>
-                    <defs>
-                      <linearGradient id="payingGrad" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#10B981" stopOpacity={0.4} />
-                        <stop offset="95%" stopColor="#10B981" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                    <XAxis dataKey="date" tick={{ fontSize: 10 }} tickFormatter={(v) => v.slice(5)} />
-                    <YAxis tick={{ fontSize: 10 }} />
-                    <Tooltip formatter={(v: number) => [v, "Paying users"]} contentStyle={{ borderRadius: 8 }} />
-                    <Area type="monotone" dataKey="value" stroke="#10B981" strokeWidth={2} fill="url(#payingGrad)" name="Paying users" />
-                  </AreaChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="h-48 flex items-center justify-center text-muted-foreground text-sm">No data</div>
-              )}
-            </Card>
-            <Card className="p-4">
-              <h3 className="text-sm font-semibold mb-3">Daily active users (90 days)</h3>
-              {tsLoading ? (
-                <div className="h-48 flex items-center justify-center">
-                  <Loader2 className="size-6 animate-spin text-muted-foreground" />
-                </div>
-              ) : timeseriesActiveUsers?.timeseries?.length ? (
-                <ResponsiveContainer width="100%" height={220}>
-                  <AreaChart data={timeseriesActiveUsers.timeseries}>
-                    <defs>
-                      <linearGradient id="dauGrad" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#8B5CF6" stopOpacity={0.4} />
-                        <stop offset="95%" stopColor="#8B5CF6" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                    <XAxis dataKey="date" tick={{ fontSize: 10 }} tickFormatter={(v) => v.slice(5)} />
-                    <YAxis tick={{ fontSize: 10 }} />
-                    <Tooltip formatter={(v: number) => [v, "Active users"]} contentStyle={{ borderRadius: 8 }} />
-                    <Area type="monotone" dataKey="value" stroke="#8B5CF6" strokeWidth={2} fill="url(#dauGrad)" name="DAU" />
-                  </AreaChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="h-48 flex items-center justify-center text-muted-foreground text-sm">No activity data</div>
-              )}
-            </Card>
-          </div>
-
-          <Card className="p-4">
-            <h3 className="text-sm font-semibold mb-3">Tick success rate (90 days)</h3>
-            {tsLoading ? (
-              <div className="h-48 flex items-center justify-center">
-                <Loader2 className="size-6 animate-spin text-muted-foreground" />
-              </div>
-            ) : timeseriesTickSuccess?.timeseries?.length ? (
-              <ResponsiveContainer width="100%" height={220}>
-                <AreaChart data={timeseriesTickSuccess.timeseries}>
-                  <defs>
-                    <linearGradient id="tickGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#F59E0B" stopOpacity={0.4} />
-                      <stop offset="95%" stopColor="#F59E0B" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                  <XAxis dataKey="date" tick={{ fontSize: 10 }} tickFormatter={(v) => v.slice(5)} />
-                  <YAxis tick={{ fontSize: 10 }} domain={[0, 1]} tickFormatter={(v) => `${(v * 100).toFixed(0)}%`} />
-                  <Tooltip formatter={(v: number) => [`${(v * 100).toFixed(2)}%`, "Success rate"]} contentStyle={{ borderRadius: 8 }} />
-                  <Area type="monotone" dataKey="value" stroke="#F59E0B" strokeWidth={2} fill="url(#tickGrad)" name="Success rate" />
-                </AreaChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="h-48 flex items-center justify-center text-muted-foreground text-sm">No tick data</div>
-            )}
-          </Card>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <Card className="p-4">

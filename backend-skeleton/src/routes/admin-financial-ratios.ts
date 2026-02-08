@@ -344,9 +344,10 @@ const CEX_EXCHANGES = ['binance', 'bybit'];
 const DEX_EXCHANGES: string[] = []; // Future: uniswap, etc.
 
 /**
- * GET /api/admin/financial-ratios/by-exchange?window=7d&platform=all|cex|dex
+ * GET /api/admin/financial-ratios/by-exchange?window=7d&platform=all|cex|dex&exchange=all|binance|bybit
  * Per-exchange metrics: connections, strategy runs, ticks, orders placed, trades count and volume.
  * platform=all (default): all exchanges + mix. platform=cex: CEX only. platform=dex: DEX only.
+ * exchange=all (default): all connected exchanges. exchange=binance|bybit: single exchange stats.
  */
 financialRatiosRouter.get('/by-exchange', async (req: Request, res: Response) => {
   const client = getSupabase();
@@ -354,11 +355,12 @@ financialRatiosRouter.get('/by-exchange', async (req: Request, res: Response) =>
 
   const windowParam = (req.query.window as string) || '30d';
   const platformFilter = ((req.query.platform as string) || 'all').toLowerCase() as 'all' | 'cex' | 'dex';
+  const exchangeFilter = ((req.query.exchange as string) || 'all').toLowerCase();
   const { from, to } = parseWindow(windowParam);
   const fromIso = from.toISOString();
   const toIso = to.toISOString();
 
-  const cacheKey = `by-exchange:${windowParam}:${platformFilter}:${Math.floor(from.getTime() / 60000)}`;
+  const cacheKey = `by-exchange:${windowParam}:${platformFilter}:${exchangeFilter}:${Math.floor(from.getTime() / 60000)}`;
   const result = await getCached(cacheKey, async () => {
     // Discover exchanges from DB; fallback to known list for future CEX additions
     let exchangeList: string[] = ['binance', 'bybit'];
@@ -375,6 +377,11 @@ financialRatiosRouter.get('/by-exchange', async (req: Request, res: Response) =>
     // Filter by platform type
     if (platformFilter === 'cex') exchangeList = exchangeList.filter((e) => CEX_EXCHANGES.includes(e));
     else if (platformFilter === 'dex') exchangeList = exchangeList.filter((e) => DEX_EXCHANGES.includes(e));
+
+    // Filter by single exchange (select one connected exchange)
+    if (exchangeFilter !== 'all' && exchangeList.includes(exchangeFilter)) {
+      exchangeList = [exchangeFilter];
+    }
 
     const byExchange: Array<{
       exchange: string;
@@ -483,7 +490,7 @@ financialRatiosRouter.get('/by-exchange', async (req: Request, res: Response) =>
 });
 
 /**
- * GET /api/admin/financial-ratios/timeseries-by-exchange?metric=volume|connections&days=90&platform=all|cex|dex
+ * GET /api/admin/financial-ratios/timeseries-by-exchange?metric=volume|connections&days=90&platform=all|cex|dex&exchange=all|binance|bybit
  * Daily timeseries per exchange for volume (USD) or connections count. Used for rich charts.
  */
 financialRatiosRouter.get('/timeseries-by-exchange', async (req: Request, res: Response) => {
@@ -493,13 +500,14 @@ financialRatiosRouter.get('/timeseries-by-exchange', async (req: Request, res: R
   const metric = (req.query.metric as string) || 'volume';
   const days = Math.min(180, Math.max(1, parseInt(req.query.days as string) || 90));
   const platformFilter = ((req.query.platform as string) || 'all').toLowerCase() as 'all' | 'cex' | 'dex';
+  const exchangeFilter = ((req.query.exchange as string) || 'all').toLowerCase();
   const to = new Date();
   const from = new Date(to);
   from.setDate(from.getDate() - days);
   const fromIso = from.toISOString();
   const toIso = to.toISOString();
 
-  const cacheKey = `ts-ex:${metric}:${days}:${platformFilter}:${Math.floor(from.getTime() / 60000)}`;
+  const cacheKey = `ts-ex:${metric}:${days}:${platformFilter}:${exchangeFilter}:${Math.floor(from.getTime() / 60000)}`;
   const result = await getCached(cacheKey, async () => {
     let exchangeList: string[] = ['binance', 'bybit'];
     try {
@@ -513,6 +521,9 @@ financialRatiosRouter.get('/timeseries-by-exchange', async (req: Request, res: R
     } catch { /* keep default */ }
     if (platformFilter === 'cex') exchangeList = exchangeList.filter((e) => CEX_EXCHANGES.includes(e));
     else if (platformFilter === 'dex') exchangeList = exchangeList.filter((e) => DEX_EXCHANGES.includes(e));
+    if (exchangeFilter !== 'all' && exchangeList.includes(exchangeFilter)) {
+      exchangeList = [exchangeFilter];
+    }
 
     const dateKeys: string[] = [];
     for (let d = new Date(from); d <= to; d.setDate(d.getDate() + 1)) {
