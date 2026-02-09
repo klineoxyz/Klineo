@@ -8,6 +8,7 @@ import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import { Mail, Lock, Eye, EyeOff, ArrowLeft } from "lucide-react";
 import { useAuth } from "@/app/contexts/AuthContext";
+import { supabase } from "@/lib/supabase";
 
 interface LoginPageProps {
   onNavigate: (view: string) => void;
@@ -31,6 +32,7 @@ export function LoginPage({ onNavigate }: LoginPageProps) {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [oauthLoading, setOauthLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -63,6 +65,17 @@ export function LoginPage({ onNavigate }: LoginPageProps) {
       .then(() => onNavigate("dashboard"))
       .catch((err) => setError(err?.message ?? "Quick Dev Login failed"))
       .finally(() => setLoading(false));
+  };
+
+  const handleGoogleLogin = async () => {
+    setError("");
+    setOauthLoading(true);
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({ provider: "google" });
+      if (error) setError(error.message);
+    } finally {
+      setOauthLoading(false);
+    }
   };
 
   return (
@@ -151,6 +164,16 @@ export function LoginPage({ onNavigate }: LoginPageProps) {
               disabled={loading}
             >
               {loading ? "Logging in..." : "Log In"}
+            </Button>
+
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full"
+              onClick={handleGoogleLogin}
+              disabled={loading || oauthLoading}
+            >
+              {oauthLoading ? "Redirecting..." : "Continue with Google"}
             </Button>
 
             {showQuickDevLogin && (

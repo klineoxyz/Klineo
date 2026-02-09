@@ -115,6 +115,9 @@ export default function App() {
   if (isAuthenticated && pathname === ROUTES.landing) {
     return <Navigate to={ROUTES.dashboard} replace />;
   }
+  if (isAuthenticated && pathname === ROUTES.login) {
+    return <Navigate to={ROUTES.dashboard} replace />;
+  }
 
   if (isAuthenticated && activeView === "admin" && !isAdmin) {
     return <Navigate to={ROUTES.dashboard} replace />;
