@@ -346,7 +346,9 @@ interface StrategyBacktestProps {
 
 export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
   const { user } = useAuth();
-  const { addDemoFromBacktest } = useDemo();
+  const { addDemoFromBacktest, isDemoMode } = useDemo();
+  // When platform is live (not in demo mode), do not show Demo/Live choice — only live launch
+  const effectiveLaunchMode = isDemoMode ? launchMode : "live";
   const [entitlement, setEntitlement] = useState<{
     joiningFeePaid: boolean;
     status: string;
@@ -516,7 +518,7 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
       return;
     }
     setLaunchDialogOpen(false);
-    if (launchMode === "demo") {
+    if (effectiveLaunchMode === "demo") {
       addDemoFromBacktest(backtestTrades, symbol);
       toast.success("Demo mode on — backtest trades are now visible in Trade History, Orders, and Positions.");
     } else {
@@ -1502,35 +1504,37 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
             </Select>
           </div>
 
-          {/* Mode Selector */}
-          <div className="space-y-2">
-            <Label>Launch Mode</Label>
-            <Tabs value={launchMode} onValueChange={(v: any) => setLaunchMode(v)}>
-              <TabsList className="w-full">
-                <TabsTrigger value="demo" className="flex-1">
-                  Demo
-                </TabsTrigger>
-                <TabsTrigger value="live" className="flex-1">
-                  Live
-                </TabsTrigger>
-              </TabsList>
-            </Tabs>
-            {launchMode === "demo" ? (
-              <Alert className="border-primary/50 bg-primary/10">
-                <CheckCircle2 className="h-4 w-4 text-primary" />
-                <AlertDescription className="text-xs">
-                  Demo mode uses simulated trading with no real funds
-                </AlertDescription>
-              </Alert>
-            ) : (
-              <Alert className="border-destructive/50 bg-destructive/10">
-                <AlertTriangle className="h-4 w-4 text-destructive" />
-                <AlertDescription className="text-xs text-destructive">
-                  Live mode trades with real funds. Losses are possible.
-                </AlertDescription>
-              </Alert>
-            )}
-          </div>
+          {/* Mode Selector — only when platform is in demo mode; when live, no Demo option */}
+          {isDemoMode && (
+            <div className="space-y-2">
+              <Label>Launch Mode</Label>
+              <Tabs value={launchMode} onValueChange={(v: any) => setLaunchMode(v)}>
+                <TabsList className="w-full">
+                  <TabsTrigger value="demo" className="flex-1">
+                    Demo
+                  </TabsTrigger>
+                  <TabsTrigger value="live" className="flex-1">
+                    Live
+                  </TabsTrigger>
+                </TabsList>
+              </Tabs>
+              {launchMode === "demo" ? (
+                <Alert className="border-primary/50 bg-primary/10">
+                  <CheckCircle2 className="h-4 w-4 text-primary" />
+                  <AlertDescription className="text-xs">
+                    Demo mode uses simulated trading with no real funds
+                  </AlertDescription>
+                </Alert>
+              ) : (
+                <Alert className="border-destructive/50 bg-destructive/10">
+                  <AlertTriangle className="h-4 w-4 text-destructive" />
+                  <AlertDescription className="text-xs text-destructive">
+                    Live mode trades with real funds. Losses are possible.
+                  </AlertDescription>
+                </Alert>
+              )}
+            </div>
+          )}
 
           {isHighRisk && (
             <Alert className="border-destructive/50 bg-destructive/10">
@@ -1739,8 +1743,8 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
             <AlertDialogTitle>Launch Strategy Confirmation</AlertDialogTitle>
             <AlertDialogDescription>
               You are about to launch the following strategy in{" "}
-              <strong className={launchMode === "live" ? "text-destructive" : "text-primary"}>
-                {launchMode.toUpperCase()} MODE
+              <strong className={effectiveLaunchMode === "live" ? "text-destructive" : "text-primary"}>
+                {effectiveLaunchMode.toUpperCase()} MODE
               </strong>
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -1771,7 +1775,7 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
               </div>
             </Card>
 
-            {launchMode === "live" && (
+            {effectiveLaunchMode === "live" && (
               <Alert className="border-destructive/50 bg-destructive/10">
                 <AlertTriangle className="h-4 w-4 text-destructive" />
                 <AlertDescription className="text-xs text-destructive font-medium">
@@ -1801,9 +1805,9 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
             <AlertDialogAction
               onClick={handleLaunchStrategy}
               disabled={!riskAccepted}
-              className={launchMode === "live" ? "bg-destructive hover:bg-destructive/90" : ""}
+              className={effectiveLaunchMode === "live" ? "bg-destructive hover:bg-destructive/90" : ""}
             >
-              {launchMode === "live" ? "Launch Live Strategy" : "Launch Demo Strategy"}
+              {effectiveLaunchMode === "live" ? "Launch Live Strategy" : "Launch Demo Strategy"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
