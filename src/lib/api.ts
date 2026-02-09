@@ -304,6 +304,38 @@ export const exchangeConnections = {
   },
 };
 
+// Candles / klines from connected exchange (Binance or Bybit Futures) — for Strategy Backtest and charts
+export interface KlineCandle {
+  time: number;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+}
+
+export const candles = {
+  getKlines: async (params: {
+    exchange: 'binance' | 'bybit';
+    symbol: string;
+    interval?: string;
+    limit?: number;
+    env?: 'production' | 'testnet';
+  }): Promise<{ candles: KlineCandle[]; exchange: string; symbol: string; interval: string; env: string }> => {
+    const { exchange, symbol, interval = '1h', limit = 500, env = 'production' } = params;
+    const q = new URLSearchParams({
+      exchange,
+      symbol: symbol.replace('/', '').toUpperCase(),
+      interval,
+      limit: String(Math.min(limit, 500)),
+      env,
+    });
+    const data = await api.get<{ candles: KlineCandle[]; exchange: string; symbol: string; interval: string; env: string }>(
+      `/api/candles/klines?${q}`
+    );
+    return data;
+  },
+};
+
 // Manual Futures Order (MVP: market only). Send qty (base) or quoteSizeUsdt (USDT; backend converts via mark price).
 export interface PlaceFuturesOrderRequest {
   connectionId: string;

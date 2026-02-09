@@ -1,7 +1,10 @@
 /**
  * Public klines/candles for Binance Futures and Bybit (no auth).
  * Used by strategy engine to compute RSI and signals.
+ * Binance uses binanceFetch so BINANCE_HTTPS_PROXY works in restricted regions.
  */
+
+import { binanceFetch } from './binance-fetch.js';
 
 const BINANCE_FUTURES_PUBLIC = 'https://fapi.binance.com';
 // USDT-M perpetual testnet; testnet.binancefuture.com is for Coin-M/delivery
@@ -53,7 +56,7 @@ export async function getBinanceFuturesKlines(
   const sym = symbol.replace('/', '').toUpperCase();
   const int = binanceInterval(interval);
   const url = `${base}/fapi/v1/klines?symbol=${sym}&interval=${int}&limit=${Math.min(limit, 500)}`;
-  const res = await fetch(url, { signal: AbortSignal.timeout(10000) });
+  const res = await binanceFetch(url, { signal: AbortSignal.timeout(10000) });
   if (!res.ok) throw new Error(`Binance klines ${res.status}`);
   const raw = (await res.json()) as Array<[number, string, string, string, string, number, number, string, number, number, number, string]>;
   return raw.map(([time, o, h, l, c]) => ({

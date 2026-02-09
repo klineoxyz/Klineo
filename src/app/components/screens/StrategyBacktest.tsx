@@ -77,7 +77,7 @@ import {
 import { toast } from "sonner";
 import { useAuth } from "@/app/contexts/AuthContext";
 import { useDemo } from "@/app/contexts/DemoContext";
-import { api, exchangeConnections, strategies, type ExchangeConnection } from "@/lib/api";
+import { api, exchangeConnections, strategies, candles as candlesApi, type ExchangeConnection, type KlineCandle } from "@/lib/api";
 import {
   Dialog,
   DialogContent,
@@ -115,7 +115,100 @@ const calculateBollingerBands = (data: any[], period: number = 20, stdDev: numbe
   });
 };
 
-// Generate realistic candlestick data for backtest with trade signals
+// RSI(period) from close prices — used for backtest signals on real data
+function computeRSI(closes: number[], period: number = 14): number | null {
+  if (closes.length < period + 1) return null;
+  let gains = 0;
+  let losses = 0;
+  for (let i = closes.length - period; i < closes.length; i++) {
+    const change = (closes[i] ?? 0) - (closes[i! - 1] ?? 0);
+    if (change > 0) gains += change;
+    else losses -= change;
+  }
+  const avgGain = gains / period;
+  const avgLoss = losses / period;
+  if (avgLoss === 0) return 100;
+  const rs = avgGain / avgLoss;
+  return 100 - 100 / (1 + rs);
+}
+
+/** Convert exchange klines to chart shape and run RSI-based backtest (long RSI<30 exit RSI>70, short RSI>70 exit RSI<30). */
+function runBacktestFromRealCandles(apiCandles: KlineCandle[]): {
+  data: Array<{
+    time: string;
+    timestamp: number;
+    open: number;
+    high: number;
+    low: number;
+    close: number;
+    buySignal: number | null;
+    sellSignal: number | null;
+    tradeId: number | null;
+  }>;
+  trades: Array<{ entryIndex: number; exitIndex: number; entryPrice: number; exitPrice: number; direction: "long" | "short" }>;
+} {
+  const RSI_PERIOD = 14;
+  const RSI_OVERSOLD = 30;
+  const RSI_OVERBOUGHT = 70;
+  const data = apiCandles.map((c) => ({
+    time: new Date(c.time).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+    timestamp: c.time,
+    open: c.open,
+    high: c.high,
+    low: c.low,
+    close: c.close,
+    buySignal: null as number | null,
+    sellSignal: null as number | null,
+    tradeId: null as number | null,
+  }));
+  const closes = data.map((d) => d.close);
+  const trades: Array<{ entryIndex: number; exitIndex: number; entryPrice: number; exitPrice: number; direction: "long" | "short" }> = [];
+  let tradeId = 1;
+  let inLong: number | null = null;
+  let inShort: number | null = null;
+
+  for (let i = RSI_PERIOD; i < data.length; i++) {
+    const rsi = computeRSI(closes.slice(0, i + 1), RSI_PERIOD);
+    if (rsi == null) continue;
+    if (inLong !== null) {
+      if (rsi >= RSI_OVERBOUGHT) {
+        trades.push({
+          entryIndex: inLong,
+          exitIndex: i,
+          entryPrice: data[inLong].close,
+          exitPrice: data[i].close,
+          direction: "long",
+        });
+        data[inLong].buySignal = data[inLong].close;
+        data[i].sellSignal = data[i].close;
+        for (let j = inLong; j <= i; j++) data[j].tradeId = tradeId;
+        tradeId++;
+        inLong = null;
+      }
+    } else if (inShort !== null) {
+      if (rsi <= RSI_OVERSOLD) {
+        trades.push({
+          entryIndex: inShort,
+          exitIndex: i,
+          entryPrice: data[inShort].close,
+          exitPrice: data[i].close,
+          direction: "short",
+        });
+        data[inShort].sellSignal = data[inShort].close;
+        data[i].buySignal = data[i].close;
+        for (let j = inShort; j <= i; j++) data[j].tradeId = tradeId;
+        tradeId++;
+        inShort = null;
+      }
+    } else {
+      if (rsi <= RSI_OVERSOLD) inLong = i;
+      else if (rsi >= RSI_OVERBOUGHT) inShort = i;
+    }
+  }
+  return { data, trades };
+}
+
+// Generate realistic candlestick data for backtest with trade signals (fallback when no exchange data)
 const generateBacktestCandlesticks = (count: number) => {
   const data = [];
   let currentPrice = 45000;
@@ -295,8 +388,11 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
   const [goLiveRiskAccepted, setGoLiveRiskAccepted] = useState(false);
   const [isGoLiveSubmitting, setIsGoLiveSubmitting] = useState(false);
 
-  // Backtest data: regenerated on "Run Backtest" so chart and KPIs update
+  // Backtest data: from exchange (live) when user has a connection, else synthetic
   const [backtestResult, setBacktestResult] = useState(() => generateBacktestCandlesticks(50));
+  const [backtestDataSource, setBacktestDataSource] = useState<"live" | "synthetic">("synthetic");
+  const [backtestExchangeLabel, setBacktestExchangeLabel] = useState<string | null>(null);
+  const [klinesError, setKlinesError] = useState<string | null>(null);
 
   const backtestCandles = backtestResult.data;
   const generatedTrades = backtestResult.trades;
@@ -357,15 +453,51 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
     [generatedTrades, backtestCandles]
   );
 
-  const handleRunBacktest = () => {
+  const handleRunBacktest = async () => {
     setIsBacktesting(true);
+    setKlinesError(null);
+    setBacktestExchangeLabel(null);
+    setBacktestDataSource("synthetic");
     toast.info("Running backtest...");
-    setTimeout(() => {
+
+    const dataConnection = connections.length > 0 ? connections[0] : null;
+    const exchange = dataConnection?.exchange === "bybit" ? "bybit" : "binance";
+    const env = (dataConnection?.environment === "testnet" ? "testnet" : "production") as "production" | "testnet";
+    const symbolClean = symbol.replace("/", "").toUpperCase();
+
+    if (dataConnection) {
+      try {
+        const { candles: rawCandles } = await candlesApi.getKlines({
+          exchange,
+          symbol: symbolClean,
+          interval: timeframe,
+          limit: 500,
+          env,
+        });
+        if (rawCandles.length > 0) {
+          const result = runBacktestFromRealCandles(rawCandles);
+          setBacktestResult(result);
+          setBacktestDataSource("live");
+          setBacktestExchangeLabel(`${dataConnection.exchange}${env === "testnet" ? " (testnet)" : ""}`);
+          setHasResults(true);
+          toast.success("Backtest completed with live data from " + dataConnection.exchange);
+        } else {
+          setBacktestResult(generateBacktestCandlesticks(50));
+          toast.success("Backtest completed (no candles returned, using sample data).");
+        }
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "Failed to load klines";
+        setKlinesError(msg);
+        setBacktestResult(generateBacktestCandlesticks(50));
+        toast.warning("Using sample data — " + msg);
+      }
+    } else {
       setBacktestResult(generateBacktestCandlesticks(50));
-      setIsBacktesting(false);
       setHasResults(true);
-      toast.success("Backtest completed successfully!");
-    }, 2000);
+      toast.success("Backtest completed (sample data). Connect an exchange for live prices.");
+    }
+
+    setIsBacktesting(false);
   };
 
   const handleLaunchStrategy = () => {
@@ -778,6 +910,19 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
                     <p className="text-xs sm:text-sm text-muted-foreground truncate">
                       {selectedStrategy?.name || 'Strategy'} • {symbol.replace('/', '')} • {timeframe} • {new Date(dateFrom).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} - {new Date(dateTo).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                     </p>
+                    {backtestDataSource === "live" && backtestExchangeLabel && (
+                      <p className="text-xs text-green-600 dark:text-green-400 mt-0.5">
+                        Live data from {backtestExchangeLabel}
+                      </p>
+                    )}
+                    {backtestDataSource === "synthetic" && connections.length === 0 && (
+                      <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5">
+                        Sample data — connect an exchange in Settings for live prices
+                      </p>
+                    )}
+                    {klinesError && (
+                      <p className="text-xs text-muted-foreground mt-0.5">Fallback: {klinesError}</p>
+                    )}
                   </div>
                 </div>
                 <Button variant="outline" size="sm" className="shrink-0 w-full sm:w-auto" onClick={() => toast.info("Share", { description: "Share backtest results coming soon" })}>
