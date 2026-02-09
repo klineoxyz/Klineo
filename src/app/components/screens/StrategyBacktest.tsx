@@ -1497,13 +1497,24 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
                 </Button>
               </div>
 
-              {/* Price Chart — TradingView Lightweight Charts (same as Terminal) */}
-              <Card className="p-4 sm:p-6 bg-card/50 overflow-hidden">
+              {/* Price Chart — TradingView Lightweight Charts™ (see https://www.tradingview.com/lightweight-charts/) */}
+              <Card className="p-4 sm:p-6 bg-card/50 overflow-hidden flex flex-col gap-4">
                 <BacktestLightweightChart
                   data={backtestCandles}
                   height={384}
                   className="min-h-[320px]"
                 />
+                <p className="text-[10px] text-muted-foreground/80 text-right">
+                  Charts by{" "}
+                  <a
+                    href="https://www.tradingview.com/lightweight-charts/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="underline hover:text-muted-foreground"
+                  >
+                    TradingView Lightweight Charts™
+                  </a>
+                </p>
               </Card>
             </div>
           )}
