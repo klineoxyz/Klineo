@@ -39,20 +39,6 @@ import { Progress } from "@/app/components/ui/progress";
 import { Separator } from "@/app/components/ui/separator";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/app/components/ui/collapsible";
 import {
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  Scatter,
-  ComposedChart,
-  Bar,
-  Line,
-  Brush,
-  ReferenceLine,
-  ReferenceArea,
-} from "recharts";
-import {
   Play,
   RefreshCw,
   Share2,
@@ -79,6 +65,7 @@ import { useAuth } from "@/app/contexts/AuthContext";
 import { useDemo } from "@/app/contexts/DemoContext";
 import { api, exchangeConnections, strategies, candles as candlesApi, type ExchangeConnection, type KlineCandle } from "@/lib/api";
 import { fetchUsdtPairs } from "@/lib/binance";
+import { BacktestLightweightChart } from "@/app/components/charts/BacktestLightweightChart";
 import {
   Dialog,
   DialogContent,
@@ -586,37 +573,6 @@ const calculateTradeStatsFromTrades = (
   };
 };
 
-// Custom Candlestick Component
-const Candlestick = (props: any) => {
-  const { x, y, width, height, open, close, high, low, yScale } = props;
-  
-  if (!open || !close || !high || !low || !yScale) return null;
-  
-  const isGreen = close > open;
-  const color = isGreen ? "#10B981" : "#EF4444";
-  const bodyHeight = Math.abs(yScale(open) - yScale(close));
-  const bodyY = Math.min(yScale(open), yScale(close));
-  
-  const wickX = x + width / 2;
-  const highY = yScale(high);
-  const lowY = yScale(low);
-  
-  return (
-    <g>
-      <line x1={wickX} y1={highY} x2={wickX} y2={lowY} stroke={color} strokeWidth={1} />
-      <rect
-        x={x}
-        y={bodyY}
-        width={width}
-        height={Math.max(bodyHeight, 1)}
-        fill={color}
-        stroke={color}
-        strokeWidth={1}
-      />
-    </g>
-  );
-};
-
 const strategyOptions = [
   { id: "rsi-oversold", name: "RSI Oversold/Overbought", description: "Buy when RSI < 30, Sell when RSI > 70" },
   { id: "ma-crossover", name: "MA Crossover", description: "Golden/Death cross strategy" },
@@ -718,20 +674,6 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
 
   const backtestCandles = backtestResult.data;
   const generatedTrades = backtestResult.trades;
-
-  const sma20Backtest = React.useMemo(() => calculateSMA(backtestCandles, 20, "close"), [backtestCandles]);
-  const bbBacktest = React.useMemo(() => calculateBollingerBands(backtestCandles, 20, 2), [backtestCandles]);
-  const backtestChartData = React.useMemo(
-    () =>
-      backtestCandles.map((item, index) => ({
-        ...item,
-        sma20: sma20Backtest[index],
-        bb_upper: bbBacktest[index].upper,
-        bb_middle: bbBacktest[index].middle,
-        bb_lower: bbBacktest[index].lower,
-      })),
-    [backtestCandles, sma20Backtest, bbBacktest]
-  );
 
   const tradeStats = React.useMemo(() => calculateTradeStatsFromTrades(generatedTrades), [generatedTrades]);
   const kpis = {
@@ -1555,230 +1497,13 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
                 </Button>
               </div>
 
-              {/* Price Chart with Buy/Sell Labels and Shaded Regions */}
+              {/* Price Chart — TradingView Lightweight Charts (same as Terminal) */}
               <Card className="p-4 sm:p-6 bg-card/50 overflow-hidden">
-                <div className="flex flex-col gap-4">
-                  {/* Chart Area - toolbar removed (was non-functional placeholders) */}
-                  <div className="flex-1">
-                    <div className="h-64 sm:h-80 lg:h-96 relative min-w-0">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <ComposedChart data={backtestChartData} margin={{ top: 20, right: 20, bottom: 60, left: 20 }}>
-                          <defs>
-                            {/* Gradient for long positions (green) */}
-                            <linearGradient id="longGradient" x1="0" y1="0" x2="0" y2="1">
-                              <stop offset="0%" stopColor="#10B981" stopOpacity={0.3} />
-                              <stop offset="100%" stopColor="#10B981" stopOpacity={0.05} />
-                            </linearGradient>
-                            {/* Gradient for short positions (red) */}
-                            <linearGradient id="shortGradient" x1="0" y1="0" x2="0" y2="1">
-                              <stop offset="0%" stopColor="#EF4444" stopOpacity={0.3} />
-                              <stop offset="100%" stopColor="#EF4444" stopOpacity={0.05} />
-                            </linearGradient>
-                          </defs>
-                          
-                          <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.3} />
-                          <XAxis 
-                            dataKey="time" 
-                            stroke="#9CA3AF" 
-                            tick={{ fontSize: 11 }}
-                            angle={-45}
-                            textAnchor="end"
-                            height={60}
-                          />
-                          <YAxis
-                            stroke="#9CA3AF"
-                            tick={{ fontSize: 11 }}
-                            tickFormatter={(value) => `$${value.toLocaleString()}`}
-                            domain={['dataMin - 100', 'dataMax + 100']}
-                          />
-                          <Tooltip
-                            contentStyle={{
-                              backgroundColor: "#1F2937",
-                              border: "1px solid #374151",
-                              borderRadius: "6px",
-                              fontSize: "12px",
-                            }}
-                            formatter={(value: any, name: string) => [
-                              `$${parseFloat(value).toLocaleString()}`,
-                              name.toUpperCase()
-                            ]}
-                            cursor={{ stroke: "#6B7280", strokeWidth: 1, strokeDasharray: "3 3" }}
-                          />
-                          
-                          {/* Shaded Trade Regions - Using ReferenceArea for proper positioning */}
-                          {generatedTrades.map((trade, idx) => {
-                            const entryData = backtestChartData[trade.entryIndex];
-                            const exitData = backtestChartData[trade.exitIndex];
-                            if (!entryData || !exitData) return null;
-                            
-                            const minPrice = Math.min(...backtestChartData.map(d => d.low));
-                            const maxPrice = Math.max(...backtestChartData.map(d => d.high));
-                            
-                            return (
-                              <ReferenceArea
-                                key={`trade-${idx}`}
-                                x1={entryData.time}
-                                x2={exitData.time}
-                                y1={minPrice}
-                                y2={maxPrice}
-                                fill={trade.direction === 'long' ? '#10B981' : '#EF4444'}
-                                fillOpacity={0.15}
-                                stroke="none"
-                              />
-                            );
-                          })}
-                          
-                          {/* Candlesticks */}
-                          <Bar
-                            dataKey="high"
-                            shape={(props: any) => {
-                              const item = backtestChartData[props.index];
-                              if (!item) return null;
-                              return (
-                                <Candlestick
-                                  {...props}
-                                  open={item.open}
-                                  close={item.close}
-                                  high={item.high}
-                                  low={item.low}
-                                  yScale={(val: number) => {
-                                    const { y, height } = props;
-                                    const domain = [
-                                      Math.min(...backtestChartData.map(d => d.low)),
-                                      Math.max(...backtestChartData.map(d => d.high))
-                                    ];
-                                    const range = domain[1] - domain[0];
-                                    return y + height - ((val - domain[0]) / range) * height;
-                                  }}
-                                />
-                              );
-                            }}
-                          />
-                          
-                          {/* Bollinger Bands */}
-                          <Line
-                            type="monotone"
-                            dataKey="bb_upper"
-                            stroke="#9333EA"
-                            strokeWidth={1}
-                            dot={false}
-                            strokeDasharray="3 3"
-                            opacity={0.7}
-                          />
-                          <Line
-                            type="monotone"
-                            dataKey="bb_middle"
-                            stroke="#9333EA"
-                            strokeWidth={1}
-                            dot={false}
-                            opacity={0.7}
-                          />
-                          <Line
-                            type="monotone"
-                            dataKey="bb_lower"
-                            stroke="#9333EA"
-                            strokeWidth={1}
-                            dot={false}
-                            strokeDasharray="3 3"
-                            opacity={0.7}
-                          />
-                          
-                          {/* SMA 20 */}
-                          <Line
-                            type="monotone"
-                            dataKey="sma20"
-                            stroke="#FFB000"
-                            strokeWidth={2}
-                            dot={false}
-                          />
-                          
-                          {/* Buy/Sell Labels */}
-                          <Scatter
-                            dataKey="buySignal"
-                            fill="#10B981"
-                            shape={(props: any) => {
-                              if (!props.payload.buySignal) return null;
-                              const yPos = props.cy - 20; // Position above the price
-                              return (
-                                <g>
-                                  <rect
-                                    x={props.cx - 10}
-                                    y={yPos - 10}
-                                    width={20}
-                                    height={20}
-                                    rx={4}
-                                    fill="#10B981"
-                                    stroke="#fff"
-                                    strokeWidth={1.5}
-                                  />
-                                  <text
-                                    x={props.cx}
-                                    y={yPos + 4}
-                                    textAnchor="middle"
-                                    fill="#fff"
-                                    fontSize={12}
-                                    fontWeight="bold"
-                                  >
-                                    B
-                                  </text>
-                                </g>
-                              );
-                            }}
-                          />
-                          <Scatter
-                            dataKey="sellSignal"
-                            fill="#EF4444"
-                            shape={(props: any) => {
-                              if (!props.payload.sellSignal) return null;
-                              const yPos = props.cy + 20; // Position below the price
-                              return (
-                                <g>
-                                  <rect
-                                    x={props.cx - 10}
-                                    y={yPos - 10}
-                                    width={20}
-                                    height={20}
-                                    rx={4}
-                                    fill="#EF4444"
-                                    stroke="#fff"
-                                    strokeWidth={1.5}
-                                  />
-                                  <text
-                                    x={props.cx}
-                                    y={yPos + 4}
-                                    textAnchor="middle"
-                                    fill="#fff"
-                                    fontSize={12}
-                                    fontWeight="bold"
-                                  >
-                                    S
-                                  </text>
-                                </g>
-                              );
-                            }}
-                          />
-                          
-                          {/* Reference Price Line */}
-                          <ReferenceLine 
-                            y={backtestChartData[Math.floor(backtestChartData.length / 2)]?.close} 
-                            stroke="#EF4444" 
-                            strokeDasharray="3 3"
-                            opacity={0.5}
-                            label={{ value: `${(backtestChartData[Math.floor(backtestChartData.length / 2)]?.close ?? 0).toFixed(2)}`, position: "right" }}
-                          />
-                          
-                          {/* Brush for zooming */}
-                          <Brush
-                            dataKey="time"
-                            height={30}
-                            stroke="#FFB000"
-                            fill="#1F2937"
-                          />
-                        </ComposedChart>
-                      </ResponsiveContainer>
-                    </div>
-                  </div>
-                </div>
+                <BacktestLightweightChart
+                  data={backtestCandles}
+                  height={384}
+                  className="min-h-[320px]"
+                />
               </Card>
             </div>
           )}
