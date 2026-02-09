@@ -257,21 +257,27 @@ def main():
             "is_win": is_win,
         })
 
-    # Metrics
+    # Metrics (dashboard-ready)
     total_trades = len(trades)
     wins = sum(1 for x in trades if x["is_win"])
     win_rate = (wins / total_trades * 100.0) if total_trades else 0.0
     profit_ratio_sum = sum(x["profit_ratio"] for x in trades)
-    profit_percent = profit_ratio_sum  # or from raw backtest summary if present
+    profit_abs_sum = sum(x["profit_abs"] for x in trades)
+    profit_percent = profit_ratio_sum
     if isinstance(raw, dict) and "backtest_stats" in raw:
         bs = raw["backtest_stats"]
-        if "profit_total" in bs and "profit_total_abs" in bs:
-            pass  # could derive profit_percent
-        if "max_drawdown" in bs:
-            profit_percent = float(bs.get("profit_total", profit_ratio_sum))
+        profit_percent = float(bs.get("profit_total", profit_ratio_sum))
     avg_duration = (sum(x["duration_minutes"] for x in trades) / total_trades) if total_trades else None
+    avg_profit_per_trade = (profit_abs_sum / total_trades) if total_trades else 0.0
 
-    # Max drawdown: from equity curve if we have it
+    # Profit factor: gross profit / abs(gross loss)
+    gross_profit = sum(x["profit_abs"] for x in trades if x["profit_abs"] > 0)
+    gross_loss = sum(x["profit_abs"] for x in trades if x["profit_abs"] < 0)
+    profit_factor = None
+    if gross_loss != 0:
+        profit_factor = round(gross_profit / abs(gross_loss), 4)
+
+    # Max drawdown from equity curve
     tv_equity = build_equity_curve(trades_raw)
     max_dd_percent = 0.0
     if len(tv_equity) >= 2:
@@ -284,6 +290,19 @@ def main():
             if dd > max_dd_percent:
                 max_dd_percent = dd
 
+    # Monthly PnL breakdown (for copy-trading marketplace UI)
+    monthly_pnl: Dict[str, Any] = {}
+    for tr in trades:
+        close_ts = tr.get("close_time") or 0
+        if close_ts:
+            dt = datetime.utcfromtimestamp(close_ts)
+            key = f"{dt.year}-{dt.month:02d}"
+            if key not in monthly_pnl:
+                monthly_pnl[key] = {"year": dt.year, "month": dt.month, "profit_abs": 0.0, "trade_count": 0}
+            monthly_pnl[key]["profit_abs"] += tr.get("profit_abs", 0)
+            monthly_pnl[key]["trade_count"] += 1
+    monthly_breakdown = sorted(monthly_pnl.values(), key=lambda x: (x["year"], x["month"]))
+
     payload = {
         "strategy": args.strategy,
         "exchange_data_source": "binance",
@@ -295,10 +314,13 @@ def main():
             "win_rate": round(win_rate, 2),
             "profit_percent": round(profit_percent, 4),
             "max_drawdown_percent": round(max_dd_percent, 2),
-            "profit_factor": None,
+            "profit_factor": profit_factor,
             "sharpe_ratio": None,
             "avg_trade_duration_minutes": round(avg_duration, 1) if avg_duration is not None else None,
+            "avg_profit_per_trade": round(avg_profit_per_trade, 4),
+            "total_profit_abs": round(profit_abs_sum, 4),
         },
+        "monthly_pnl_breakdown": monthly_breakdown,
         "tv_ohlc": tv_ohlc,
         "tv_equity": tv_equity,
         "trades": trades,

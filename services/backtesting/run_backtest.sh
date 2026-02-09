@@ -70,7 +70,8 @@ freqtrade backtesting \
   --timerange "$TIMERANGE" \
   --pairs $PAIRS_SPACE \
   --export trades \
-  --export-filename "$RAW_IN_USERDATA"
+  --export-filename "$RAW_IN_USERDATA" \
+  --enable-protections
 
 # Copy to output/raw for persistence
 if [ -f "$RAW_IN_USERDATA" ]; then

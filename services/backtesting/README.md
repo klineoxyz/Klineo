@@ -25,17 +25,29 @@ services/backtesting/
         KlineoEmaRsiTrend.py
         KlineoBollingerRevert.py
         KlineoDonchianAtrBreakout.py
+        KlineoBenchmarkTrend.py      # Baseline benchmark
+        KlineoRangeRevert.py         # Mean reversion (protections)
+        KlineoMomentumBreakout.py    # CTA-style breakout
+        KlineoRiskManaged.py        # Protections: MaxDrawdown, Cooldown, StoplossGuard
+        KlineoMTFConfirm.py         # Multi-timeframe 5m+1h
 ```
 
 ---
 
 ## Strategies
 
-| Strategy | Timeframe | Entry | Exit | ROI / Stoploss |
-|----------|-----------|--------|------|----------------|
-| **KlineoEmaRsiTrend** | 15m | EMA(21) cross above EMA(55) + RSI>52 + volume > SMA(vol,20) | EMA cross below or RSI<45 | 3%→1.5%→0, -8%, trailing |
-| **KlineoBollingerRevert** | 5m | close < BB lower & RSI<30 | close > BB mid or RSI>55 | 1.2%→0.6%→0, -6% |
-| **KlineoDonchianAtrBreakout** | 15m | close > Donchian high(20).shift(1) | close < Donchian low(20).shift(1) | 4%→1.5%→0, -10% |
+| Strategy | Timeframe | Description | ROI / Stoploss |
+|----------|-----------|-------------|----------------|
+| **KlineoBenchmarkTrend** | 15m | **Baseline benchmark.** EMA50>EMA200, RSI 50–65, volume>SMA(20). Exit RSI<45 or EMA50<EMA200. Low overtrading, clean metrics. | 6%→3%→1.5%→0, -8%, trailing |
+| **KlineoEmaRsiTrend** | 15m | EMA(21)/EMA(55) cross + RSI>52 + volume filter | 3%→1.5%→0, -8%, trailing |
+| **KlineoBollingerRevert** | 5m | close < BB lower & RSI<30 → exit at BB mid or RSI>55 | 1.2%→0.6%→0, -6% |
+| **KlineoRangeRevert** | 5m | **Range market.** BB + RSI + VWAP; CooldownPeriod to reduce overtrading | 2%→1%→0, -5% |
+| **KlineoDonchianAtrBreakout** | 15m | Donchian(20) breakout + volume spike | 4%→1.5%→0, -10% |
+| **KlineoMomentumBreakout** | 15m | **CTA-style.** Close > Donchian high + volume spike; trail after +2% | 8%→4%→2%→0, -10%, trailing |
+| **KlineoRiskManaged** | 15m | **Safety-first.** EMA100 + RSI 50–60. Uses MaxDrawdown, CooldownPeriod, StoplossGuard. | 4%→2%→0, -6% |
+| **KlineoMTFConfirm** | 5m (1h informative) | **Multi-timeframe.** 1h close > EMA200, 5m RSI crosses above 50; exit RSI<45 | 3.5%→2%→1%→0, -7% |
+
+Backtests run with `--enable-protections` so strategies that define protections (e.g. **KlineoRiskManaged**, **KlineoRangeRevert**) show reduced drawdowns where applicable.
 
 ---
 
@@ -117,8 +129,13 @@ Exactly as required by Klineo:
     "max_drawdown_percent": 0.0,
     "profit_factor": null,
     "sharpe_ratio": null,
-    "avg_trade_duration_minutes": null
+    "avg_trade_duration_minutes": null,
+    "avg_profit_per_trade": 0,
+    "total_profit_abs": 0
   },
+  "monthly_pnl_breakdown": [
+    { "year": 2024, "month": 1, "profit_abs": 0, "trade_count": 0 }
+  ],
   "tv_ohlc": [
     { "time": 1704067200, "open": 0, "high": 0, "low": 0, "close": 0, "volume": 0 }
   ],
@@ -145,11 +162,14 @@ Exactly as required by Klineo:
 - **tv_equity**: Compatible with `LineSeries` (time, value).
 - **tv_ohlc** is built from the first pair’s OHLCV in the Freqtrade data dir (or BTC/USDT if present). Multiple pairs are supported for backtest; only the first pair’s candles are exported for v1.
 
-### Metrics
+### Metrics (dashboard-ready)
 
-- **total_trades**, **win_rate**, **profit_percent**, **avg_trade_duration_minutes**: computed from the trades list.
-- **max_drawdown_percent**: computed from the equity curve when available; otherwise 0 (see below).
-- **profit_factor**, **sharpe_ratio**: not computed in this module; set to `null`. Can be added later from Freqtrade stats or in the backend.
+- **total_trades**, **win_rate**, **profit_percent**, **avg_trade_duration_minutes**: from the trades list.
+- **max_drawdown_percent**: from the equity curve.
+- **profit_factor**: gross profit / abs(gross loss); `null` if no losing trades.
+- **sharpe_ratio**: not computed; set to `null`.
+- **avg_profit_per_trade**, **total_profit_abs**: for UI display.
+- **monthly_pnl_breakdown**: list of `{ year, month, profit_abs, trade_count }` for monthly PnL charts and copy-trading marketplace UI.
 
 ---
 
