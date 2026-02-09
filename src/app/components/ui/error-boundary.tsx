@@ -54,6 +54,14 @@ export class ErrorBoundary extends React.Component<Props, State> {
         </div>
       );
     }
-    return this.props.children;
+    const { children } = this.props;
+    if (children == null) {
+      return (
+        <div className="min-h-[200px] flex items-center justify-center text-muted-foreground text-sm">
+          No content
+        </div>
+      );
+    }
+    return children;
   }
 }

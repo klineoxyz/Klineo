@@ -52,11 +52,28 @@ import { ErrorBoundary } from "@/app/components/ui/error-boundary";
 import { ROUTES, pathForView, viewForPath, PUBLIC_PATHS, REF_CODE_STORAGE_KEY } from "@/app/config/routes";
 import { api } from "@/lib/api";
 
+/** Show a single toast when the API returns 429 (rate limited). */
+function useRateLimitToast() {
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<{ retryAfterSeconds: number }>).detail;
+      const secs = detail?.retryAfterSeconds ?? 60;
+      toast.warning("Too many requests", {
+        description: `Please wait ${secs} seconds and try again.`,
+        duration: 8000,
+      });
+    };
+    window.addEventListener("klineo:rate-limited", handler);
+    return () => window.removeEventListener("klineo:rate-limited", handler);
+  }, []);
+}
+
 export default function App() {
   const { isAuthenticated, isAdmin, loading, logout } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const isMobile = useIsMobile();
+  useRateLimitToast();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 

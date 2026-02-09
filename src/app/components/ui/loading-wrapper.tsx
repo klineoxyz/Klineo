@@ -37,7 +37,8 @@ export function LoadingWrapper({
     }
   }, [isLoading, startTime, minLoadingTime]);
 
-  return <>{showLoading ? loadingComponent : children}</>;
+  const loadingUI = showLoading ? (loadingComponent ?? <div className="flex items-center justify-center p-8 text-muted-foreground">Loading…</div>) : children;
+  return <>{loadingUI}</>;
 }
 
 // Hook for simulating loading states (useful for development/demo)

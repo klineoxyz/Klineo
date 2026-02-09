@@ -44,6 +44,17 @@ export function isRateLimitError(err: unknown): boolean {
   return /429|rate limit|too many requests/i.test(msg);
 }
 
+/** Fire once per rate-limit window so UI can show a single toast. */
+let rateLimitNotifyTimeout: ReturnType<typeof setTimeout> | null = null;
+function notifyRateLimitedOnce(retryAfterSeconds: number): void {
+  if (typeof window === 'undefined') return;
+  if (rateLimitNotifyTimeout != null) return;
+  window.dispatchEvent(new CustomEvent('klineo:rate-limited', { detail: { retryAfterSeconds } }));
+  rateLimitNotifyTimeout = setTimeout(() => {
+    rateLimitNotifyTimeout = null;
+  }, Math.min(retryAfterSeconds * 1000, 60000));
+}
+
 export function getApiErrorMessage(err: unknown): string {
   const msg = err instanceof Error ? err.message : String(err ?? 'Something went wrong');
   if (isBackendUnreachableError(err)) return BACKEND_UNREACHABLE_MESSAGE;
@@ -97,7 +108,9 @@ export async function apiRequest<T = unknown>(
 
   if (res.status === 429) {
     const retryAfter = res.headers.get('retry-after') || '60';
-    throw new Error(`429: {"error":"Too many requests","message":"Rate limit exceeded. Please wait ${retryAfter} seconds and try again."}`);
+    const secs = parseInt(retryAfter, 10) || 60;
+    notifyRateLimitedOnce(secs);
+    throw new Error(`429: {"error":"Too many requests","message":"Too many requests. Please wait ${secs} seconds and try again.","retryAfter":${secs}}`);
   }
 
   if (!res.ok) {
