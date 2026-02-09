@@ -20,7 +20,14 @@ import {
   type UTCTimestamp,
 } from "lightweight-charts";
 import { Button } from "@/app/components/ui/button";
-import { Play, Pause, RotateCcw } from "lucide-react";
+import { Play, Pause, RotateCcw, Gauge } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/app/components/ui/select";
 
 const THEME = {
   layout: {
@@ -153,7 +160,14 @@ function rsi(closes: number[], period: number): (number | null)[] {
   return out;
 }
 
-const REPLAY_SPEED = 0.015; // fraction of chart per 100ms at 1x
+const REPLAY_SPEED_BASE = 0.012; // fraction of chart per 100ms at 1x
+const SPEED_OPTIONS = [
+  { value: "0.5", label: "0.5×" },
+  { value: "1", label: "1×" },
+  { value: "2", label: "2×" },
+  { value: "4", label: "4×" },
+  { value: "8", label: "8×" },
+] as const;
 
 export function BacktestLightweightChart({
   data,
@@ -178,6 +192,7 @@ export function BacktestLightweightChart({
   const [showRSI, setShowRSI] = useState(true);
   const [replayPosition, setReplayPosition] = useState(1);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [replaySpeed, setReplaySpeed] = useState("1");
 
   const { candleData, markers, sma20Data, bbUpperData, bbMiddleData, bbLowerData, rsiData } = useMemo(() => {
     const closes = data.map((d) => d.close);
@@ -198,10 +213,10 @@ export function BacktestLightweightChart({
     data.forEach((d) => {
       const t = toUtcTimestamp(d.timestamp);
       if (d.buySignal != null) {
-        marks.push({ time: t, position: "belowBar", color: THEME.green, shape: "arrowUp", text: "B" });
+        marks.push({ time: t, position: "belowBar", color: THEME.green, shape: "arrowUp", text: "Long" });
       }
       if (d.sellSignal != null) {
-        marks.push({ time: t, position: "aboveBar", color: THEME.red, shape: "arrowDown", text: "S" });
+        marks.push({ time: t, position: "aboveBar", color: THEME.red, shape: "arrowDown", text: "Short" });
       }
     });
 
@@ -351,13 +366,14 @@ export function BacktestLightweightChart({
     timeScale.setVisibleLogicalRange({ from, to: to + 5 });
   }, [replayPosition, len]);
 
+  const speedMult = useMemo(() => parseFloat(replaySpeed) || 1, [replaySpeed]);
   useEffect(() => {
     if (!isPlaying || len === 0) return;
     const start = performance.now();
     const startPos = replayPosition;
     const run = (now: number) => {
       const elapsed = (now - start) / 1000;
-      const next = Math.min(1, startPos + REPLAY_SPEED * 10 * elapsed);
+      const next = Math.min(1, startPos + REPLAY_SPEED_BASE * 10 * elapsed * speedMult);
       setReplayPosition(next);
       if (next < 1) {
         replayAnimRef.current = requestAnimationFrame(run);
@@ -372,7 +388,7 @@ export function BacktestLightweightChart({
         replayAnimRef.current = null;
       }
     };
-  }, [isPlaying, len]);
+  }, [isPlaying, len, speedMult]);
 
   const onPlayPause = useCallback(() => {
     if (replayPosition >= 1) setReplayPosition(0);
@@ -395,68 +411,116 @@ export function BacktestLightweightChart({
   }
 
   return (
-    <div className={`flex flex-col gap-2 w-full ${className}`}>
-      {showTAToolbar && (
-        <div className="flex flex-wrap items-center gap-3 py-1.5 px-2 rounded-md bg-[#0a0e13]/80 border border-border/50">
-          <span className="text-xs font-medium text-muted-foreground mr-1">Indicators</span>
-          <Button
-            variant={showSMA ? "secondary" : "ghost"}
-            size="sm"
-            className="h-7 text-xs"
-            onClick={() => setShowSMA((v) => !v)}
-          >
-            <span className="w-2 h-2 rounded-full bg-[#FFB000] mr-1.5 inline-block" />
-            SMA 20
-          </Button>
-          <Button
-            variant={showBB ? "secondary" : "ghost"}
-            size="sm"
-            className="h-7 text-xs"
-            onClick={() => setShowBB((v) => !v)}
-          >
-            <span className="w-2 h-2 rounded-full bg-[#9333EA] mr-1.5 inline-block" />
-            Bollinger Bands
-          </Button>
-          <Button
-            variant={showRSI ? "secondary" : "ghost"}
-            size="sm"
-            className="h-7 text-xs"
-            onClick={() => setShowRSI((v) => !v)}
-          >
-            <span className="w-2 h-2 rounded-full bg-[#FFB000] mr-1.5 inline-block opacity-80" />
-            RSI(14)
-          </Button>
-          <span className="text-[10px] text-muted-foreground/80 ml-auto hidden sm:inline">
-            Price · Buy/Sell markers
-          </span>
+    <div className={`flex flex-col w-full ${className}`}>
+      {/* Pro-style unified toolbar */}
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3 py-3 px-3 rounded-t-lg bg-[#0d1117] border border-border/60 border-b-0">
+        {/* Indicators */}
+        {showTAToolbar && (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mr-1">
+              Indicators
+            </span>
+            <div className="flex gap-1">
+              <Button
+                variant={showSMA ? "secondary" : "ghost"}
+                size="sm"
+                className="h-7 text-xs font-medium px-2.5"
+                onClick={() => setShowSMA((v) => !v)}
+              >
+                <span className="w-2 h-2 rounded-full bg-[#FFB000] mr-1.5 inline-block shrink-0" />
+                SMA 20
+              </Button>
+              <Button
+                variant={showBB ? "secondary" : "ghost"}
+                size="sm"
+                className="h-7 text-xs font-medium px-2.5"
+                onClick={() => setShowBB((v) => !v)}
+              >
+                <span className="w-2 h-2 rounded-full bg-[#9333EA] mr-1.5 inline-block shrink-0" />
+                BB
+              </Button>
+              <Button
+                variant={showRSI ? "secondary" : "ghost"}
+                size="sm"
+                className="h-7 text-xs font-medium px-2.5"
+                onClick={() => setShowRSI((v) => !v)}
+              >
+                <span className="w-2 h-2 rounded-full bg-[#06b6d4] mr-1.5 inline-block shrink-0" />
+                RSI
+              </Button>
+            </div>
+          </div>
+        )}
+        {/* Replay controls */}
+        {showReplayBar && (
+          <div className="flex flex-wrap items-center gap-3 sm:gap-4 flex-1 min-w-0">
+            <div className="flex items-center gap-1.5">
+              <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider hidden sm:inline">
+                Replay
+              </span>
+              <Button variant="outline" size="icon" className="h-8 w-8 shrink-0" onClick={onReset} title="Reset to full range">
+                <RotateCcw className="h-4 w-4" />
+              </Button>
+              <Button
+                variant={isPlaying ? "default" : "outline"}
+                size="icon"
+                className="h-8 w-8 shrink-0"
+                onClick={onPlayPause}
+                title={isPlaying ? "Pause" : "Play bar-by-bar"}
+              >
+                {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+              </Button>
+              <Select value={replaySpeed} onValueChange={setReplaySpeed}>
+                <SelectTrigger className="h-8 w-[72px] text-xs font-medium">
+                  <Gauge className="h-3.5 w-3.5 mr-1 shrink-0" />
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {SPEED_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value} className="text-xs">
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex-1 flex items-center gap-2 min-w-[120px]">
+              <input
+                type="range"
+                min={0}
+                max={100}
+                value={replayPosition * 100}
+                onChange={(e) => {
+                  setIsPlaying(false);
+                  setReplayPosition(Number(e.target.value) / 100);
+                }}
+                className="flex-1 h-2 rounded-full accent-[#FFB000] bg-muted/80 cursor-pointer min-w-0"
+                title="Scrub timeline"
+              />
+              <span className="text-xs font-mono text-muted-foreground tabular-nums w-9 text-right shrink-0">
+                {Math.round(replayPosition * 100)}%
+              </span>
+            </div>
+          </div>
+        )}
+        {/* Long / Short legend */}
+        <div className="flex items-center gap-4 shrink-0 border-l border-border/60 pl-3">
+          <div className="flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-sm bg-[#10B981] shrink-0" />
+            <span className="text-[11px] font-semibold text-foreground">Long</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-sm bg-[#EF4444] shrink-0" />
+            <span className="text-[11px] font-semibold text-foreground">Short</span>
+          </div>
         </div>
-      )}
-      <div ref={containerRef} className="w-full rounded-lg overflow-hidden" style={{ height }} />
-      {showReplayBar && (
-        <div className="flex items-center gap-2 py-2 px-2 rounded-md bg-[#0a0e13]/80 border border-border/50">
-          <Button variant="outline" size="icon" className="h-8 w-8 shrink-0" onClick={onReset} title="Reset view">
-            <RotateCcw className="h-4 w-4" />
-          </Button>
-          <Button variant="outline" size="icon" className="h-8 w-8 shrink-0" onClick={onPlayPause} title={isPlaying ? "Pause" : "Play replay"}>
-            {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-          </Button>
-          <input
-            type="range"
-            min={0}
-            max={100}
-            value={replayPosition * 100}
-            onChange={(e) => {
-              setIsPlaying(false);
-              setReplayPosition(Number(e.target.value) / 100);
-            }}
-            className="flex-1 h-2 rounded-full accent-[#FFB000] bg-muted cursor-pointer"
-            title="Scrub timeline"
-          />
-          <span className="text-[10px] text-muted-foreground tabular-nums w-10 text-right">
-            {Math.round(replayPosition * 100)}%
-          </span>
-        </div>
-      )}
+      </div>
+      {/* Chart area */}
+      <div
+        ref={containerRef}
+        className="w-full rounded-b-lg overflow-hidden border border-border/60 border-t-0"
+        style={{ height }}
+      />
     </div>
   );
 }
