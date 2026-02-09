@@ -44,6 +44,7 @@ masterTraderApplicationsRouter.post(
     body('strategyDescription').trim().isLength({ min: 1 }).withMessage('Strategy description required'),
     body('whyMasterTrader').trim().isLength({ min: 1 }).withMessage('Why Master Trader required'),
     body('profileUrl').optional().trim(),
+    body('proofUrl').optional().trim().isString().isLength({ max: 2000 }).withMessage('proofUrl must be a string'),
   ]),
   async (req: AuthenticatedRequest, res) => {
     const client = getSupabase();
@@ -96,13 +97,15 @@ masterTraderApplicationsRouter.post(
         profileUrl: profileUrl || null,
       };
 
+      const proofUrl = (req.body.proofUrl as string)?.trim() || null;
+
       const { data: row, error } = await (client as any)
         .from('master_trader_applications')
         .insert({
           user_id: userId,
           status: 'pending',
           form_data: formData,
-          proof_url: null,
+          proof_url: proofUrl,
           updated_at: new Date().toISOString(),
         })
         .select('id, status, created_at')

@@ -7,13 +7,19 @@ import { Textarea } from "@/app/components/ui/textarea";
 import { ArrowLeft, TrendingUp, Users, Shield, Clock, CheckCircle2, Upload, Loader2 } from "lucide-react";
 import { useState } from "react";
 import { api } from "@/lib/api";
+import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/app/contexts/AuthContext";
 import { toast } from "@/app/lib/toast";
+
+const PROOF_BUCKET = "master-trader-proofs";
+const MAX_PROOF_SIZE_MB = 10;
 
 interface MasterTraderApplicationProps {
   onNavigate: (view: string) => void;
 }
 
 export function MasterTraderApplication({ onNavigate }: MasterTraderApplicationProps) {
+  const { user } = useAuth();
   const [applicationStatus, setApplicationStatus] = useState<"form" | "review" | "approved" | "rejected">("form");
   const [exchangeProof, setExchangeProof] = useState<File | null>(null);
   const [submitLoading, setSubmitLoading] = useState(false);
@@ -36,6 +42,30 @@ export function MasterTraderApplication({ onNavigate }: MasterTraderApplicationP
     e.preventDefault();
     setSubmitLoading(true);
     try {
+      if (!exchangeProof) {
+        toast.error("Please upload a trading history screenshot");
+        setSubmitLoading(false);
+        return;
+      }
+      let proofUrl: string | undefined;
+      if (user?.id) {
+        if (exchangeProof.size > MAX_PROOF_SIZE_MB * 1024 * 1024) {
+          toast.error("Screenshot too large", { description: `Max size is ${MAX_PROOF_SIZE_MB} MB.` });
+          setSubmitLoading(false);
+          return;
+        }
+        const ext = exchangeProof.name.split(".").pop()?.toLowerCase() || "png";
+        const safeExt = ["jpeg", "jpg", "png", "gif", "webp"].includes(ext) ? ext : "png";
+        const path = `${user.id}/${Date.now()}_proof.${safeExt}`;
+        const { error: uploadError } = await supabase.storage.from(PROOF_BUCKET).upload(path, exchangeProof, { upsert: false });
+        if (uploadError) {
+          toast.error("Screenshot upload failed", { description: uploadError.message });
+          setSubmitLoading(false);
+          return;
+        }
+        const { data: urlData } = supabase.storage.from(PROOF_BUCKET).getPublicUrl(path);
+        proofUrl = urlData.publicUrl;
+      }
       await api.post("/api/master-trader-applications", {
         fullName: formData.fullName,
         email: formData.email,
@@ -49,6 +79,7 @@ export function MasterTraderApplication({ onNavigate }: MasterTraderApplicationP
         strategyDescription: formData.strategyDescription,
         whyMasterTrader: formData.whyMasterTrader,
         profileUrl: formData.profileUrl || undefined,
+        proofUrl,
       });
       setApplicationStatus("review");
       toast.success("Application submitted", { description: "We will review within 2–5 business days." });
@@ -193,7 +224,7 @@ export function MasterTraderApplication({ onNavigate }: MasterTraderApplicationP
                   <div className="space-y-4">
                     <div className="space-y-2">
                       <Label>Trading History Screenshot *</Label>
-                      <div className="border-2 border-dashed border-border rounded p-6 text-center hover:border-primary/50 transition cursor-pointer">
+                      <label htmlFor="master-trader-proof-upload" className="block border-2 border-dashed border-border rounded p-6 text-center hover:border-primary/50 transition cursor-pointer">
                         <Upload className="size-8 mx-auto mb-2 text-muted-foreground" />
                         <p className="text-sm text-muted-foreground mb-1">
                           Click to upload or drag and drop
@@ -202,12 +233,13 @@ export function MasterTraderApplication({ onNavigate }: MasterTraderApplicationP
                           PNG, JPG up to 10MB (Last 3-6 months of trading history)
                         </p>
                         <input
+                          id="master-trader-proof-upload"
                           type="file"
                           className="hidden"
                           accept="image/*"
                           onChange={(e) => setExchangeProof(e.target.files?.[0] || null)}
                         />
-                      </div>
+                      </label>
                       {exchangeProof && (
                         <p className="text-xs text-[#10B981]">✓ File uploaded: {exchangeProof.name}</p>
                       )}

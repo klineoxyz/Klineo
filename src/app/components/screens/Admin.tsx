@@ -130,7 +130,7 @@ export function Admin() {
   // Master Trader applications
   const [masterTraderApplications, setMasterTraderApplications] = useState<any[]>([]);
   const [masterTraderApplicationsLoading, setMasterTraderApplicationsLoading] = useState(false);
-  const [masterTraderReviewApp, setMasterTraderReviewApp] = useState<{ id: string; userEmail: string } | null>(null);
+  const [masterTraderReviewApp, setMasterTraderReviewApp] = useState<{ id: string; userEmail: string; formData?: Record<string, unknown>; proofUrl?: string | null } | null>(null);
   const [masterTraderReviewStatus, setMasterTraderReviewStatus] = useState<"approved" | "rejected">("approved");
   const [masterTraderReviewMessage, setMasterTraderReviewMessage] = useState("");
   const [masterTraderReviewLoading, setMasterTraderReviewLoading] = useState(false);
@@ -1666,7 +1666,7 @@ export function Admin() {
                                   size="sm"
                                   className="text-[#10B981] border-[#10B981]/50"
                                   onClick={() => {
-                                    setMasterTraderReviewApp({ id: app.id, userEmail: app.userEmail });
+                                    setMasterTraderReviewApp({ id: app.id, userEmail: app.userEmail, formData: app.formData, proofUrl: app.proofUrl });
                                     setMasterTraderReviewStatus("approved");
                                     setMasterTraderReviewMessage("");
                                   }}
@@ -1678,7 +1678,7 @@ export function Admin() {
                                   size="sm"
                                   className="text-[#EF4444] border-[#EF4444]/50"
                                   onClick={() => {
-                                    setMasterTraderReviewApp({ id: app.id, userEmail: app.userEmail });
+                                    setMasterTraderReviewApp({ id: app.id, userEmail: app.userEmail, formData: app.formData, proofUrl: app.proofUrl });
                                     setMasterTraderReviewStatus("rejected");
                                     setMasterTraderReviewMessage("");
                                   }}
@@ -1698,13 +1698,51 @@ export function Admin() {
           </Card>
 
           <Dialog open={!!masterTraderReviewApp} onOpenChange={(open) => !open && setMasterTraderReviewApp(null)}>
-            <DialogContent>
+            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>{masterTraderReviewStatus === "approved" ? "Approve" : "Reject"} Application</DialogTitle>
               </DialogHeader>
               {masterTraderReviewApp && (
                 <div className="space-y-4">
                   <p className="text-sm text-muted-foreground">User: {masterTraderReviewApp.userEmail}</p>
+
+                  {masterTraderReviewApp.formData && Object.keys(masterTraderReviewApp.formData).length > 0 && (
+                    <div className="rounded border border-border p-4 space-y-2 bg-muted/30">
+                      <h4 className="text-sm font-semibold">Application details</h4>
+                      <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                        {masterTraderReviewApp.formData.fullName != null && <><dt className="text-muted-foreground">Name</dt><dd>{(masterTraderReviewApp.formData.fullName as string)}</dd></>}
+                        {masterTraderReviewApp.formData.country != null && <><dt className="text-muted-foreground">Country</dt><dd>{(masterTraderReviewApp.formData.country as string)}</dd></>}
+                        {masterTraderReviewApp.formData.telegram != null && <><dt className="text-muted-foreground">Telegram</dt><dd>{(masterTraderReviewApp.formData.telegram as string)}</dd></>}
+                        {masterTraderReviewApp.formData.primaryExchange != null && <><dt className="text-muted-foreground">Exchange</dt><dd>{(masterTraderReviewApp.formData.primaryExchange as string)}</dd></>}
+                        {masterTraderReviewApp.formData.yearsExperience != null && <><dt className="text-muted-foreground">Experience</dt><dd>{(masterTraderReviewApp.formData.yearsExperience as number)} yrs</dd></>}
+                        {masterTraderReviewApp.formData.tradingStyle != null && <><dt className="text-muted-foreground">Trading style</dt><dd>{(masterTraderReviewApp.formData.tradingStyle as string)}</dd></>}
+                        {masterTraderReviewApp.formData.preferredMarkets != null && <><dt className="text-muted-foreground">Markets</dt><dd>{(masterTraderReviewApp.formData.preferredMarkets as string)}</dd></>}
+                        {masterTraderReviewApp.formData.avgMonthlyReturn != null && <><dt className="text-muted-foreground">Avg monthly return</dt><dd>{(masterTraderReviewApp.formData.avgMonthlyReturn as string)}%</dd></>}
+                        {masterTraderReviewApp.formData.profileUrl != null && <><dt className="text-muted-foreground">Profile URL</dt><dd className="truncate"><a href={(masterTraderReviewApp.formData.profileUrl as string)} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Link</a></dd></>}
+                      </dl>
+                      {masterTraderReviewApp.formData.strategyDescription != null && (
+                        <div className="pt-2 border-t border-border">
+                          <dt className="text-muted-foreground text-xs mb-1">Strategy</dt>
+                          <dd className="text-xs whitespace-pre-wrap">{(masterTraderReviewApp.formData.strategyDescription as string)}</dd>
+                        </div>
+                      )}
+                      {masterTraderReviewApp.formData.whyMasterTrader != null && (
+                        <div>
+                          <dt className="text-muted-foreground text-xs mb-1">Why Master Trader</dt>
+                          <dd className="text-xs whitespace-pre-wrap">{(masterTraderReviewApp.formData.whyMasterTrader as string)}</dd>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {masterTraderReviewApp.proofUrl && (
+                    <div className="rounded border border-border p-4 space-y-2 bg-muted/30">
+                      <h4 className="text-sm font-semibold">Proof of performance (screenshot)</h4>
+                      <a href={masterTraderReviewApp.proofUrl} target="_blank" rel="noopener noreferrer" className="block text-xs text-primary hover:underline mb-2">Open in new tab</a>
+                      <img src={masterTraderReviewApp.proofUrl} alt="Trading history proof" className="max-w-full max-h-64 object-contain rounded border border-border bg-background" />
+                    </div>
+                  )}
+
                   {masterTraderReviewStatus === "rejected" && (
                     <div className="space-y-2">
                       <Label>Rejection reason (optional)</Label>
