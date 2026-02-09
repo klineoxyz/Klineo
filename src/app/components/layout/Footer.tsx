@@ -163,33 +163,33 @@ export function Footer({ onNavigate }: FooterProps) {
             </ul>
           </div>
 
-          {/* Legal */}
+          {/* Legal - use <a> tags so crawlers (e.g. Google OAuth verification) can find Privacy Policy */}
           <div>
             <h3 className="font-semibold mb-4 text-sm">Legal</h3>
             <ul className="space-y-3">
               <li>
-                <button 
-                  onClick={() => onNavigate && onNavigate("terms-of-service")}
+                <a 
+                  href="https://www.klineo.xyz/terms-of-service"
                   className="text-sm text-muted-foreground hover:text-foreground transition"
                 >
                   Terms of Service
-                </button>
+                </a>
               </li>
               <li>
-                <button 
-                  onClick={() => onNavigate && onNavigate("privacy-policy")}
+                <a 
+                  href="https://www.klineo.xyz/privacy-policy"
                   className="text-sm text-muted-foreground hover:text-foreground transition"
                 >
                   Privacy Policy
-                </button>
+                </a>
               </li>
               <li>
-                <button 
-                  onClick={() => onNavigate && onNavigate("risk-disclosure")}
+                <a 
+                  href="https://www.klineo.xyz/risk-disclosure"
                   className="text-sm text-muted-foreground hover:text-foreground transition"
                 >
                   Risk Disclosure
-                </button>
+                </a>
               </li>
               <li>
                 <a 
