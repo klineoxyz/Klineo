@@ -1,6 +1,10 @@
 /**
  * Strategy Backtest chart using TradingView Lightweight Charts™.
  * Candlestick + buy/sell markers + TA overlays (SMA 20, Bollinger Bands, RSI).
+ *
+ * Built with the official library (~35KB, HTML5 Canvas):
+ * https://www.tradingview.com/lightweight-charts/
+ * API: https://tradingview.github.io/lightweight-charts/docs/api
  */
 
 import { useEffect, useRef, useMemo } from "react";
@@ -9,6 +13,7 @@ import {
   CandlestickSeries,
   LineSeries,
   createSeriesMarkers,
+  LineStyle,
   TickMarkType,
   type IChartApi,
   type ISeriesApi,
@@ -237,11 +242,11 @@ export function BacktestLightweightChart({
     sma20Series.setData(sma20Data);
     sma20Ref.current = sma20Series;
 
-    // Bollinger Bands overlay
+    // Bollinger Bands overlay (LineStyle from official API)
     const bbOpt = { lineWidth: 1, priceScaleId: "right" as const };
-    const bbUpper = chart.addSeries(LineSeries, { ...bbOpt, color: "#9333EA", lineStyle: 2 });
+    const bbUpper = chart.addSeries(LineSeries, { ...bbOpt, color: "#9333EA", lineStyle: LineStyle.Dashed });
     const bbMiddle = chart.addSeries(LineSeries, { ...bbOpt, color: "#9333EA" });
-    const bbLower = chart.addSeries(LineSeries, { ...bbOpt, color: "#9333EA", lineStyle: 2 });
+    const bbLower = chart.addSeries(LineSeries, { ...bbOpt, color: "#9333EA", lineStyle: LineStyle.Dashed });
     bbUpper.setData(bbUpperData);
     bbMiddle.setData(bbMiddleData);
     bbLower.setData(bbLowerData);
@@ -320,10 +325,20 @@ export function BacktestLightweightChart({
   }
 
   return (
-    <div
-      ref={containerRef}
-      className={`w-full rounded-lg overflow-hidden ${className}`}
-      style={{ height }}
-    />
+    <div className={`flex flex-col gap-1 ${className}`}>
+      <div
+        ref={containerRef}
+        className="w-full rounded-lg overflow-hidden"
+        style={{ height }}
+      />
+      <a
+        href="https://www.tradingview.com/lightweight-charts/"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-[10px] text-muted-foreground hover:text-foreground self-end mr-1"
+      >
+        Lightweight Charts™
+      </a>
+    </div>
   );
 }
