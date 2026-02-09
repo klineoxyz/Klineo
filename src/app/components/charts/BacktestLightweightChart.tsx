@@ -1,12 +1,13 @@
 /**
  * Strategy Backtest chart using TradingView Lightweight Charts™.
- * Candlestick + buy/sell markers (B/S), same look as Terminal charts.
+ * Candlestick + buy/sell markers + TA overlays (SMA 20, Bollinger Bands, RSI).
  */
 
 import { useEffect, useRef, useMemo } from "react";
 import {
   createChart,
   CandlestickSeries,
+  LineSeries,
   createSeriesMarkers,
   TickMarkType,
   type IChartApi,
@@ -88,6 +89,59 @@ function toUtcTimestamp(ms: number): UTCTimestamp {
   return Math.floor(ms / 1000) as unknown as UTCTimestamp;
 }
 
+function sma(closes: number[], period: number): (number | null)[] {
+  return closes.map((_, i) => {
+    if (i < period - 1) return null;
+    const sum = closes.slice(i - period + 1, i + 1).reduce((a, b) => a + b, 0);
+    return sum / period;
+  });
+}
+
+function bollingerBands(closes: number[], period: number, mult: number): { upper: (number | null)[]; middle: (number | null)[]; lower: (number | null)[] } {
+  const middle = sma(closes, period);
+  const upper: (number | null)[] = [];
+  const lower: (number | null)[] = [];
+  for (let i = 0; i < closes.length; i++) {
+    if (middle[i] == null) {
+      upper.push(null);
+      lower.push(null);
+      continue;
+    }
+    const slice = closes.slice(Math.max(0, i - period + 1), i + 1);
+    const variance = slice.reduce((s, x) => s + (x - middle[i]!) ** 2, 0) / slice.length;
+    const std = Math.sqrt(variance) || 1e-8;
+    upper.push(middle[i]! + mult * std);
+    lower.push(middle[i]! - mult * std);
+  }
+  return { upper, middle, lower };
+}
+
+function rsi(closes: number[], period: number): (number | null)[] {
+  const out: (number | null)[] = [];
+  for (let i = 0; i < closes.length; i++) {
+    if (i < period) {
+      out.push(null);
+      continue;
+    }
+    let gains = 0;
+    let losses = 0;
+    for (let j = i - period + 1; j <= i; j++) {
+      const ch = closes[j]! - closes[j - 1]!;
+      if (ch > 0) gains += ch;
+      else losses -= ch;
+    }
+    const avgGain = gains / period;
+    const avgLoss = losses / period;
+    if (avgLoss === 0) {
+      out.push(100);
+    } else {
+      const rs = avgGain / avgLoss;
+      out.push(100 - 100 / (1 + rs));
+    }
+  }
+  return out;
+}
+
 export function BacktestLightweightChart({
   data,
   height = 400,
@@ -97,8 +151,14 @@ export function BacktestLightweightChart({
   const chartRef = useRef<IChartApi | null>(null);
   const candlestickRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
   const seriesMarkersRef = useRef<ReturnType<typeof createSeriesMarkers> | null>(null);
+  const sma20Ref = useRef<ISeriesApi<"Line"> | null>(null);
+  const bbUpperRef = useRef<ISeriesApi<"Line"> | null>(null);
+  const bbMiddleRef = useRef<ISeriesApi<"Line"> | null>(null);
+  const bbLowerRef = useRef<ISeriesApi<"Line"> | null>(null);
+  const rsiRef = useRef<ISeriesApi<"Line"> | null>(null);
 
-  const { candleData, markers } = useMemo(() => {
+  const { candleData, markers, sma20Data, bbUpperData, bbMiddleData, bbLowerData, rsiData } = useMemo(() => {
+    const closes = data.map((d) => d.close);
     const candles = data.map((d) => ({
       time: toUtcTimestamp(d.timestamp),
       open: d.open,
@@ -116,25 +176,31 @@ export function BacktestLightweightChart({
     data.forEach((d) => {
       const t = toUtcTimestamp(d.timestamp);
       if (d.buySignal != null) {
-        marks.push({
-          time: t,
-          position: "belowBar",
-          color: THEME.green,
-          shape: "arrowUp",
-          text: "B",
-        });
+        marks.push({ time: t, position: "belowBar", color: THEME.green, shape: "arrowUp", text: "B" });
       }
       if (d.sellSignal != null) {
-        marks.push({
-          time: t,
-          position: "aboveBar",
-          color: THEME.red,
-          shape: "arrowDown",
-          text: "S",
-        });
+        marks.push({ time: t, position: "aboveBar", color: THEME.red, shape: "arrowDown", text: "S" });
       }
     });
-    return { candleData: candles, markers: marks };
+
+    const sma20 = sma(closes, 20);
+    const bb = bollingerBands(closes, 20, 2);
+    const rsi14 = rsi(closes, 14);
+
+    const toLine = (arr: (number | null)[]) =>
+      data
+        .map((d, i) => ({ time: toUtcTimestamp(d.timestamp), value: arr[i] }))
+        .filter((p) => p.value != null) as { time: UTCTimestamp; value: number }[];
+
+    return {
+      candleData: candles,
+      markers: marks,
+      sma20Data: toLine(sma20),
+      bbUpperData: toLine(bb.upper),
+      bbMiddleData: toLine(bb.middle),
+      bbLowerData: toLine(bb.lower),
+      rsiData: toLine(rsi14),
+    };
   }, [data]);
 
   useEffect(() => {
@@ -161,10 +227,42 @@ export function BacktestLightweightChart({
       borderDownColor: THEME.red,
     });
     candlestick.setData(candleData);
-    candlestick.priceScale().applyOptions({ scaleMargins: { top: 0.1, bottom: 0.25 } });
+    candlestick.priceScale().applyOptions({ scaleMargins: { top: 0.1, bottom: 0.5 } });
     candlestickRef.current = candlestick;
 
     seriesMarkersRef.current = createSeriesMarkers(candlestick, markers);
+
+    // SMA 20 overlay
+    const sma20Series = chart.addSeries(LineSeries, { color: "#FFB000", lineWidth: 2, priceScaleId: "right" });
+    sma20Series.setData(sma20Data);
+    sma20Ref.current = sma20Series;
+
+    // Bollinger Bands overlay
+    const bbOpt = { lineWidth: 1, priceScaleId: "right" as const };
+    const bbUpper = chart.addSeries(LineSeries, { ...bbOpt, color: "#9333EA", lineStyle: 2 });
+    const bbMiddle = chart.addSeries(LineSeries, { ...bbOpt, color: "#9333EA" });
+    const bbLower = chart.addSeries(LineSeries, { ...bbOpt, color: "#9333EA", lineStyle: 2 });
+    bbUpper.setData(bbUpperData);
+    bbMiddle.setData(bbMiddleData);
+    bbLower.setData(bbLowerData);
+    bbUpperRef.current = bbUpper;
+    bbMiddleRef.current = bbMiddle;
+    bbLowerRef.current = bbLower;
+
+    // RSI in lower pane (separate price scale 0–100)
+    const rsiSeries = chart.addSeries(LineSeries, {
+      color: "#FFB000",
+      lineWidth: 2,
+      priceScaleId: "rsi",
+    });
+    rsiSeries.setData(rsiData);
+    rsiSeries.priceScale().applyOptions({
+      scaleMargins: { top: 0.75, bottom: 0.05 },
+      borderVisible: true,
+      scaleBorderColor: "#374151",
+      visible: true,
+    });
+    rsiRef.current = rsiSeries;
 
     chart.timeScale().fitContent();
     chart.timeScale().applyOptions({
@@ -186,6 +284,11 @@ export function BacktestLightweightChart({
     return () => {
       ro.disconnect();
       seriesMarkersRef.current = null;
+      sma20Ref.current = null;
+      bbUpperRef.current = null;
+      bbMiddleRef.current = null;
+      bbLowerRef.current = null;
+      rsiRef.current = null;
       chart.remove();
       chartRef.current = null;
       candlestickRef.current = null;
@@ -196,11 +299,14 @@ export function BacktestLightweightChart({
     const candlestick = candlestickRef.current;
     if (!candlestick || !candleData.length) return;
     candlestick.setData(candleData);
-    if (seriesMarkersRef.current) {
-      seriesMarkersRef.current.setMarkers(markers);
-    }
+    if (seriesMarkersRef.current) seriesMarkersRef.current.setMarkers(markers);
+    if (sma20Ref.current && sma20Data.length) sma20Ref.current.setData(sma20Data);
+    if (bbUpperRef.current && bbUpperData.length) bbUpperRef.current.setData(bbUpperData);
+    if (bbMiddleRef.current && bbMiddleData.length) bbMiddleRef.current.setData(bbMiddleData);
+    if (bbLowerRef.current && bbLowerData.length) bbLowerRef.current.setData(bbLowerData);
+    if (rsiRef.current && rsiData.length) rsiRef.current.setData(rsiData);
     chartRef.current?.timeScale().fitContent();
-  }, [candleData, markers]);
+  }, [candleData, markers, sma20Data, bbUpperData, bbMiddleData, bbLowerData, rsiData]);
 
   if (!data.length) {
     return (
