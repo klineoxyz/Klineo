@@ -1392,6 +1392,11 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
                 </>
               )}
             </Button>
+            {connections.length > 0 && (
+              <p className="text-[11px] text-green-600 dark:text-green-400 text-center mt-1.5">
+                Uses live charts from {connections[0]?.exchange || "exchange"}
+              </p>
+            )}
           </div>
         )}
       </div>
@@ -1497,8 +1502,35 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
                 </Button>
               </div>
 
-              {/* Price Chart — TradingView Lightweight Charts™ (see https://www.tradingview.com/lightweight-charts/) */}
+              {/* Price Chart — Live market data when connected, else demo */}
               <Card className="p-4 sm:p-6 bg-card/50 overflow-hidden flex flex-col gap-4">
+                {/* Live / Demo data strip — like pro trading platforms */}
+                <div className={`flex flex-wrap items-center gap-2 py-2 px-3 rounded-lg text-sm ${backtestDataSource === "live" ? "bg-green-500/10 border border-green-500/30" : "bg-amber-500/10 border border-amber-500/30"}`}>
+                  {backtestDataSource === "live" && backtestExchangeLabel ? (
+                    <>
+                      <span className="inline-flex items-center gap-1.5 font-semibold text-green-600 dark:text-green-400">
+                        <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                        Live market data
+                      </span>
+                      <span className="text-muted-foreground">·</span>
+                      <span className="font-mono text-foreground">{symbol.replace("/", "")}</span>
+                      <span className="text-muted-foreground">·</span>
+                      <span className="font-mono text-foreground">{timeframe}</span>
+                      <span className="text-muted-foreground">·</span>
+                      <span className="text-muted-foreground">{backtestExchangeLabel}</span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="inline-flex items-center gap-1.5 font-semibold text-amber-600 dark:text-amber-400">
+                        <span className="w-2 h-2 rounded-full bg-amber-500" />
+                        Demo data
+                      </span>
+                      <span className="text-muted-foreground text-xs sm:text-sm">
+                        Connect an exchange in Settings to run backtest on live charts
+                      </span>
+                    </>
+                  )}
+                </div>
                 <BacktestLightweightChart
                   data={backtestCandles}
                   height={384}
@@ -1524,13 +1556,17 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
             <Card className="p-6 sm:p-12 bg-card/50 flex flex-col items-center justify-center text-center">
               <Activity className="h-10 w-10 sm:h-12 sm:w-12 text-muted-foreground mb-3 sm:mb-4" />
               <h3 className="text-base sm:text-lg font-semibold mb-2">No Backtest Results</h3>
-              <p className="text-sm text-muted-foreground mb-4 sm:mb-6 max-w-md px-2">
-                Configure your strategy parameters in the left panel and click "Run Backtest" to
-                see performance results
+              <p className="text-sm text-muted-foreground mb-2 max-w-md px-2">
+                Configure your strategy in the left panel and click "Run Backtest" to see results on the chart.
+              </p>
+              <p className="text-xs text-muted-foreground mb-4 max-w-md px-2">
+                {connections.length > 0
+                  ? "Your backtest will use live market data from your connected exchange (same as live charts)."
+                  : "Connect an exchange in Settings to backtest on live market data instead of demo data."}
               </p>
               <Button onClick={handleRunBacktest} className="w-full sm:w-auto min-h-[44px]">
                 <Play className="h-4 w-4 mr-2" />
-                Run Your First Backtest
+                Run Backtest {connections.length > 0 ? "on live data" : ""}
               </Button>
             </Card>
           )}
