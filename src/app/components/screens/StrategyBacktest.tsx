@@ -88,13 +88,43 @@ import {
   DialogTitle,
 } from "@/app/components/ui/dialog";
 
-// Helper: Calculate SMA
+// Helper: Calculate SMA (for chart overlays: array of objects with key)
 const calculateSMA = (data: any[], period: number, key: string) => {
   return data.map((item, index) => {
     if (index < period - 1) return null;
-    const sum = data.slice(index - period + 1, index + 1).reduce((acc, d) => acc + d[key], 0);
+    const sum = data.slice(index - period + 1, index + 1).reduce((acc: number, d: any) => acc + d[key], 0);
     return sum / period;
   });
+};
+
+// SMA of a number array (for strategy backtest)
+const sma = (closes: number[], period: number): (number | null)[] => {
+  return closes.map((_, i) => {
+    if (i < period - 1) return null;
+    const sum = closes.slice(i - period + 1, i + 1).reduce((a, b) => a + b, 0);
+    return sum / period;
+  });
+};
+
+// EMA of a number array (for strategy backtest)
+const ema = (closes: number[], period: number): (number | null)[] => {
+  const k = 2 / (period + 1);
+  const out: (number | null)[] = [];
+  let val: number | null = null;
+  for (let i = 0; i < closes.length; i++) {
+    if (val == null) {
+      if (i < period - 1) {
+        out.push(null);
+        continue;
+      }
+      const sum = closes.slice(0, i + 1).reduce((a, b) => a + b, 0);
+      val = sum / (i + 1);
+    } else {
+      val = closes[i] * k + val * (1 - k);
+    }
+    out.push(val);
+  }
+  return out;
 };
 
 // Helper: Calculate Bollinger Bands
@@ -133,153 +163,330 @@ function computeRSI(closes: number[], period: number = 14): number | null {
   return 100 - 100 / (1 + rs);
 }
 
-/** Config passed into backtest so results reflect Strategy Parameters panel. */
+/** Config passed into backtest so results reflect Strategy Parameters and Filters. */
 export type BacktestConfig = {
   strategy: string;
   rsiPeriod: number;
   rsiOversold: number;
   rsiOverbought: number;
+  maFastType: "sma" | "ema";
+  maFastPeriod: number;
+  maSlowType: "sma" | "ema";
+  maSlowPeriod: number;
+  breakoutLookback: number;
+  breakoutThresholdPct: number;
+  meanReversionLookback: number;
+  meanReversionZScore: number;
+  momentumRocPeriod: number;
+  momentumMinPct: number;
+  volumeFilterEnabled: boolean;
+  volumeMaPeriod: number;
+  atrPeriod: number;
 };
 
-/** Convert exchange klines to chart shape and run RSI-based backtest (long RSI<oversold exit RSI>overbought, short RSI>overbought exit RSI<oversold). Uses config when strategy is RSI. */
+type ChartPoint = {
+  time: string;
+  timestamp: number;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  buySignal: number | null;
+  sellSignal: number | null;
+  tradeId: number | null;
+};
+
+type Trade = { entryIndex: number; exitIndex: number; entryPrice: number; exitPrice: number; direction: "long" | "short" };
+
+/** Run backtest on OHLC candles with the selected strategy. Returns chart data and trades. */
 function runBacktestFromRealCandles(
   apiCandles: KlineCandle[],
-  config?: BacktestConfig
-): {
-  data: Array<{
-    time: string;
-    timestamp: number;
-    open: number;
-    high: number;
-    low: number;
-    close: number;
-    buySignal: number | null;
-    sellSignal: number | null;
-    tradeId: number | null;
-  }>;
-  trades: Array<{ entryIndex: number; exitIndex: number; entryPrice: number; exitPrice: number; direction: "long" | "short" }>;
-} {
-  const RSI_PERIOD = config?.strategy === "rsi-oversold" ? config.rsiPeriod : 14;
-  const RSI_OVERSOLD = config?.strategy === "rsi-oversold" ? config.rsiOversold : 30;
-  const RSI_OVERBOUGHT = config?.strategy === "rsi-oversold" ? config.rsiOverbought : 70;
-  const data = apiCandles.map((c) => ({
+  config: BacktestConfig
+): { data: ChartPoint[]; trades: Trade[] } {
+  const data: ChartPoint[] = apiCandles.map((c) => ({
     time: new Date(c.time).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
     timestamp: c.time,
     open: c.open,
     high: c.high,
     low: c.low,
     close: c.close,
-    buySignal: null as number | null,
-    sellSignal: null as number | null,
-    tradeId: null as number | null,
+    buySignal: null,
+    sellSignal: null,
+    tradeId: null,
   }));
   const closes = data.map((d) => d.close);
-  const trades: Array<{ entryIndex: number; exitIndex: number; entryPrice: number; exitPrice: number; direction: "long" | "short" }> = [];
+  const trades: Trade[] = [];
   let tradeId = 1;
   let inLong: number | null = null;
   let inShort: number | null = null;
 
-  for (let i = RSI_PERIOD; i < data.length; i++) {
-    const rsi = computeRSI(closes.slice(0, i + 1), RSI_PERIOD);
-    if (rsi == null) continue;
-    if (inLong !== null) {
-      if (rsi >= RSI_OVERBOUGHT) {
-        trades.push({
-          entryIndex: inLong,
-          exitIndex: i,
-          entryPrice: data[inLong].close,
-          exitPrice: data[i].close,
-          direction: "long",
-        });
-        data[inLong].buySignal = data[inLong].close;
-        data[i].sellSignal = data[i].close;
-        for (let j = inLong; j <= i; j++) data[j].tradeId = tradeId;
-        tradeId++;
-        inLong = null;
+  const strategy = config.strategy;
+
+  // ---- RSI ----
+  if (strategy === "rsi-oversold") {
+    const period = config.rsiPeriod;
+    const oversold = config.rsiOversold;
+    const overbought = config.rsiOverbought;
+    for (let i = period; i < data.length; i++) {
+      const rsi = computeRSI(closes.slice(0, i + 1), period);
+      if (rsi == null) continue;
+      if (inLong !== null) {
+        if (rsi >= overbought) {
+          trades.push({ entryIndex: inLong, exitIndex: i, entryPrice: data[inLong].close, exitPrice: data[i].close, direction: "long" });
+          data[inLong].buySignal = data[inLong].close;
+          data[i].sellSignal = data[i].close;
+          for (let j = inLong; j <= i; j++) data[j].tradeId = tradeId;
+          tradeId++;
+          inLong = null;
+        }
+      } else if (inShort !== null) {
+        if (rsi <= oversold) {
+          trades.push({ entryIndex: inShort, exitIndex: i, entryPrice: data[inShort].close, exitPrice: data[i].close, direction: "short" });
+          data[inShort].sellSignal = data[inShort].close;
+          data[i].buySignal = data[i].close;
+          for (let j = inShort; j <= i; j++) data[j].tradeId = tradeId;
+          tradeId++;
+          inShort = null;
+        }
+      } else {
+        if (rsi <= oversold) inLong = i;
+        else if (rsi >= overbought) inShort = i;
       }
-    } else if (inShort !== null) {
-      if (rsi <= RSI_OVERSOLD) {
-        trades.push({
-          entryIndex: inShort,
-          exitIndex: i,
-          entryPrice: data[inShort].close,
-          exitPrice: data[i].close,
-          direction: "short",
-        });
-        data[inShort].sellSignal = data[inShort].close;
-        data[i].buySignal = data[i].close;
-        for (let j = inShort; j <= i; j++) data[j].tradeId = tradeId;
-        tradeId++;
-        inShort = null;
-      }
-    } else {
-      if (rsi <= RSI_OVERSOLD) inLong = i;
-      else if (rsi >= RSI_OVERBOUGHT) inShort = i;
     }
+    return { data, trades };
   }
+
+  // ---- MA Crossover: golden cross = long, death cross = short ----
+  if (strategy === "ma-crossover") {
+    const fastArr = config.maFastType === "ema" ? ema(closes, config.maFastPeriod) : sma(closes, config.maFastPeriod);
+    const slowArr = config.maSlowType === "ema" ? ema(closes, config.maSlowPeriod) : sma(closes, config.maSlowPeriod);
+    const lookback = Math.max(config.maFastPeriod, config.maSlowPeriod);
+    for (let i = lookback; i < data.length; i++) {
+      const fast = fastArr[i];
+      const slow = slowArr[i];
+      const prevFast = fastArr[i - 1];
+      const prevSlow = slowArr[i - 1];
+      if (fast == null || slow == null || prevFast == null || prevSlow == null) continue;
+      const crossUp = prevFast <= prevSlow && fast > slow;
+      const crossDown = prevFast >= prevSlow && fast < slow;
+      if (inLong !== null) {
+        if (crossDown) {
+          trades.push({ entryIndex: inLong, exitIndex: i, entryPrice: data[inLong].close, exitPrice: data[i].close, direction: "long" });
+          data[inLong].buySignal = data[inLong].close;
+          data[i].sellSignal = data[i].close;
+          for (let j = inLong; j <= i; j++) data[j].tradeId = tradeId;
+          tradeId++;
+          inLong = null;
+        }
+      } else if (inShort !== null) {
+        if (crossUp) {
+          trades.push({ entryIndex: inShort, exitIndex: i, entryPrice: data[inShort].close, exitPrice: data[i].close, direction: "short" });
+          data[inShort].sellSignal = data[inShort].close;
+          data[i].buySignal = data[i].close;
+          for (let j = inShort; j <= i; j++) data[j].tradeId = tradeId;
+          tradeId++;
+          inShort = null;
+        }
+      } else {
+        if (crossUp) inLong = i;
+        else if (crossDown) inShort = i;
+      }
+    }
+    return { data, trades };
+  }
+
+  // ---- Breakout: break above lookback high = long, below lookback low = short ----
+  if (strategy === "breakout") {
+    const lb = config.breakoutLookback;
+    const thresh = config.breakoutThresholdPct / 100;
+    for (let i = lb; i < data.length; i++) {
+      const slice = closes.slice(i - lb, i);
+      const high = Math.max(...slice);
+      const low = Math.min(...slice);
+      const prevHigh = i > lb ? Math.max(...closes.slice(i - lb - 1, i - 1)) : high;
+      const prevLow = i > lb ? Math.min(...closes.slice(i - lb - 1, i - 1)) : low;
+      const price = closes[i];
+      const breakUp = price >= high * (1 + thresh) && high > prevHigh;
+      const breakDown = price <= low * (1 - thresh) && low < prevLow;
+      if (inLong !== null) {
+        if (breakDown) {
+          trades.push({ entryIndex: inLong, exitIndex: i, entryPrice: data[inLong].close, exitPrice: data[i].close, direction: "long" });
+          data[inLong].buySignal = data[inLong].close;
+          data[i].sellSignal = data[i].close;
+          for (let j = inLong; j <= i; j++) data[j].tradeId = tradeId;
+          tradeId++;
+          inLong = null;
+        }
+      } else if (inShort !== null) {
+        if (breakUp) {
+          trades.push({ entryIndex: inShort, exitIndex: i, entryPrice: data[inShort].close, exitPrice: data[i].close, direction: "short" });
+          data[inShort].sellSignal = data[inShort].close;
+          data[i].buySignal = data[i].close;
+          for (let j = inShort; j <= i; j++) data[j].tradeId = tradeId;
+          tradeId++;
+          inShort = null;
+        }
+      } else {
+        if (breakUp) inLong = i;
+        else if (breakDown) inShort = i;
+      }
+    }
+    return { data, trades };
+  }
+
+  // ---- Mean reversion: price Z std below mean = long, above = short ----
+  if (strategy === "mean-reversion") {
+    const lb = config.meanReversionLookback;
+    const zThresh = config.meanReversionZScore;
+    for (let i = lb; i < data.length; i++) {
+      const slice = closes.slice(i - lb, i + 1);
+      const mean = slice.reduce((a, b) => a + b, 0) / slice.length;
+      const variance = slice.reduce((s, x) => s + (x - mean) ** 2, 0) / slice.length;
+      const std = Math.sqrt(variance) || 1e-8;
+      const z = (closes[i] - mean) / std;
+      const oversold = z <= -zThresh;
+      const overbought = z >= zThresh;
+      if (inLong !== null) {
+        if (overbought) {
+          trades.push({ entryIndex: inLong, exitIndex: i, entryPrice: data[inLong].close, exitPrice: data[i].close, direction: "long" });
+          data[inLong].buySignal = data[inLong].close;
+          data[i].sellSignal = data[i].close;
+          for (let j = inLong; j <= i; j++) data[j].tradeId = tradeId;
+          tradeId++;
+          inLong = null;
+        }
+      } else if (inShort !== null) {
+        if (oversold) {
+          trades.push({ entryIndex: inShort, exitIndex: i, entryPrice: data[inShort].close, exitPrice: data[i].close, direction: "short" });
+          data[inShort].sellSignal = data[inShort].close;
+          data[i].buySignal = data[i].close;
+          for (let j = inShort; j <= i; j++) data[j].tradeId = tradeId;
+          tradeId++;
+          inShort = null;
+        }
+      } else {
+        if (oversold) inLong = i;
+        else if (overbought) inShort = i;
+      }
+    }
+    return { data, trades };
+  }
+
+  // ---- Momentum (ROC): ROC > min% = long, ROC < -min% = short ----
+  if (strategy === "momentum") {
+    const period = config.momentumRocPeriod;
+    const minPct = config.momentumMinPct;
+    for (let i = period; i < data.length; i++) {
+      const roc = ((closes[i] - closes[i - period]) / (closes[i - period] || 1)) * 100;
+      const strongUp = roc >= minPct;
+      const strongDown = roc <= -minPct;
+      if (inLong !== null) {
+        if (strongDown) {
+          trades.push({ entryIndex: inLong, exitIndex: i, entryPrice: data[inLong].close, exitPrice: data[i].close, direction: "long" });
+          data[inLong].buySignal = data[inLong].close;
+          data[i].sellSignal = data[i].close;
+          for (let j = inLong; j <= i; j++) data[j].tradeId = tradeId;
+          tradeId++;
+          inLong = null;
+        }
+      } else if (inShort !== null) {
+        if (strongUp) {
+          trades.push({ entryIndex: inShort, exitIndex: i, entryPrice: data[inShort].close, exitPrice: data[i].close, direction: "short" });
+          data[inShort].sellSignal = data[inShort].close;
+          data[i].buySignal = data[i].close;
+          for (let j = inShort; j <= i; j++) data[j].tradeId = tradeId;
+          tradeId++;
+          inShort = null;
+        }
+      } else {
+        if (strongUp) inLong = i;
+        else if (strongDown) inShort = i;
+      }
+    }
+    return { data, trades };
+  }
+
+  // Custom / fallback: no signals
   return { data, trades };
 }
 
-// Generate realistic candlestick data for backtest with trade signals (fallback when no exchange data)
-const generateBacktestCandlesticks = (count: number) => {
-  const data = [];
+/** Generate OHLC-only candles (no signals). Used when no exchange data; backtest runner then applies selected strategy. */
+function generateSyntheticCandles(count: number): KlineCandle[] {
+  const candles: KlineCandle[] = [];
   let currentPrice = 45000;
-  const trades: Array<{ entryIndex: number; exitIndex: number; entryPrice: number; exitPrice: number; direction: 'long' | 'short' }> = [];
-  
   for (let i = 0; i < count; i++) {
     const change = (Math.random() - 0.5) * 500;
     const open = currentPrice;
     const close = currentPrice + change;
     const high = Math.max(open, close) + Math.random() * 200;
     const low = Math.min(open, close) - Math.random() * 200;
-    
-    const timestamp = new Date(Date.now() - (count - i) * 86400000);
-    
-    data.push({
-      time: timestamp.toLocaleDateString("en-US", {
-        month: "short",
-        day: "numeric",
-      }),
-      timestamp: timestamp.getTime(),
-      open,
-      high,
-      low,
-      close,
-      buySignal: null as number | null,
-      sellSignal: null as number | null,
-      tradeId: null as number | null,
-    });
-    
+    const timestamp = new Date(Date.now() - (count - i) * 86400000).getTime();
+    candles.push({ time: timestamp, open, high, low, close });
     currentPrice = close;
   }
-  
-  // Generate realistic trades with entry/exit points
-  let tradeId = 1;
-  for (let i = 0; i < count - 10; i += Math.floor(Math.random() * 8) + 5) {
-    const entryIndex = i;
-    const exitIndex = Math.min(i + Math.floor(Math.random() * 8) + 3, count - 1);
-    const entryPrice = data[entryIndex].close;
-    const exitPrice = data[exitIndex].close;
-    const direction = Math.random() > 0.3 ? 'long' : 'short';
-    
-    trades.push({ entryIndex, exitIndex, entryPrice, exitPrice, direction });
-    
-    // Mark buy/sell signals
-    data[entryIndex].buySignal = direction === 'long' ? entryPrice : null;
-    data[entryIndex].sellSignal = direction === 'short' ? entryPrice : null;
-    data[exitIndex].sellSignal = direction === 'long' ? exitPrice : null;
-    data[exitIndex].buySignal = direction === 'short' ? exitPrice : null;
-    
-    // Mark trade ID for shaded regions
-    for (let j = entryIndex; j <= exitIndex; j++) {
-      data[j].tradeId = tradeId;
-    }
-    
-    tradeId++;
-  }
-  
-  return { data, trades };
+  return candles;
+}
+
+const DEFAULT_BACKTEST_CONFIG: BacktestConfig = {
+  strategy: "rsi-oversold",
+  rsiPeriod: 14,
+  rsiOversold: 30,
+  rsiOverbought: 70,
+  maFastType: "ema",
+  maFastPeriod: 9,
+  maSlowType: "ema",
+  maSlowPeriod: 21,
+  breakoutLookback: 20,
+  breakoutThresholdPct: 0.5,
+  meanReversionLookback: 20,
+  meanReversionZScore: 2,
+  momentumRocPeriod: 10,
+  momentumMinPct: 1,
+  volumeFilterEnabled: false,
+  volumeMaPeriod: 20,
+  atrPeriod: 14,
 };
+
+/** Build full BacktestConfig from form state (string inputs). */
+function buildBacktestConfig(state: {
+  strategy: string;
+  rsiPeriod: string;
+  rsiOversold: string;
+  rsiOverbought: string;
+  maFastType: "sma" | "ema";
+  maFastPeriod: string;
+  maSlowType: "sma" | "ema";
+  maSlowPeriod: string;
+  breakoutLookback: string;
+  breakoutThresholdPct: string;
+  meanReversionLookback: string;
+  meanReversionZScore: string;
+  momentumRocPeriod: string;
+  momentumMinPct: string;
+  volumeFilterEnabled: boolean;
+  volumeMaPeriod: string;
+  atrPeriod: string;
+}): BacktestConfig {
+  return {
+    strategy: state.strategy,
+    rsiPeriod: parseInt(state.rsiPeriod, 10) || 14,
+    rsiOversold: parseInt(state.rsiOversold, 10) || 30,
+    rsiOverbought: parseInt(state.rsiOverbought, 10) || 70,
+    maFastType: state.maFastType,
+    maFastPeriod: parseInt(state.maFastPeriod, 10) || 9,
+    maSlowType: state.maSlowType,
+    maSlowPeriod: parseInt(state.maSlowPeriod, 10) || 21,
+    breakoutLookback: parseInt(state.breakoutLookback, 10) || 20,
+    breakoutThresholdPct: parseFloat(state.breakoutThresholdPct) || 0.5,
+    meanReversionLookback: parseInt(state.meanReversionLookback, 10) || 20,
+    meanReversionZScore: parseFloat(state.meanReversionZScore) || 2,
+    momentumRocPeriod: parseInt(state.momentumRocPeriod, 10) || 10,
+    momentumMinPct: parseFloat(state.momentumMinPct) || 1,
+    volumeFilterEnabled: state.volumeFilterEnabled,
+    volumeMaPeriod: parseInt(state.volumeMaPeriod, 10) || 20,
+    atrPeriod: parseInt(state.atrPeriod, 10) || 14,
+  };
+}
 
 // Calculate trade statistics from a list of generated trades
 const calculateTradeStatsFromTrades = (
@@ -432,7 +639,9 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
   const [isGoLiveSubmitting, setIsGoLiveSubmitting] = useState(false);
 
   // Backtest data: from exchange (live) when user has a connection, else synthetic
-  const [backtestResult, setBacktestResult] = useState(() => generateBacktestCandlesticks(50));
+  const [backtestResult, setBacktestResult] = useState(() =>
+    runBacktestFromRealCandles(generateSyntheticCandles(50), DEFAULT_BACKTEST_CONFIG)
+  );
   const [backtestDataSource, setBacktestDataSource] = useState<"live" | "synthetic">("synthetic");
   const [backtestExchangeLabel, setBacktestExchangeLabel] = useState<string | null>(null);
   const [klinesError, setKlinesError] = useState<string | null>(null);
@@ -508,6 +717,26 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
     const env = (dataConnection?.environment === "testnet" ? "testnet" : "production") as "production" | "testnet";
     const symbolClean = symbol.replace("/", "").toUpperCase();
 
+    const backtestConfig = buildBacktestConfig({
+      strategy,
+      rsiPeriod,
+      rsiOversold,
+      rsiOverbought,
+      maFastType,
+      maFastPeriod,
+      maSlowType,
+      maSlowPeriod,
+      breakoutLookback,
+      breakoutThresholdPct,
+      meanReversionLookback,
+      meanReversionZScore,
+      momentumRocPeriod,
+      momentumMinPct,
+      volumeFilterEnabled,
+      volumeMaPeriod,
+      atrPeriod,
+    });
+
     if (dataConnection) {
       try {
         const { candles: rawCandles } = await candlesApi.getKlines({
@@ -518,12 +747,6 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
           env,
         });
         if (rawCandles.length > 0) {
-          const backtestConfig: BacktestConfig = {
-            strategy,
-            rsiPeriod: parseInt(rsiPeriod, 10) || 14,
-            rsiOversold: parseInt(rsiOversold, 10) || 30,
-            rsiOverbought: parseInt(rsiOverbought, 10) || 70,
-          };
           const result = runBacktestFromRealCandles(rawCandles, backtestConfig);
           setBacktestResult(result);
           setBacktestDataSource("live");
@@ -531,19 +754,27 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
           setHasResults(true);
           toast.success("Backtest completed with live data from " + dataConnection.exchange);
         } else {
-          setBacktestResult(generateBacktestCandlesticks(50));
-          toast.success("Backtest completed (no candles returned, using sample data).");
+          const synthetic = generateSyntheticCandles(200);
+          const result = runBacktestFromRealCandles(synthetic, backtestConfig);
+          setBacktestResult(result);
+          setHasResults(true);
+          toast.success("Backtest completed (no candles returned, using synthetic data with your strategy).");
         }
       } catch (e) {
         const msg = e instanceof Error ? e.message : "Failed to load klines";
         setKlinesError(msg);
-        setBacktestResult(generateBacktestCandlesticks(50));
-        toast.warning("Using sample data — " + msg);
+        const synthetic = generateSyntheticCandles(200);
+        const result = runBacktestFromRealCandles(synthetic, backtestConfig);
+        setBacktestResult(result);
+        setHasResults(true);
+        toast.warning("Using synthetic data with your strategy — " + msg);
       }
     } else {
-      setBacktestResult(generateBacktestCandlesticks(50));
+      const synthetic = generateSyntheticCandles(200);
+      const result = runBacktestFromRealCandles(synthetic, backtestConfig);
+      setBacktestResult(result);
       setHasResults(true);
-      toast.success("Backtest completed (sample data). Connect an exchange for live prices.");
+      toast.success("Backtest completed (synthetic data with your strategy). Connect an exchange for live prices.");
     }
 
     setIsBacktesting(false);
@@ -1159,52 +1390,8 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
 
               {/* Price Chart with Buy/Sell Labels and Shaded Regions */}
               <Card className="p-4 sm:p-6 bg-card/50 overflow-hidden">
-                <div className="flex flex-col lg:flex-row gap-4">
-                  {/* Chart Toolbar - horizontal on mobile, vertical on lg+ */}
-                  <div className="flex flex-row lg:flex-col gap-2 lg:border-r border-border lg:pr-4 overflow-x-auto pb-2 lg:pb-0">
-                    <Button variant="ghost" size="icon" className="h-8 w-8" title="Trend Line">
-                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                      </svg>
-                    </Button>
-                    <Button variant="ghost" size="icon" className="h-8 w-8" title="Horizontal Line">
-                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14" />
-                      </svg>
-                    </Button>
-                    <Button variant="ghost" size="icon" className="h-8 w-8" title="Zoom">
-                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v6m6-6v6" />
-                      </svg>
-                    </Button>
-                    <Button variant="ghost" size="icon" className="h-8 w-8" title="Pan">
-                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16l-4-4m0 0l4-4m-4 4h18" />
-                      </svg>
-                    </Button>
-                    <Button variant="ghost" size="icon" className="h-8 w-8" title="Vertical Pan">
-                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7l4-4m0 0l4 4m-4-4v18" />
-                      </svg>
-                    </Button>
-                    <Button variant="ghost" size="icon" className="h-8 w-8" title="Parallel Lines">
-                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 5h16M4 9h16M4 13h16M4 17h16" />
-                      </svg>
-                    </Button>
-                    <Button variant="ghost" size="icon" className="h-8 w-8" title="Rectangle">
-                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-                      </svg>
-                    </Button>
-                    <Button variant="ghost" size="icon" className="h-8 w-8" title="Triangle">
-                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v18m-9-9l9-9 9 9" />
-                      </svg>
-                    </Button>
-                  </div>
-
-                  {/* Chart Area */}
+                <div className="flex flex-col gap-4">
+                  {/* Chart Area - toolbar removed (was non-functional placeholders) */}
                   <div className="flex-1">
                     <div className="h-64 sm:h-80 lg:h-96 relative min-w-0">
                       <ResponsiveContainer width="100%" height="100%">
