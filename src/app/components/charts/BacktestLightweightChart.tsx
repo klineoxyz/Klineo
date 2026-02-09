@@ -93,8 +93,17 @@ export interface BacktestChartPoint {
   tradeId: number | null;
 }
 
+/** Trade from backtest engine: entry/exit bar indices and direction. */
+export interface BacktestTrade {
+  entryIndex: number;
+  exitIndex: number;
+  direction: "long" | "short";
+}
+
 interface BacktestLightweightChartProps {
   data: BacktestChartPoint[];
+  /** When provided, markers are built from trades (Long entry, Long exit, Short entry, Short exit). */
+  trades?: BacktestTrade[];
   height?: number;
   className?: string;
   /** Show TA toolbar (toggle indicators) and legend. Default true. */
@@ -171,6 +180,7 @@ const SPEED_OPTIONS = [
 
 export function BacktestLightweightChart({
   data,
+  trades,
   height = 400,
   className = "",
   showTAToolbar = true,
@@ -210,15 +220,33 @@ export function BacktestLightweightChart({
       shape: "arrowUp" | "arrowDown";
       text: string;
     }> = [];
-    data.forEach((d) => {
-      const t = toUtcTimestamp(d.timestamp);
-      if (d.buySignal != null) {
-        marks.push({ time: t, position: "belowBar", color: THEME.green, shape: "arrowUp", text: "Long" });
-      }
-      if (d.sellSignal != null) {
-        marks.push({ time: t, position: "aboveBar", color: THEME.red, shape: "arrowDown", text: "Short" });
-      }
-    });
+    if (trades?.length) {
+      // Build entry + exit markers for Long and Short from trades
+      trades.forEach((trade) => {
+        const entryBar = data[trade.entryIndex];
+        const exitBar = data[trade.exitIndex];
+        if (!entryBar || !exitBar) return;
+        const entryTime = toUtcTimestamp(entryBar.timestamp);
+        const exitTime = toUtcTimestamp(exitBar.timestamp);
+        if (trade.direction === "long") {
+          marks.push({ time: entryTime, position: "belowBar", color: THEME.green, shape: "arrowUp", text: "Long" });
+          marks.push({ time: exitTime, position: "aboveBar", color: THEME.green, shape: "arrowDown", text: "Exit" });
+        } else {
+          marks.push({ time: entryTime, position: "aboveBar", color: THEME.red, shape: "arrowDown", text: "Short" });
+          marks.push({ time: exitTime, position: "belowBar", color: THEME.red, shape: "arrowUp", text: "Exit" });
+        }
+      });
+    } else {
+      data.forEach((d) => {
+        const t = toUtcTimestamp(d.timestamp);
+        if (d.buySignal != null) {
+          marks.push({ time: t, position: "belowBar", color: THEME.green, shape: "arrowUp", text: "Long" });
+        }
+        if (d.sellSignal != null) {
+          marks.push({ time: t, position: "aboveBar", color: THEME.red, shape: "arrowDown", text: "Short" });
+        }
+      });
+    }
 
     const sma20 = sma(closes, 20);
     const bb = bollingerBands(closes, 20, 2);
@@ -238,7 +266,7 @@ export function BacktestLightweightChart({
       bbLowerData: toLine(bb.lower),
       rsiData: toLine(rsi14),
     };
-  }, [data]);
+  }, [data, trades]);
 
   useEffect(() => {
     const el = containerRef.current;
@@ -503,15 +531,17 @@ export function BacktestLightweightChart({
             </div>
           </div>
         )}
-        {/* Long / Short legend */}
+        {/* Long / Short legend (entry + exit when trades provided) */}
         <div className="flex items-center gap-4 shrink-0 border-l border-border/60 pl-3">
           <div className="flex items-center gap-1.5">
             <span className="w-2.5 h-2.5 rounded-sm bg-[#10B981] shrink-0" />
             <span className="text-[11px] font-semibold text-foreground">Long</span>
+            {trades?.length ? <span className="text-[10px] text-muted-foreground">(entry + exit)</span> : null}
           </div>
           <div className="flex items-center gap-1.5">
             <span className="w-2.5 h-2.5 rounded-sm bg-[#EF4444] shrink-0" />
             <span className="text-[11px] font-semibold text-foreground">Short</span>
+            {trades?.length ? <span className="text-[10px] text-muted-foreground">(entry + exit)</span> : null}
           </div>
         </div>
       </div>

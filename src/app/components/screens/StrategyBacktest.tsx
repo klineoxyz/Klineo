@@ -1533,6 +1533,7 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
                 </div>
                 <BacktestLightweightChart
                   data={backtestCandles}
+                  trades={generatedTrades}
                   height={384}
                   className="min-h-[320px]"
                 />
