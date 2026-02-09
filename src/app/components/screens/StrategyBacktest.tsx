@@ -488,6 +488,74 @@ function buildBacktestConfig(state: {
   };
 }
 
+/** Build a small grid of BacktestConfig for the current strategy (for parameter optimization). */
+function buildOptimizationGrid(base: BacktestConfig): BacktestConfig[] {
+  const grids: BacktestConfig[] = [];
+  const s = base.strategy;
+
+  if (s === "rsi-oversold") {
+    const periods = [10, 14, 21];
+    const oversolds = [25, 30, 35];
+    const overboughts = [65, 70, 75];
+    for (const p of periods) {
+      for (const ov of oversolds) {
+        for (const ob of overboughts) {
+          if (ov >= ob) continue;
+          grids.push({ ...base, rsiPeriod: p, rsiOversold: ov, rsiOverbought: ob });
+        }
+      }
+    }
+    return grids.length > 0 ? grids : [base];
+  }
+
+  if (s === "ma-crossover") {
+    const fastPeriods = [7, 9, 12];
+    const slowPeriods = [21, 26, 34];
+    for (const f of fastPeriods) {
+      for (const sl of slowPeriods) {
+        if (sl <= f) continue;
+        grids.push({ ...base, maFastPeriod: f, maSlowPeriod: sl });
+      }
+    }
+    return grids.length > 0 ? grids : [base];
+  }
+
+  if (s === "breakout") {
+    const lookbacks = [14, 20, 26];
+    const thresholds = [0.3, 0.5, 0.7];
+    for (const lb of lookbacks) {
+      for (const t of thresholds) {
+        grids.push({ ...base, breakoutLookback: lb, breakoutThresholdPct: t });
+      }
+    }
+    return grids;
+  }
+
+  if (s === "mean-reversion") {
+    const lookbacks = [14, 20, 26];
+    const zScores = [1.5, 2, 2.5];
+    for (const lb of lookbacks) {
+      for (const z of zScores) {
+        grids.push({ ...base, meanReversionLookback: lb, meanReversionZScore: z });
+      }
+    }
+    return grids;
+  }
+
+  if (s === "momentum") {
+    const rocPeriods = [7, 10, 14];
+    const minPcts = [0.5, 1, 1.5];
+    for (const roc of rocPeriods) {
+      for (const mp of minPcts) {
+        grids.push({ ...base, momentumRocPeriod: roc, momentumMinPct: mp });
+      }
+    }
+    return grids;
+  }
+
+  return [base];
+}
+
 // Calculate trade statistics from a list of generated trades
 const calculateTradeStatsFromTrades = (
   trades: Array<{ entryPrice: number; exitPrice: number; direction: 'long' | 'short' }>
@@ -645,6 +713,8 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
   const [backtestDataSource, setBacktestDataSource] = useState<"live" | "synthetic">("synthetic");
   const [backtestExchangeLabel, setBacktestExchangeLabel] = useState<string | null>(null);
   const [klinesError, setKlinesError] = useState<string | null>(null);
+  const [isOptimizing, setIsOptimizing] = useState(false);
+  const lastCandlesRef = React.useRef<KlineCandle[] | null>(null);
 
   const backtestCandles = backtestResult.data;
   const generatedTrades = backtestResult.trades;
@@ -747,6 +817,7 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
           env,
         });
         if (rawCandles.length > 0) {
+          lastCandlesRef.current = rawCandles;
           const result = runBacktestFromRealCandles(rawCandles, backtestConfig);
           setBacktestResult(result);
           setBacktestDataSource("live");
@@ -755,6 +826,7 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
           toast.success("Backtest completed with live data from " + dataConnection.exchange);
         } else {
           const synthetic = generateSyntheticCandles(200);
+          lastCandlesRef.current = synthetic;
           const result = runBacktestFromRealCandles(synthetic, backtestConfig);
           setBacktestResult(result);
           setHasResults(true);
@@ -764,6 +836,7 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
         const msg = e instanceof Error ? e.message : "Failed to load klines";
         setKlinesError(msg);
         const synthetic = generateSyntheticCandles(200);
+        lastCandlesRef.current = synthetic;
         const result = runBacktestFromRealCandles(synthetic, backtestConfig);
         setBacktestResult(result);
         setHasResults(true);
@@ -771,6 +844,7 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
       }
     } else {
       const synthetic = generateSyntheticCandles(200);
+      lastCandlesRef.current = synthetic;
       const result = runBacktestFromRealCandles(synthetic, backtestConfig);
       setBacktestResult(result);
       setHasResults(true);
@@ -778,6 +852,98 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
     }
 
     setIsBacktesting(false);
+  };
+
+  const handleOptimize = async () => {
+    if (strategy === "custom") {
+      toast.info("Optimization not available for custom strategies.");
+      return;
+    }
+    setIsOptimizing(true);
+    toast.info("Optimizing parameters...");
+
+    let candles: KlineCandle[] | null = lastCandlesRef.current;
+    if (!candles || candles.length === 0) {
+      const dataConnection = connections.length > 0 ? connections[0] : null;
+      const exchange = dataConnection?.exchange === "bybit" ? "bybit" : "binance";
+      const env = (dataConnection?.environment === "testnet" ? "testnet" : "production") as "production" | "testnet";
+      const symbolClean = symbol.replace("/", "").toUpperCase();
+      if (dataConnection) {
+        try {
+          const { candles: raw } = await candlesApi.getKlines({
+            exchange,
+            symbol: symbolClean,
+            interval: timeframe,
+            limit: 500,
+            env,
+          });
+          candles = raw.length > 0 ? raw : generateSyntheticCandles(200);
+        } catch {
+          candles = generateSyntheticCandles(200);
+        }
+      } else {
+        candles = generateSyntheticCandles(200);
+      }
+      lastCandlesRef.current = candles;
+    }
+
+    const baseConfig = buildBacktestConfig({
+      strategy,
+      rsiPeriod,
+      rsiOversold,
+      rsiOverbought,
+      maFastType,
+      maFastPeriod,
+      maSlowType,
+      maSlowPeriod,
+      breakoutLookback,
+      breakoutThresholdPct,
+      meanReversionLookback,
+      meanReversionZScore,
+      momentumRocPeriod,
+      momentumMinPct,
+      volumeFilterEnabled,
+      volumeMaPeriod,
+      atrPeriod,
+    });
+    const grid = buildOptimizationGrid(baseConfig);
+    let bestPnL = -Infinity;
+    let bestResult: { data: ChartPoint[]; trades: Trade[] } | null = null;
+    let bestConfig: BacktestConfig = baseConfig;
+
+    for (const cfg of grid) {
+      const result = runBacktestFromRealCandles(candles!, cfg);
+      const pnl = result.trades.reduce((sum, t) => {
+        const p = t.direction === "long" ? t.exitPrice - t.entryPrice : t.entryPrice - t.exitPrice;
+        return sum + p;
+      }, 0);
+      if (pnl > bestPnL) {
+        bestPnL = pnl;
+        bestResult = result;
+        bestConfig = cfg;
+      }
+    }
+
+    if (bestResult) {
+      setBacktestResult(bestResult);
+      setHasResults(true);
+      setRsiPeriod(String(bestConfig.rsiPeriod));
+      setRsiOversold(String(bestConfig.rsiOversold));
+      setRsiOverbought(String(bestConfig.rsiOverbought));
+      setMaFastPeriod(String(bestConfig.maFastPeriod));
+      setMaSlowPeriod(String(bestConfig.maSlowPeriod));
+      setBreakoutLookback(String(bestConfig.breakoutLookback));
+      setBreakoutThresholdPct(String(bestConfig.breakoutThresholdPct));
+      setMeanReversionLookback(String(bestConfig.meanReversionLookback));
+      setMeanReversionZScore(String(bestConfig.meanReversionZScore));
+      setMomentumRocPeriod(String(bestConfig.momentumRocPeriod));
+      setMomentumMinPct(String(bestConfig.momentumMinPct));
+      const wins = bestResult.trades.filter((t) => (t.direction === "long" ? t.exitPrice > t.entryPrice : t.entryPrice > t.exitPrice)).length;
+      const winRate = bestResult.trades.length > 0 ? ((wins / bestResult.trades.length) * 100).toFixed(1) : "0";
+      toast.success(`Optimization complete. Best of ${grid.length} runs: ${bestResult.trades.length} trades, ${winRate}% win rate, PnL $${bestPnL.toFixed(2)}. Parameters updated.`);
+    }
+
+    setIsOptimizing(false);
   };
 
   const handleLaunchStrategy = () => {
@@ -1305,9 +1471,9 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
                   <RefreshCw className="h-4 w-4" />
                   Re-run
                 </Button>
-                <Button variant="outline" size="sm" className="gap-2" onClick={() => toast.info("Optimize", { description: "Parameter optimization coming soon" })}>
-                  <Zap className="h-4 w-4" />
-                  Optimize
+                <Button variant="outline" size="sm" className="gap-2" onClick={handleOptimize} disabled={isOptimizing}>
+                  {isOptimizing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
+                  {isOptimizing ? "Optimizing…" : "Optimize"}
                 </Button>
                 <Button variant="outline" size="sm" className="gap-2" onClick={() => toast.info("Share", { description: "Share backtest results coming soon" })}>
                   <Share2 className="h-4 w-4" />
@@ -1383,8 +1549,9 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
 
               {/* Optimize Button */}
               <div className="flex justify-end">
-                <Button className="bg-[#FFB000] hover:bg-[#FFB000]/90 text-black font-semibold w-full sm:w-auto min-h-[44px] sm:min-h-0" onClick={() => toast.info("Optimize", { description: "Parameter optimization coming soon" })}>
-                  Optimize
+                <Button className="bg-[#FFB000] hover:bg-[#FFB000]/90 text-black font-semibold w-full sm:w-auto min-h-[44px] sm:min-h-0" onClick={handleOptimize} disabled={isOptimizing}>
+                  {isOptimizing ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                  {isOptimizing ? "Optimizing…" : "Optimize"}
                 </Button>
               </div>
 
