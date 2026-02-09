@@ -123,6 +123,22 @@ export default function App() {
     return <Navigate to={ROUTES.dashboard} replace />;
   }
 
+  // Legal pages: show same content for everyone (authenticated or not) so /privacy-policy etc. always work
+  if (pathname === ROUTES.privacyPolicy || pathname === ROUTES.termsOfService || pathname === ROUTES.riskDisclosure) {
+    return (
+      <div className="h-screen w-screen flex flex-col bg-background text-foreground overflow-hidden dark min-w-0">
+        <main className="flex-1 overflow-y-auto overflow-x-hidden min-w-0">
+          <Routes>
+            <Route path={ROUTES.termsOfService} element={<TermsOfService onNavigate={handleNavigate} />} />
+            <Route path={ROUTES.privacyPolicy} element={<PrivacyPolicy onNavigate={handleNavigate} />} />
+            <Route path={ROUTES.riskDisclosure} element={<RiskDisclosure onNavigate={handleNavigate} />} />
+          </Routes>
+        </main>
+        <Toaster />
+      </div>
+    );
+  }
+
   if (!isAuthenticated) {
     const publicRoutes = (
       <Routes>
