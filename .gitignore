@@ -24,3 +24,6 @@ Thumbs.db
 *.swp
 *.swo
 *~
+
+# Backtesting module output (Freqtrade raw + normalized results)
+services/backtesting/output/

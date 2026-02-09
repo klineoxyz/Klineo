@@ -1,0 +1,18 @@
+{
+  "dry_run": true,
+  "stake_currency": "USDT",
+  "exchange": {
+    "name": "binance",
+    "key": "",
+    "secret": ""
+  },
+  "pair_whitelist": [],
+  "timeframe": "15m",
+  "max_open_trades": 3,
+  "stake_amount": "unlimited",
+  "tradable_balance_ratio": 0.99,
+  "fee": 0.001,
+  "data_format_ohlcv": "json",
+  "dataformat_ohlcv": "json",
+  "backtest_cache": "day"
+}
