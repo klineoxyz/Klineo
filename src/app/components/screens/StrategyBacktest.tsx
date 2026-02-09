@@ -176,36 +176,27 @@ const generateBacktestCandlesticks = (count: number) => {
   return { data, trades };
 };
 
-const { data: backtestCandles, trades: generatedTrades } = generateBacktestCandlesticks(50);
-const sma20Backtest = calculateSMA(backtestCandles, 20, "close");
-const bbBacktest = calculateBollingerBands(backtestCandles, 20, 2);
-
-const backtestChartData = backtestCandles.map((item, index) => ({
-  ...item,
-  sma20: sma20Backtest[index],
-  bb_upper: bbBacktest[index].upper,
-  bb_middle: bbBacktest[index].middle,
-  bb_lower: bbBacktest[index].lower,
-}));
-
-// Calculate trade statistics from generated trades
-const calculateTradeStats = () => {
-  let totalTrades = generatedTrades.length;
+// Calculate trade statistics from a list of generated trades
+const calculateTradeStatsFromTrades = (
+  trades: Array<{ entryPrice: number; exitPrice: number; direction: 'long' | 'short' }>
+) => {
+  let totalTrades = trades.length;
   let winningTrades = 0;
   let totalPnl = 0;
   let totalPnlPercent = 0;
-  
-  generatedTrades.forEach(trade => {
-    const pnl = trade.direction === 'long' 
-      ? trade.exitPrice - trade.entryPrice 
-      : trade.entryPrice - trade.exitPrice;
+
+  trades.forEach((trade) => {
+    const pnl =
+      trade.direction === 'long'
+        ? trade.exitPrice - trade.entryPrice
+        : trade.entryPrice - trade.exitPrice;
     const pnlPercent = (pnl / trade.entryPrice) * 100;
-    
+
     totalPnl += pnl;
     totalPnlPercent += pnlPercent;
     if (pnl > 0) winningTrades++;
   });
-  
+
   return {
     totalTrades,
     winRate: totalTrades > 0 ? (winningTrades / totalTrades) * 100 : 0,
@@ -245,20 +236,6 @@ const Candlestick = (props: any) => {
     </g>
   );
 };
-
-const backtestTrades = Array.from({ length: 15 }, (_, i) => ({
-  id: i + 1,
-  entryTime: new Date(Date.now() - (15 - i) * 86400000 * 2).toLocaleString(),
-  exitTime: new Date(Date.now() - (15 - i) * 86400000 * 2 + 43200000).toLocaleString(),
-  direction: Math.random() > 0.5 ? "Long" : "Short",
-  entryPrice: (45000 + Math.random() * 2000).toFixed(2),
-  exitPrice: (45000 + Math.random() * 2000).toFixed(2),
-  pnl: (Math.random() * 2000 - 500).toFixed(2),
-  pnlPercent: (Math.random() * 10 - 2).toFixed(2),
-  leverage: ["1x", "2x", "3x", "5x"][Math.floor(Math.random() * 4)],
-  stopLoss: (45000 - Math.random() * 1000).toFixed(2),
-  takeProfit: (46000 + Math.random() * 1000).toFixed(2),
-}));
 
 const strategyOptions = [
   { id: "rsi-oversold", name: "RSI Oversold/Overbought", description: "Buy when RSI < 30, Sell when RSI > 70" },
@@ -318,8 +295,27 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
   const [goLiveRiskAccepted, setGoLiveRiskAccepted] = useState(false);
   const [isGoLiveSubmitting, setIsGoLiveSubmitting] = useState(false);
 
-  // Calculate KPIs from generated trades
-  const tradeStats = calculateTradeStats();
+  // Backtest data: regenerated on "Run Backtest" so chart and KPIs update
+  const [backtestResult, setBacktestResult] = useState(() => generateBacktestCandlesticks(50));
+
+  const backtestCandles = backtestResult.data;
+  const generatedTrades = backtestResult.trades;
+
+  const sma20Backtest = React.useMemo(() => calculateSMA(backtestCandles, 20, "close"), [backtestCandles]);
+  const bbBacktest = React.useMemo(() => calculateBollingerBands(backtestCandles, 20, 2), [backtestCandles]);
+  const backtestChartData = React.useMemo(
+    () =>
+      backtestCandles.map((item, index) => ({
+        ...item,
+        sma20: sma20Backtest[index],
+        bb_upper: bbBacktest[index].upper,
+        bb_middle: bbBacktest[index].middle,
+        bb_lower: bbBacktest[index].lower,
+      })),
+    [backtestCandles, sma20Backtest, bbBacktest]
+  );
+
+  const tradeStats = React.useMemo(() => calculateTradeStatsFromTrades(generatedTrades), [generatedTrades]);
   const kpis = {
     totalTrades: tradeStats.totalTrades,
     winRate: tradeStats.winRate,
@@ -331,10 +327,41 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
     profitFactor: 2.34,
   };
 
+  // Trade list for table: derived from generated trades so it stays in sync with chart
+  const backtestTrades = React.useMemo(
+    () =>
+      generatedTrades.map((trade, i) => {
+        const pnl =
+          trade.direction === "long"
+            ? trade.exitPrice - trade.entryPrice
+            : trade.entryPrice - trade.exitPrice;
+        const pnlPercent = (pnl / trade.entryPrice) * 100;
+        const entryTs = backtestCandles[trade.entryIndex]?.timestamp;
+        const exitTs = backtestCandles[trade.exitIndex]?.timestamp;
+        const entryTime = entryTs != null ? new Date(entryTs).toLocaleString() : "";
+        const exitTime = exitTs != null ? new Date(exitTs).toLocaleString() : "";
+        return {
+          id: i + 1,
+          entryTime,
+          exitTime,
+          direction: trade.direction === "long" ? "Long" : "Short",
+          entryPrice: trade.entryPrice.toFixed(2),
+          exitPrice: trade.exitPrice.toFixed(2),
+          pnl: pnl.toFixed(2),
+          pnlPercent: pnlPercent.toFixed(2),
+          leverage: "1x",
+          stopLoss: (trade.entryPrice * 0.98).toFixed(2),
+          takeProfit: (trade.entryPrice * 1.02).toFixed(2),
+        };
+      }),
+    [generatedTrades, backtestCandles]
+  );
+
   const handleRunBacktest = () => {
     setIsBacktesting(true);
     toast.info("Running backtest...");
     setTimeout(() => {
+      setBacktestResult(generateBacktestCandlesticks(50));
       setIsBacktesting(false);
       setHasResults(true);
       toast.success("Backtest completed successfully!");
