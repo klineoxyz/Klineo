@@ -455,8 +455,8 @@ exchangeConnectionsRouter.post(
   uuidParam('id'),
   validate([
     body('default_leverage').optional().isInt({ min: 1, max: 125 }).withMessage('Leverage 1-125'),
-    body('margin_mode').optional().isIn(['isolated', 'cross']).withMessage('isolated or cross'),
-    body('position_mode').optional().isIn(['one_way', 'hedge']).withMessage('one_way or hedge'),
+    body('margin_mode').optional().isIn(['isolated', 'cross', 'Isolated', 'Cross', 'ISOLATED', 'CROSS']).withMessage('isolated or cross'),
+    body('position_mode').optional().isIn(['one_way', 'hedge', 'one-way', 'One-way', 'Hedge']).withMessage('one_way or hedge'),
   ]),
   async (req: AuthenticatedRequest, res) => {
     const client = getSupabase();
@@ -465,12 +465,12 @@ exchangeConnectionsRouter.post(
     }
     const requestId = (req as any).requestId || 'unknown';
     const connectionId = req.params.id;
-    const { default_leverage, margin_mode, position_mode } = req.body;
+    const rawBody = req.body as { default_leverage?: number; margin_mode?: string; position_mode?: string };
 
     try {
       const { data: connection, error: fetchError } = await client
         .from('user_exchange_connections')
-        .select('id, exchange, environment, encrypted_config_b64, supports_futures, max_leverage_allowed, default_leverage, margin_mode, position_mode')
+        .select('id, exchange, environment, encrypted_config_b64, encrypted_config, supports_futures, max_leverage_allowed, default_leverage, margin_mode, position_mode')
         .eq('id', connectionId)
         .eq('user_id', req.user!.id)
         .single();
@@ -483,35 +483,67 @@ exchangeConnectionsRouter.post(
         return res.status(400).json({ error: 'Exchange does not support futures', requestId });
       }
 
+      let configB64: string;
       const hasB64 = typeof connection.encrypted_config_b64 === 'string' && connection.encrypted_config_b64.length > 0;
-      if (!hasB64) {
+      if (hasB64) {
+        configB64 = connection.encrypted_config_b64;
+      } else if (connection.encrypted_config != null) {
+        configB64 = encryptedConfigToBase64(connection.encrypted_config);
+      } else {
         return res.status(400).json({ error: 'Credentials need to be re-saved', requestId });
       }
 
       const conn = connection as { default_leverage?: number; margin_mode?: string; position_mode?: string };
-      const leverage = default_leverage ?? conn.default_leverage ?? 3;
+      const leverage = rawBody.default_leverage ?? conn.default_leverage ?? 3;
       const maxAllowed = Number(connection.max_leverage_allowed ?? 10);
       if (leverage > maxAllowed) {
         return res.status(400).json({ error: `Leverage must be <= ${maxAllowed}`, requestId });
       }
 
       const env = (connection.environment || 'production') as 'production' | 'testnet';
-      const decryptedJson = await decrypt(connection.encrypted_config_b64);
+      const decryptedJson = await decrypt(configB64);
       const parsed = JSON.parse(decryptedJson);
       const symbol = 'BTCUSDT';
-      const marginMode = (margin_mode ?? conn.margin_mode ?? 'isolated') as 'isolated' | 'cross';
-      const posMode = (position_mode ?? conn.position_mode ?? 'one_way') as 'one_way' | 'hedge';
+      const marginModeRaw = rawBody.margin_mode ?? conn.margin_mode ?? 'isolated';
+      const marginMode = (typeof marginModeRaw === 'string' ? marginModeRaw.toLowerCase().replace(/^crossed$/i, 'cross') : 'isolated') as 'isolated' | 'cross';
+      const posModeRaw = rawBody.position_mode ?? conn.position_mode ?? 'one_way';
+      const posMode = (typeof posModeRaw === 'string' ? posModeRaw.toLowerCase().replace(/-/g, '_').replace(/one_way|oneway/i, 'one_way').replace(/hedge/i, 'hedge') : 'one_way') as 'one_way' | 'hedge';
+      const marginModeFinal = marginMode === 'cross' ? 'cross' : 'isolated';
+      const posModeFinal = posMode === 'hedge' ? 'hedge' : 'one_way';
+
+      /** Binance/Bybit sometimes return "no need to change" when already set; treat as success */
+      const isNoOpError = (e: unknown) => {
+        const msg = e instanceof Error ? e.message : String(e ?? '');
+        return /-4046|-4059|no need to change|already set/i.test(msg);
+      };
 
       if (connection.exchange === 'bybit') {
         const creds: bybitFutures.BybitFuturesCredentials = { apiKey: parsed.apiKey, apiSecret: parsed.apiSecret, environment: env };
         await bybitFutures.setLeverage(creds, symbol, leverage);
-        await bybitFutures.setMarginMode(creds, symbol, marginMode);
-        await bybitFutures.setPositionMode(creds, posMode);
+        await bybitFutures.setMarginMode(creds, symbol, marginModeFinal);
+        try {
+          await bybitFutures.setPositionMode(creds, posModeFinal);
+        } catch (e) {
+          if (!isNoOpError(e)) throw e;
+        }
       } else {
         const creds: binanceFutures.BinanceFuturesCredentials = { apiKey: parsed.apiKey, apiSecret: parsed.apiSecret, environment: env };
-        await binanceFutures.setLeverage(creds, symbol, leverage);
-        await binanceFutures.setMarginMode(creds, symbol, marginMode);
-        await binanceFutures.setPositionMode(creds, posMode);
+        // Binance: set position mode first, then margin type, then leverage
+        try {
+          await binanceFutures.setPositionMode(creds, posModeFinal);
+        } catch (e) {
+          if (!isNoOpError(e)) throw e;
+        }
+        try {
+          await binanceFutures.setMarginMode(creds, symbol, marginModeFinal);
+        } catch (e) {
+          if (!isNoOpError(e)) throw e;
+        }
+        try {
+          await binanceFutures.setLeverage(creds, symbol, leverage);
+        } catch (e) {
+          if (!isNoOpError(e)) throw e;
+        }
       }
 
       await client
@@ -520,8 +552,8 @@ exchangeConnectionsRouter.post(
           futures_enabled: true,
           supports_futures: true,
           default_leverage: leverage,
-          margin_mode: marginMode,
-          position_mode: posMode,
+          margin_mode: marginModeFinal,
+          position_mode: posModeFinal,
           updated_at: new Date().toISOString(),
         })
         .eq('id', connectionId)
