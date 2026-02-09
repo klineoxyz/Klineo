@@ -358,7 +358,7 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
   const [configCollapsed, setConfigCollapsed] = useState(false);
   const [launchDialogOpen, setLaunchDialogOpen] = useState(false);
   const [isBacktesting, setIsBacktesting] = useState(false);
-  const [hasResults, setHasResults] = useState(true);
+  const [hasResults, setHasResults] = useState(false);
   const [expandedTrade, setExpandedTrade] = useState<number | null>(null);
   const [launchMode, setLaunchMode] = useState<"demo" | "live">("demo");
   const [riskAccepted, setRiskAccepted] = useState(false);
@@ -920,7 +920,7 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
             )}
           </div>
 
-          {/* Summary Statistics Header - Matching Screenshot */}
+          {/* Summary Statistics Header — only after a backtest run; KPIs update when user re-runs */}
           {hasResults && (
             <div className="space-y-6">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
