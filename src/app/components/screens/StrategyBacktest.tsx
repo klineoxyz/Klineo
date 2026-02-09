@@ -133,8 +133,19 @@ function computeRSI(closes: number[], period: number = 14): number | null {
   return 100 - 100 / (1 + rs);
 }
 
-/** Convert exchange klines to chart shape and run RSI-based backtest (long RSI<30 exit RSI>70, short RSI>70 exit RSI<30). */
-function runBacktestFromRealCandles(apiCandles: KlineCandle[]): {
+/** Config passed into backtest so results reflect Strategy Parameters panel. */
+export type BacktestConfig = {
+  strategy: string;
+  rsiPeriod: number;
+  rsiOversold: number;
+  rsiOverbought: number;
+};
+
+/** Convert exchange klines to chart shape and run RSI-based backtest (long RSI<oversold exit RSI>overbought, short RSI>overbought exit RSI<oversold). Uses config when strategy is RSI. */
+function runBacktestFromRealCandles(
+  apiCandles: KlineCandle[],
+  config?: BacktestConfig
+): {
   data: Array<{
     time: string;
     timestamp: number;
@@ -148,9 +159,9 @@ function runBacktestFromRealCandles(apiCandles: KlineCandle[]): {
   }>;
   trades: Array<{ entryIndex: number; exitIndex: number; entryPrice: number; exitPrice: number; direction: "long" | "short" }>;
 } {
-  const RSI_PERIOD = 14;
-  const RSI_OVERSOLD = 30;
-  const RSI_OVERBOUGHT = 70;
+  const RSI_PERIOD = config?.strategy === "rsi-oversold" ? config.rsiPeriod : 14;
+  const RSI_OVERSOLD = config?.strategy === "rsi-oversold" ? config.rsiOversold : 30;
+  const RSI_OVERBOUGHT = config?.strategy === "rsi-oversold" ? config.rsiOverbought : 70;
   const data = apiCandles.map((c) => ({
     time: new Date(c.time).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
     timestamp: c.time,
@@ -388,6 +399,26 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
   const [launchCapital, setLaunchCapital] = useState("10000");
   const [exchange, setExchange] = useState("binance");
 
+  // Strategy-specific parameters (expert config)
+  const [rsiPeriod, setRsiPeriod] = useState("14");
+  const [rsiOversold, setRsiOversold] = useState("30");
+  const [rsiOverbought, setRsiOverbought] = useState("70");
+  const [maFastType, setMaFastType] = useState<"sma" | "ema">("ema");
+  const [maFastPeriod, setMaFastPeriod] = useState("9");
+  const [maSlowType, setMaSlowType] = useState<"sma" | "ema">("ema");
+  const [maSlowPeriod, setMaSlowPeriod] = useState("21");
+  const [breakoutLookback, setBreakoutLookback] = useState("20");
+  const [breakoutThresholdPct, setBreakoutThresholdPct] = useState("0.5");
+  const [meanReversionLookback, setMeanReversionLookback] = useState("20");
+  const [meanReversionZScore, setMeanReversionZScore] = useState("2");
+  const [momentumRocPeriod, setMomentumRocPeriod] = useState("10");
+  const [momentumMinPct, setMomentumMinPct] = useState("1");
+  const [volumeFilterEnabled, setVolumeFilterEnabled] = useState(false);
+  const [volumeMaPeriod, setVolumeMaPeriod] = useState("20");
+  const [atrPeriod, setAtrPeriod] = useState("14");
+  const [strategyParamsOpen, setStrategyParamsOpen] = useState(true);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+
   // Go Live (Futures) modal + gating (load connections on mount)
   const [goLiveFuturesOpen, setGoLiveFuturesOpen] = useState(false);
   const [connections, setConnections] = useState<ExchangeConnection[]>([]);
@@ -487,7 +518,13 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
           env,
         });
         if (rawCandles.length > 0) {
-          const result = runBacktestFromRealCandles(rawCandles);
+          const backtestConfig: BacktestConfig = {
+            strategy,
+            rsiPeriod: parseInt(rsiPeriod, 10) || 14,
+            rsiOversold: parseInt(rsiOversold, 10) || 30,
+            rsiOverbought: parseInt(rsiOverbought, 10) || 70,
+          };
+          const result = runBacktestFromRealCandles(rawCandles, backtestConfig);
           setBacktestResult(result);
           setBacktestDataSource("live");
           setBacktestExchangeLabel(`${dataConnection.exchange}${env === "testnet" ? " (testnet)" : ""}`);
@@ -720,6 +757,135 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
                 <p className="text-xs text-muted-foreground">{selectedStrategy.description}</p>
               )}
             </div>
+
+            {/* Strategy-specific parameters (expert) */}
+            <Collapsible open={strategyParamsOpen} onOpenChange={setStrategyParamsOpen}>
+              <CollapsibleTrigger asChild>
+                <Button variant="ghost" size="sm" className="w-full justify-between px-0 h-8 text-xs font-medium text-muted-foreground hover:text-foreground">
+                  Strategy parameters
+                  {strategyParamsOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                </Button>
+              </CollapsibleTrigger>
+              <CollapsibleContent className="space-y-3 pt-2">
+                {strategy === "rsi-oversold" && (
+                  <>
+                    <div className="space-y-1">
+                      <Label className="text-xs">RSI period</Label>
+                      <Input type="number" min={5} max={50} value={rsiPeriod} onChange={(e) => setRsiPeriod(e.target.value)} className="h-8 text-xs" />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Oversold level</Label>
+                      <Input type="number" min={10} max={50} value={rsiOversold} onChange={(e) => setRsiOversold(e.target.value)} className="h-8 text-xs" />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Overbought level</Label>
+                      <Input type="number" min={50} max={90} value={rsiOverbought} onChange={(e) => setRsiOverbought(e.target.value)} className="h-8 text-xs" />
+                    </div>
+                  </>
+                )}
+                {strategy === "ma-crossover" && (
+                  <>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Fast MA type</Label>
+                      <Select value={maFastType} onValueChange={(v: "sma" | "ema") => setMaFastType(v)}>
+                        <SelectTrigger className="h-8 text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="sma">SMA</SelectItem>
+                          <SelectItem value="ema">EMA</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Fast MA period</Label>
+                      <Input type="number" min={1} max={99} value={maFastPeriod} onChange={(e) => setMaFastPeriod(e.target.value)} className="h-8 text-xs" />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Slow MA type</Label>
+                      <Select value={maSlowType} onValueChange={(v: "sma" | "ema") => setMaSlowType(v)}>
+                        <SelectTrigger className="h-8 text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="sma">SMA</SelectItem>
+                          <SelectItem value="ema">EMA</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Slow MA period</Label>
+                      <Input type="number" min={2} max={200} value={maSlowPeriod} onChange={(e) => setMaSlowPeriod(e.target.value)} className="h-8 text-xs" />
+                    </div>
+                  </>
+                )}
+                {strategy === "breakout" && (
+                  <>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Lookback period</Label>
+                      <Input type="number" min={5} max={100} value={breakoutLookback} onChange={(e) => setBreakoutLookback(e.target.value)} className="h-8 text-xs" />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Breakout threshold (%)</Label>
+                      <Input type="number" step="0.1" min={0} value={breakoutThresholdPct} onChange={(e) => setBreakoutThresholdPct(e.target.value)} className="h-8 text-xs" />
+                    </div>
+                  </>
+                )}
+                {strategy === "mean-reversion" && (
+                  <>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Lookback period</Label>
+                      <Input type="number" min={5} max={100} value={meanReversionLookback} onChange={(e) => setMeanReversionLookback(e.target.value)} className="h-8 text-xs" />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Z-score threshold</Label>
+                      <Input type="number" step="0.1" value={meanReversionZScore} onChange={(e) => setMeanReversionZScore(e.target.value)} className="h-8 text-xs" />
+                    </div>
+                  </>
+                )}
+                {strategy === "momentum" && (
+                  <>
+                    <div className="space-y-1">
+                      <Label className="text-xs">ROC period</Label>
+                      <Input type="number" min={1} max={50} value={momentumRocPeriod} onChange={(e) => setMomentumRocPeriod(e.target.value)} className="h-8 text-xs" />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Min momentum (%)</Label>
+                      <Input type="number" step="0.1" value={momentumMinPct} onChange={(e) => setMomentumMinPct(e.target.value)} className="h-8 text-xs" />
+                    </div>
+                  </>
+                )}
+                {strategy === "custom" && (
+                  <p className="text-xs text-muted-foreground">Custom strategy logic (upload or API) coming soon.</p>
+                )}
+              </CollapsibleContent>
+            </Collapsible>
+
+            {/* Indicators & filters (expert) */}
+            <Collapsible open={filtersOpen} onOpenChange={setFiltersOpen}>
+              <CollapsibleTrigger asChild>
+                <Button variant="ghost" size="sm" className="w-full justify-between px-0 h-8 text-xs font-medium text-muted-foreground hover:text-foreground">
+                  Indicators & filters
+                  {filtersOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                </Button>
+              </CollapsibleTrigger>
+              <CollapsibleContent className="space-y-3 pt-2">
+                <div className="flex items-center justify-between gap-2">
+                  <Label className="text-xs">Volume filter (MA)</Label>
+                  <Checkbox checked={volumeFilterEnabled} onCheckedChange={(c) => setVolumeFilterEnabled(!!c)} />
+                </div>
+                {volumeFilterEnabled && (
+                  <div className="space-y-1">
+                    <Label className="text-xs">Volume MA period</Label>
+                    <Input type="number" min={5} max={50} value={volumeMaPeriod} onChange={(e) => setVolumeMaPeriod(e.target.value)} className="h-8 text-xs" />
+                  </div>
+                )}
+                <div className="space-y-1">
+                  <Label className="text-xs">ATR period (volatility)</Label>
+                  <Input type="number" min={5} max={50} value={atrPeriod} onChange={(e) => setAtrPeriod(e.target.value)} className="h-8 text-xs" />
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
 
             {/* Date Range */}
             <div className="space-y-2">
