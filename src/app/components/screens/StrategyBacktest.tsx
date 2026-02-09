@@ -78,6 +78,7 @@ import { toast } from "sonner";
 import { useAuth } from "@/app/contexts/AuthContext";
 import { useDemo } from "@/app/contexts/DemoContext";
 import { api, exchangeConnections, strategies, candles as candlesApi, type ExchangeConnection, type KlineCandle } from "@/lib/api";
+import { fetchUsdtPairs } from "@/lib/binance";
 import {
   Dialog,
   DialogContent,
@@ -361,6 +362,15 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
   const [riskAccepted, setRiskAccepted] = useState(false);
   const [tradeBreakdownExpanded, setTradeBreakdownExpanded] = useState(true);
 
+  // Available pairs (from Binance, same as Terminal) — loaded on mount
+  const [availablePairs, setAvailablePairs] = useState<Array<{ symbol: string }>>([
+    { symbol: "BTC/USDT" },
+    { symbol: "ETH/USDT" },
+    { symbol: "SOL/USDT" },
+    { symbol: "BNB/USDT" },
+  ]);
+  const [pairsLoaded, setPairsLoaded] = useState(false);
+
   // Strategy Configuration State
   const [symbol, setSymbol] = useState("BTC/USDT");
   const [strategy, setStrategy] = useState("rsi-oversold");
@@ -534,6 +544,16 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
       .catch(() => setConnectionsLoaded(true));
   }, []);
 
+  // Load available USDT pairs for symbol selector (same source as Terminal)
+  useEffect(() => {
+    fetchUsdtPairs(150)
+      .then((list) => {
+        setAvailablePairs(list.map((p) => ({ symbol: p.symbol })));
+        setPairsLoaded(true);
+      })
+      .catch(() => setPairsLoaded(true));
+  }, []);
+
   useEffect(() => {
     if (!user?.id) {
       setEntitlement(null);
@@ -662,18 +682,19 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
 
             <Separator />
 
-            {/* Symbol Selector */}
+            {/* Symbol Selector — same pairs as Terminal (from exchange) */}
             <div className="space-y-2">
               <Label>Trading Symbol</Label>
               <Select value={symbol} onValueChange={setSymbol}>
                 <SelectTrigger>
-                  <SelectValue />
+                  <SelectValue placeholder="Select pair" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="BTC/USDT">BTC/USDT</SelectItem>
-                  <SelectItem value="ETH/USDT">ETH/USDT</SelectItem>
-                  <SelectItem value="SOL/USDT">SOL/USDT</SelectItem>
-                  <SelectItem value="BNB/USDT">BNB/USDT</SelectItem>
+                  {availablePairs.map((p) => (
+                    <SelectItem key={p.symbol} value={p.symbol}>
+                      {p.symbol}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
