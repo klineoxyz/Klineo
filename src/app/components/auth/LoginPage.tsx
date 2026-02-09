@@ -9,6 +9,7 @@ import { Label } from "@/app/components/ui/label";
 import { Mail, Lock, Eye, EyeOff, ArrowLeft } from "lucide-react";
 import { useAuth } from "@/app/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
+import { GoogleIcon } from "@/app/components/auth/GoogleIcon";
 
 interface LoginPageProps {
   onNavigate: (view: string) => void;
@@ -169,11 +170,14 @@ export function LoginPage({ onNavigate }: LoginPageProps) {
             <Button
               type="button"
               variant="outline"
-              className="w-full"
+              className="w-full bg-white hover:bg-gray-50 text-gray-800 border border-gray-300 hover:border-gray-400 dark:bg-white dark:hover:bg-gray-100 dark:text-gray-800 dark:border-gray-300"
               onClick={handleGoogleLogin}
               disabled={loading || oauthLoading}
             >
-              {oauthLoading ? "Redirecting..." : "Continue with Google"}
+              <span className="flex items-center justify-center gap-3">
+                <GoogleIcon className="size-5 shrink-0" />
+                {oauthLoading ? "Redirecting..." : "Continue with Google"}
+              </span>
             </Button>
 
             {showQuickDevLogin && (

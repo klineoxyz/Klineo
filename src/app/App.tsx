@@ -115,7 +115,7 @@ export default function App() {
   if (isAuthenticated && pathname === ROUTES.landing) {
     return <Navigate to={ROUTES.dashboard} replace />;
   }
-  if (isAuthenticated && pathname === ROUTES.login) {
+  if (isAuthenticated && (pathname === ROUTES.login || pathname === ROUTES.signup)) {
     return <Navigate to={ROUTES.dashboard} replace />;
   }
 

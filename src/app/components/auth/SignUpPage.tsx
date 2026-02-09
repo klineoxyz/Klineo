@@ -9,6 +9,8 @@ import { Label } from "@/app/components/ui/label";
 import { Checkbox } from "@/app/components/ui/checkbox";
 import { Mail, Lock, Eye, EyeOff, ArrowLeft, User } from "lucide-react";
 import { useAuth } from "@/app/contexts/AuthContext";
+import { supabase } from "@/lib/supabase";
+import { GoogleIcon } from "@/app/components/auth/GoogleIcon";
 
 interface SignUpPageProps {
   onNavigate: (view: string) => void;
@@ -35,6 +37,7 @@ export function SignUpPage({ onNavigate }: SignUpPageProps) {
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [oauthLoading, setOauthLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -67,6 +70,17 @@ export function SignUpPage({ onNavigate }: SignUpPageProps) {
       setError(err?.message ?? "Sign up failed");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleGoogleSignUp = async () => {
+    setError("");
+    setOauthLoading(true);
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({ provider: "google" });
+      if (error) setError(error.message);
+    } finally {
+      setOauthLoading(false);
     }
   };
 
@@ -199,6 +213,19 @@ export function SignUpPage({ onNavigate }: SignUpPageProps) {
 
             <Button type="submit" className="w-full bg-accent text-background hover:bg-accent/90" disabled={loading}>
               {loading ? "Creating Account..." : "Create Account"}
+            </Button>
+
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full bg-white hover:bg-gray-50 text-gray-800 border border-gray-300 hover:border-gray-400 dark:bg-white dark:hover:bg-gray-100 dark:text-gray-800 dark:border-gray-300"
+              onClick={handleGoogleSignUp}
+              disabled={loading || oauthLoading}
+            >
+              <span className="flex items-center justify-center gap-3">
+                <GoogleIcon className="size-5 shrink-0" />
+                {oauthLoading ? "Redirecting..." : "Create account with Google"}
+              </span>
             </Button>
           </form>
 
