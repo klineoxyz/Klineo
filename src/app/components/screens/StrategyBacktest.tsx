@@ -153,6 +153,7 @@ function computeRSI(closes: number[], period: number = 14): number | null {
 /** Config passed into backtest so results reflect Strategy Parameters and Filters. */
 export type BacktestConfig = {
   strategy: string;
+  direction: "long" | "short" | "both";
   rsiPeriod: number;
   rsiOversold: number;
   rsiOverbought: number;
@@ -206,6 +207,8 @@ function runBacktestFromRealCandles(
   let tradeId = 1;
   let inLong: number | null = null;
   let inShort: number | null = null;
+  const allowLong = config.direction === "long" || config.direction === "both";
+  const allowShort = config.direction === "short" || config.direction === "both";
 
   const strategy = config.strategy;
 
@@ -236,8 +239,8 @@ function runBacktestFromRealCandles(
           inShort = null;
         }
       } else {
-        if (rsi <= oversold) inLong = i;
-        else if (rsi >= overbought) inShort = i;
+        if (rsi <= oversold && allowLong) inLong = i;
+        else if (rsi >= overbought && allowShort) inShort = i;
       }
     }
     return { data, trades };
@@ -275,8 +278,8 @@ function runBacktestFromRealCandles(
           inShort = null;
         }
       } else {
-        if (crossUp) inLong = i;
-        else if (crossDown) inShort = i;
+        if (crossUp && allowLong) inLong = i;
+        else if (crossDown && allowShort) inShort = i;
       }
     }
     return { data, trades };
@@ -314,8 +317,8 @@ function runBacktestFromRealCandles(
           inShort = null;
         }
       } else {
-        if (breakUp) inLong = i;
-        else if (breakDown) inShort = i;
+        if (breakUp && allowLong) inLong = i;
+        else if (breakDown && allowShort) inShort = i;
       }
     }
     return { data, trades };
@@ -352,8 +355,8 @@ function runBacktestFromRealCandles(
           inShort = null;
         }
       } else {
-        if (oversold) inLong = i;
-        else if (overbought) inShort = i;
+        if (oversold && allowLong) inLong = i;
+        else if (overbought && allowShort) inShort = i;
       }
     }
     return { data, trades };
@@ -386,8 +389,8 @@ function runBacktestFromRealCandles(
           inShort = null;
         }
       } else {
-        if (strongUp) inLong = i;
-        else if (strongDown) inShort = i;
+        if (strongUp && allowLong) inLong = i;
+        else if (strongDown && allowShort) inShort = i;
       }
     }
     return { data, trades };
@@ -416,6 +419,7 @@ function generateSyntheticCandles(count: number): KlineCandle[] {
 
 const DEFAULT_BACKTEST_CONFIG: BacktestConfig = {
   strategy: "rsi-oversold",
+  direction: "both",
   rsiPeriod: 14,
   rsiOversold: 30,
   rsiOverbought: 70,
@@ -437,6 +441,7 @@ const DEFAULT_BACKTEST_CONFIG: BacktestConfig = {
 /** Build full BacktestConfig from form state (string inputs). */
 function buildBacktestConfig(state: {
   strategy: string;
+  direction: string;
   rsiPeriod: string;
   rsiOversold: string;
   rsiOverbought: string;
@@ -454,8 +459,10 @@ function buildBacktestConfig(state: {
   volumeMaPeriod: string;
   atrPeriod: string;
 }): BacktestConfig {
+  const dir = state.direction === "long" || state.direction === "short" ? state.direction : "both";
   return {
     strategy: state.strategy,
+    direction: dir,
     rsiPeriod: parseInt(state.rsiPeriod, 10) || 14,
     rsiOversold: parseInt(state.rsiOversold, 10) || 30,
     rsiOverbought: parseInt(state.rsiOverbought, 10) || 70,
@@ -717,6 +724,12 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
     [generatedTrades, backtestCandles]
   );
 
+  const longShortCounts = React.useMemo(() => {
+    const long = backtestTrades.filter((t) => t.direction === "Long").length;
+    const short = backtestTrades.filter((t) => t.direction === "Short").length;
+    return { long, short };
+  }, [backtestTrades]);
+
   const handleRunBacktest = async () => {
     setIsBacktesting(true);
     setKlinesError(null);
@@ -731,6 +744,7 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
 
     const backtestConfig = buildBacktestConfig({
       strategy,
+      direction,
       rsiPeriod,
       rsiOversold,
       rsiOverbought,
@@ -831,6 +845,7 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
 
     const baseConfig = buildBacktestConfig({
       strategy,
+      direction,
       rsiPeriod,
       rsiOversold,
       rsiOverbought,
@@ -1432,17 +1447,30 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
 
           {/* Summary Statistics Header — only after a backtest run; KPIs update when user re-runs */}
           {hasResults && (
-            <div className="space-y-6">
+            <div className="space-y-5">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                 <div className="flex items-center gap-3 min-w-0">
-                  <Badge className="bg-[#FFB000] text-black font-semibold px-2 py-1 shrink-0">
-                    {kpis.totalTrades}
+                  <Badge className="bg-[#FFB000] text-black font-semibold px-2.5 py-1 shrink-0">
+                    {kpis.totalTrades} trades
                   </Badge>
                   <div className="min-w-0">
-                    <h2 className="text-lg sm:text-xl font-semibold">Backtest results</h2>
+                    <h2 className="text-lg sm:text-xl font-semibold tracking-tight">Backtest results</h2>
                     <p className="text-xs sm:text-sm text-muted-foreground truncate">
-                      {selectedStrategy?.name || 'Strategy'} • {symbol.replace('/', '')} • {timeframe} • {new Date(dateFrom).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} - {new Date(dateTo).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                      {selectedStrategy?.name || 'Strategy'} · {symbol.replace('/', '')} · {timeframe} · {new Date(dateFrom).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} – {new Date(dateTo).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                     </p>
+                    {/* Long / Short opens & exits summary — visible when strategy supports both */}
+                    <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                      <span className="inline-flex items-center gap-1.5 text-xs font-medium text-green-600 dark:text-green-400">
+                        <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
+                        {longShortCounts.long} Long
+                      </span>
+                      <span className="text-muted-foreground/60">·</span>
+                      <span className="inline-flex items-center gap-1.5 text-xs font-medium text-red-600 dark:text-red-400">
+                        <span className="w-1.5 h-1.5 rounded-full bg-red-500" />
+                        {longShortCounts.short} Short
+                      </span>
+                      <span className="text-[10px] text-muted-foreground">(opens & exits on chart)</span>
+                    </div>
                     {backtestDataSource === "live" && backtestExchangeLabel && (
                       <p className="text-xs text-green-600 dark:text-green-400 mt-0.5">
                         Live data from {backtestExchangeLabel}
@@ -1464,31 +1492,31 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
                 </Button>
               </div>
 
-              {/* KPI Cards - Matching Screenshot Layout */}
+              {/* KPI Cards — pro copy-trading style */}
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
-                <div className="min-w-0">
-                  <div className="text-xs text-muted-foreground mb-1">Total trades</div>
-                  <div className="text-xl sm:text-2xl font-bold truncate">{kpis.totalTrades}</div>
+                <div className="rounded-lg border border-border/60 bg-card/40 px-4 py-3 min-w-0">
+                  <div className="text-[11px] uppercase tracking-wider text-muted-foreground mb-0.5">Total trades</div>
+                  <div className="text-xl sm:text-2xl font-bold tabular-nums">{kpis.totalTrades}</div>
                 </div>
-                <div className="min-w-0">
-                  <div className="text-xs text-muted-foreground mb-1">Win rate</div>
-                  <div className="text-xl sm:text-2xl font-bold text-green-500 truncate">{kpis.winRate.toFixed(1)}%</div>
+                <div className="rounded-lg border border-border/60 bg-card/40 px-4 py-3 min-w-0">
+                  <div className="text-[11px] uppercase tracking-wider text-muted-foreground mb-0.5">Win rate</div>
+                  <div className="text-xl sm:text-2xl font-bold text-green-500 tabular-nums">{kpis.winRate.toFixed(1)}%</div>
                 </div>
-                <div className="min-w-0">
-                  <div className="text-xs text-muted-foreground mb-1">PnL (USDT)</div>
-                  <div className={`text-xl sm:text-2xl font-bold truncate ${kpis.netPnl >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                <div className="rounded-lg border border-border/60 bg-card/40 px-4 py-3 min-w-0">
+                  <div className="text-[11px] uppercase tracking-wider text-muted-foreground mb-0.5">PnL (USDT)</div>
+                  <div className={`text-xl sm:text-2xl font-bold tabular-nums ${kpis.netPnl >= 0 ? 'text-green-500' : 'text-red-500'}`}>
                     {kpis.netPnl >= 0 ? '+' : ''}${kpis.netPnl.toFixed(2)}
                   </div>
                 </div>
-                <div className="min-w-0">
-                  <div className="text-xs text-muted-foreground mb-1">PnL (%)</div>
-                  <div className={`text-xl sm:text-2xl font-bold truncate ${kpis.roi >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                <div className="rounded-lg border border-border/60 bg-card/40 px-4 py-3 min-w-0">
+                  <div className="text-[11px] uppercase tracking-wider text-muted-foreground mb-0.5">PnL (%)</div>
+                  <div className={`text-xl sm:text-2xl font-bold tabular-nums ${kpis.roi >= 0 ? 'text-green-500' : 'text-red-500'}`}>
                     {kpis.roi >= 0 ? '+' : ''}{kpis.roi.toFixed(2)}%
                   </div>
                 </div>
-                <div className="min-w-0">
-                  <div className="text-xs text-muted-foreground mb-1">Avg Profit/Trade</div>
-                  <div className={`text-xl sm:text-2xl font-bold truncate ${kpis.avgPnl >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                <div className="rounded-lg border border-border/60 bg-card/40 px-4 py-3 min-w-0">
+                  <div className="text-[11px] uppercase tracking-wider text-muted-foreground mb-0.5">Avg / trade</div>
+                  <div className={`text-xl sm:text-2xl font-bold tabular-nums ${kpis.avgPnl >= 0 ? 'text-green-500' : 'text-red-500'}`}>
                     {kpis.avgPnl >= 0 ? '+' : ''}${kpis.avgPnl.toFixed(2)}
                   </div>
                 </div>
@@ -1585,7 +1613,7 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
           )}
         </div>
 
-        {/* BOTTOM PANEL - Trade Breakdown */}
+        {/* BOTTOM PANEL - Trade Breakdown (Long & Short opens & exits) */}
         {hasResults && !isBacktesting && (
           <div className={`border-t border-border transition-all duration-300 shrink-0 ${tradeBreakdownExpanded ? 'h-64 sm:h-80 lg:h-96' : 'h-auto'}`}>
             {/* Collapsible Header */}
@@ -1593,10 +1621,20 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
               className="flex items-center justify-between px-4 sm:px-6 py-3 bg-card/30 border-b border-border cursor-pointer hover:bg-card/50 transition-colors min-h-[52px]"
               onClick={() => setTradeBreakdownExpanded(!tradeBreakdownExpanded)}
             >
-              <div className="flex items-center gap-2 min-w-0">
+              <div className="flex items-center gap-3 min-w-0">
                 <ListOrdered className="h-4 w-4 text-primary shrink-0" />
-                <h3 className="font-semibold truncate">Trade Breakdown</h3>
-                <Badge variant="outline" className="shrink-0">{backtestTrades.length} trades</Badge>
+                <div>
+                  <h3 className="font-semibold truncate">Trade breakdown</h3>
+                  <p className="text-[11px] text-muted-foreground">Long & Short · opens & exits</p>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <Badge variant="outline" className="bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/20 font-mono text-xs">
+                    {longShortCounts.long} Long
+                  </Badge>
+                  <Badge variant="outline" className="bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20 font-mono text-xs">
+                    {longShortCounts.short} Short
+                  </Badge>
+                </div>
               </div>
               <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0" aria-label={tradeBreakdownExpanded ? "Collapse" : "Expand"}>
                 {tradeBreakdownExpanded ? (
@@ -1613,16 +1651,16 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
                 <div className="p-4 sm:p-6 min-w-0">
                   <Table className="min-w-[640px]">
                     <TableHeader>
-                      <TableRow>
-                        <TableHead className="w-12">#</TableHead>
-                        <TableHead>Entry Time</TableHead>
-                        <TableHead>Exit Time</TableHead>
-                        <TableHead>Direction</TableHead>
-                        <TableHead>Entry Price</TableHead>
-                        <TableHead>Exit Price</TableHead>
-                        <TableHead>PnL</TableHead>
-                        <TableHead>PnL %</TableHead>
-                        <TableHead className="w-12"></TableHead>
+                      <TableRow className="border-border/80">
+                        <TableHead className="w-12 text-muted-foreground font-medium">#</TableHead>
+                        <TableHead className="text-muted-foreground font-medium">Open</TableHead>
+                        <TableHead className="text-muted-foreground font-medium">Close</TableHead>
+                        <TableHead className="text-muted-foreground font-medium">Side</TableHead>
+                        <TableHead className="text-muted-foreground font-medium">Entry</TableHead>
+                        <TableHead className="text-muted-foreground font-medium">Exit</TableHead>
+                        <TableHead className="text-muted-foreground font-medium">PnL</TableHead>
+                        <TableHead className="text-muted-foreground font-medium">%</TableHead>
+                        <TableHead className="w-12" />
                       </TableRow>
                     </TableHeader>
                     <TableBody>
