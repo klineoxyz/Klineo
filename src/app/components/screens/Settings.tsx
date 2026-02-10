@@ -82,6 +82,8 @@ export function Settings({ onNavigate }: SettingsProps) {
 
   // Referral code (required to use platform / buy packages)
   const [hasReferral, setHasReferral] = useState(false);
+  const [referralCodeDisplay, setReferralCodeDisplay] = useState<string | null>(null);
+  const [referrerNameDisplay, setReferrerNameDisplay] = useState<string | null>(null);
   const [referralCodeInput, setReferralCodeInput] = useState("");
   const [claimReferralLoading, setClaimReferralLoading] = useState(false);
 
@@ -147,7 +149,10 @@ export function Settings({ onNavigate }: SettingsProps) {
         setAvatarImageError(false);
         setReferralWallet(data.referralWallet ?? "");
         setPaymentWalletBsc(data.paymentWalletBsc ?? "");
-        setHasReferral(!!(data as { hasReferral?: boolean }).hasReferral);
+        const d = data as { hasReferral?: boolean; referralCode?: string; referrerName?: string };
+        setHasReferral(!!d.hasReferral);
+        setReferralCodeDisplay(d.referralCode ?? null);
+        setReferrerNameDisplay(d.referrerName ?? null);
         setProfileLoading(false);
       })
       .catch((err: any) => {
@@ -681,9 +686,27 @@ export function Settings({ onNavigate }: SettingsProps) {
               A referral code is required to use the platform and to pay the joining fee or buy packages. Enter the code from the person who referred you.
             </p>
             {hasReferral ? (
-              <div className="flex items-center gap-2 text-sm text-[#10B981]">
-                <CheckCircle2 className="size-5 shrink-0" />
-                <span>You have entered a referral code. You can use the platform and purchase packages.</span>
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 text-sm text-[#10B981]">
+                  <CheckCircle2 className="size-5 shrink-0" />
+                  <span>You have entered a referral code. You can use the platform and purchase packages.</span>
+                </div>
+                {(referralCodeDisplay || referrerNameDisplay) && (
+                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground pt-1">
+                    {referralCodeDisplay && (
+                      <span>
+                        <span className="font-medium text-foreground">Referral code:</span>{" "}
+                        <span className="font-mono">{referralCodeDisplay}</span>
+                      </span>
+                    )}
+                    {referrerNameDisplay && (
+                      <span>
+                        <span className="font-medium text-foreground">Referred by:</span>{" "}
+                        {referrerNameDisplay}
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
             ) : (
               <div className="flex flex-col sm:flex-row gap-2 max-w-md">
@@ -708,8 +731,10 @@ export function Settings({ onNavigate }: SettingsProps) {
                       setHasReferral(true);
                       setReferralCodeInput("");
                       setProfileLoading(true);
-                      const data = await api.get<{ hasReferral?: boolean }>("/api/me/profile");
+                      const data = await api.get<{ hasReferral?: boolean; referralCode?: string; referrerName?: string }>("/api/me/profile");
                       setHasReferral(!!data.hasReferral);
+                      setReferralCodeDisplay(data.referralCode ?? null);
+                      setReferrerNameDisplay(data.referrerName ?? null);
                     } catch (err: unknown) {
                       const msg = err instanceof Error ? err.message : getApiErrorMessage(err);
                       toast.error("Invalid referral code", { description: msg });

@@ -115,6 +115,21 @@ profileRouter.get('/profile', async (req: AuthenticatedRequest, res) => {
       return res.status(404).json({ error: 'Profile not found' });
     }
 
+    let referralCode: string | null = null;
+    let referrerName: string | null = null;
+    if (profile.referred_by_user_id) {
+      const { data: referrer } = await client
+        .from('user_profiles')
+        .select('referral_code, full_name, username, email')
+        .eq('id', profile.referred_by_user_id)
+        .single();
+      if (referrer) {
+        referralCode = (referrer as { referral_code?: string | null }).referral_code ?? null;
+        const r = referrer as { full_name?: string | null; username?: string | null; email?: string | null };
+        referrerName = (r.full_name && r.full_name.trim()) || (r.username && r.username.trim()) || r.email || null;
+      }
+    }
+
     res.json({
       id: profile.id,
       email: profile.email,
@@ -128,6 +143,8 @@ profileRouter.get('/profile', async (req: AuthenticatedRequest, res) => {
       avatarUrl: profile.avatar_url ?? null,
       status: profile.status || 'active',
       hasReferral: !!profile.referred_by_user_id,
+      referralCode: referralCode ?? undefined,
+      referrerName: referrerName ?? undefined,
       createdAt: profile.created_at,
       updatedAt: profile.updated_at,
     });
