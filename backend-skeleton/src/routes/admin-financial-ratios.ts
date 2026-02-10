@@ -7,7 +7,7 @@ import { body } from 'express-validator';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { validate } from '../middleware/validation.js';
 
-const REFERRAL_POOL_PCT = parseFloat(process.env.REFERRAL_POOL_PCT || '70');
+const REFERRAL_POOL_PCT = parseFloat(process.env.REFERRAL_POOL_PCT || '50');
 const PLATFORM_PCT = parseFloat(process.env.PLATFORM_PCT || '20');
 const MARKETING_PCT = parseFloat(process.env.MARKETING_PCT || '10');
 const PCT_SUM = REFERRAL_POOL_PCT + PLATFORM_PCT + MARKETING_PCT;
