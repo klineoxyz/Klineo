@@ -1628,6 +1628,7 @@ export function Admin() {
                     <TableHead>Exchange / Experience</TableHead>
                     <TableHead>Trading Style</TableHead>
                     <TableHead>Preferred Markets</TableHead>
+                    <TableHead>Trading proof</TableHead>
                     <TableHead>Package Benefit</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Submitted</TableHead>
@@ -1637,7 +1638,7 @@ export function Admin() {
                 <TableBody>
                   {masterTraderApplications.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={10} className="text-center text-muted-foreground py-8">
+                      <TableCell colSpan={11} className="text-center text-muted-foreground py-8">
                         No Master Trader applications yet.
                       </TableCell>
                     </TableRow>
@@ -1657,6 +1658,11 @@ export function Admin() {
                           </TableCell>
                           <TableCell className="text-xs">{get("tradingStyle") ? (tradingStyleLabel[String(get("tradingStyle"))] ?? get("tradingStyle")) : "—"}</TableCell>
                           <TableCell className="text-xs">{get("preferredMarkets") ? (marketsLabel[String(get("preferredMarkets"))] ?? get("preferredMarkets")) : "—"}</TableCell>
+                          <TableCell className="text-xs">
+                            {app.proofUrl ? (
+                              <a href={app.proofUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">View screenshot</a>
+                            ) : "—"}
+                          </TableCell>
                           <TableCell className="text-xs text-muted-foreground">
                             6 mo – 1 yr free
                           </TableCell>
@@ -1760,23 +1766,26 @@ export function Admin() {
                     </dl>
                   </div>
 
-                  {/* 3. Proof of Performance — exact labels from application form */}
+                  {/* 3. Proof of Performance — exact labels from application form (screenshot required; profile URL optional) */}
                   <div className="rounded border border-border p-4 space-y-2 bg-muted/30">
                     <h4 className="text-sm font-semibold">Proof of Performance</h4>
-                    <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
+                    {/* Trading History Screenshot * — required on form; user uploads snapshot */}
+                    <div className="space-y-2">
+                      <dt className="text-muted-foreground text-xs font-medium">Trading History Screenshot *</dt>
+                      <dd>
+                        {masterTraderReviewApp.proofUrl ? (
+                          <div className="space-y-2">
+                            <a href={masterTraderReviewApp.proofUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline inline-block">Open in new tab</a>
+                            <img src={masterTraderReviewApp.proofUrl} alt="Trading history screenshot submitted by applicant" className="max-w-full max-h-72 object-contain rounded border border-border bg-background block" />
+                          </div>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">No screenshot uploaded</span>
+                        )}
+                      </dd>
+                    </div>
+                    <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs pt-2 border-t border-border">
                       <><dt className="text-muted-foreground">TradingView or Exchange Profile URL</dt><dd>{v(get("profileUrl")) ? <a href={String(get("profileUrl"))} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline truncate block">Open link</a> : "—"}</dd></>
                     </dl>
-                    {masterTraderReviewApp.proofUrl ? (
-                      <div className="pt-2 border-t border-border mt-2">
-                        <dt className="text-muted-foreground text-xs mb-1">Trading History Screenshot *</dt>
-                        <dd>
-                          <a href={masterTraderReviewApp.proofUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline">Open in new tab</a>
-                          <img src={masterTraderReviewApp.proofUrl} alt="Trading history proof" className="max-w-full max-h-64 object-contain rounded border border-border bg-background mt-2" />
-                        </dd>
-                      </div>
-                    ) : (
-                      <p className="text-xs text-muted-foreground pt-2 border-t border-border">No screenshot uploaded</p>
-                    )}
                   </div>
 
                   {/* 4. Trading Strategy — exact labels from application form */}
