@@ -1,7 +1,6 @@
 import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
 import { Badge } from "@/app/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/app/components/ui/tabs";
 import { TrendingUp, TrendingDown, Users, ArrowLeft, Copy } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { useState, useEffect } from "react";
@@ -9,7 +8,6 @@ import { api } from "@/lib/api";
 import { toast } from "@/app/lib/toast";
 import { LoadingWrapper } from "@/app/components/ui/loading-wrapper";
 import { ErrorState } from "@/app/components/ui/error-state";
-import { formatDistanceToNow } from "date-fns";
 
 interface TraderProfileProps {
   onNavigate: (view: string, data?: any) => void;
@@ -43,13 +41,16 @@ interface TraderDetails {
   }>;
 }
 
-type PerformancePeriod = "1m" | "3m" | "6m" | "1y" | "all";
+const PERFORMANCE_PERIODS = ["1m", "3m", "6m", "1y", "all"] as const;
+type PerformancePeriod = (typeof PERFORMANCE_PERIODS)[number];
 
 function filterPerformanceByPeriod(
   performance: TraderDetails["performance"],
   period: PerformancePeriod
-): TraderDetails["performance"] {
-  if (!performance.length || period === "all") return performance;
+): { data: TraderDetails["performance"]; fallbackLabel: string | null } {
+  if (!performance.length) return { data: [], fallbackLabel: null };
+  if (period === "all") return { data: performance, fallbackLabel: null };
+
   const now = Date.now();
   const ms = (n: number) => n * 24 * 60 * 60 * 1000;
   const cutoff =
@@ -57,7 +58,13 @@ function filterPerformanceByPeriod(
     period === "3m" ? now - ms(92) :
     period === "6m" ? now - ms(183) :
     period === "1y" ? now - ms(365) : 0;
-  return performance.filter((p) => new Date(p.periodEnd).getTime() >= cutoff);
+
+  const filtered = performance.filter((p) => new Date(p.periodEnd).getTime() >= cutoff);
+  // If no data in range, show all so chart never goes empty; label so user knows
+  if (filtered.length === 0) {
+    return { data: performance, fallbackLabel: "No data in selected period; showing all." };
+  }
+  return { data: filtered, fallbackLabel: null };
 }
 
 export function TraderProfile({ onNavigate, traderData }: TraderProfileProps) {
@@ -138,14 +145,14 @@ export function TraderProfile({ onNavigate, traderData }: TraderProfileProps) {
   // Determine risk level from drawdown
   const risk = (stats.maxDrawdown ?? 0) > -10 ? "Low" : (stats.maxDrawdown ?? 0) > -15 ? "Medium" : "High";
 
-  // Filter performance by selected period, then build chart data (chronological for display)
-  const filteredPerformance = filterPerformanceByPeriod(performance, performancePeriod);
+  // Filter performance by selected period; fallback to all if period empty
+  const { data: filteredPerformance, fallbackLabel } = filterPerformanceByPeriod(performance, performancePeriod);
   const chartData = filteredPerformance
     .slice()
     .reverse()
     .map((p, i) => ({
       date: new Date(p.periodEnd).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
-      value: 10000 + filteredPerformance.slice(0, i + 1).reduce((sum, perf) => sum + perf.pnl, 0),
+      value: 10000 + filteredPerformance.slice(0, i + 1).reduce((sum, perf) => sum + (Number(perf.pnl) || 0), 0),
     }));
 
   return (
@@ -223,40 +230,55 @@ export function TraderProfile({ onNavigate, traderData }: TraderProfileProps) {
         </Card>
       </div>
 
-      {/* Performance Chart */}
+      {/* Performance Chart — period selector as button group so it's clearly functional */}
       {(chartData.length > 0 || performance.length > 0) && (
         <Card className="p-6">
           <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
             <h3 className="text-lg font-semibold">Performance</h3>
-            <Tabs value={performancePeriod} onValueChange={(v) => setPerformancePeriod(v as PerformancePeriod)} className="w-auto">
-              <TabsList>
-                <TabsTrigger value="1m">1M</TabsTrigger>
-                <TabsTrigger value="3m">3M</TabsTrigger>
-                <TabsTrigger value="6m">6M</TabsTrigger>
-                <TabsTrigger value="1y">1Y</TabsTrigger>
-                <TabsTrigger value="all">ALL</TabsTrigger>
-              </TabsList>
-            </Tabs>
+            <div className="flex items-center gap-1 rounded-lg border border-border bg-muted/30 p-0.5" role="tablist" aria-label="Performance period">
+              {PERFORMANCE_PERIODS.map((period) => (
+                <button
+                  key={period}
+                  type="button"
+                  role="tab"
+                  aria-selected={performancePeriod === period}
+                  aria-label={`Show ${period === "all" ? "all" : period.replace("m", " month").replace("y", " year")} performance`}
+                  onClick={() => setPerformancePeriod(period)}
+                  className={`min-w-[44px] px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                    performancePeriod === period
+                      ? "bg-primary text-primary-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                  }`}
+                >
+                  {period === "all" ? "ALL" : period.toUpperCase().replace("m", "M").replace("y", "Y")}
+                </button>
+              ))}
+            </div>
           </div>
+          {fallbackLabel && (
+            <p className="text-xs text-muted-foreground mb-2">{fallbackLabel}</p>
+          )}
           {chartData.length > 0 ? (
             <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={chartData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#2A2D35" />
-                <XAxis dataKey="date" stroke="#8B8B8B" />
-                <YAxis stroke="#8B8B8B" />
-                <Tooltip 
-                  contentStyle={{ 
-                    backgroundColor: "#12151A", 
-                    border: "1px solid #2A2D35",
-                    borderRadius: "4px"
+              <LineChart data={chartData} margin={{ top: 8, right: 8, left: 8, bottom: 8 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                <XAxis dataKey="date" stroke="hsl(var(--muted-foreground))" fontSize={12} />
+                <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} tickFormatter={(v) => `$${Number(v).toLocaleString()}`} />
+                <Tooltip
+                  formatter={(value: number) => [`$${Number(value).toLocaleString(undefined, { minimumFractionDigits: 2 })}`, "Equity"]}
+                  contentStyle={{
+                    backgroundColor: "hsl(var(--card))",
+                    border: "1px solid hsl(var(--border))",
+                    borderRadius: "8px",
                   }}
+                  labelStyle={{ color: "hsl(var(--foreground))" }}
                 />
-                <Line type="monotone" dataKey="value" stroke="#10B981" strokeWidth={2} dot={false} />
+                <Line type="monotone" dataKey="value" stroke="hsl(var(--chart-1, 142 76% 36%))" strokeWidth={2} dot={false} name="Equity" />
               </LineChart>
             </ResponsiveContainer>
           ) : (
-            <div className="flex items-center justify-center h-[300px] text-sm text-muted-foreground">
-              No performance data in this period
+            <div className="flex items-center justify-center h-[300px] text-sm text-muted-foreground border border-dashed border-border rounded-lg">
+              No performance data available
             </div>
           )}
         </Card>
