@@ -183,9 +183,10 @@ referralsRouter.post(
       if (!referrerProfile || (referrerProfile.referral_code || '').toUpperCase() !== code) {
         return res.status(400).json({ error: 'Invalid referral code' });
       }
-      const referrerId = referrerProfile.id as string;
-      if (referrerId === userId) {
-        return res.status(400).json({ error: 'Cannot use your own referral code' });
+      const referrerId = String((referrerProfile as { id: string }).id).trim();
+      const currentUserId = String(userId).trim();
+      if (referrerId === currentUserId) {
+        return res.status(400).json({ error: 'Cannot use your own referral code', message: 'Get a code from someone who referred you. Admins cannot self-refer.' });
       }
 
       const { data: myProfile } = await client
