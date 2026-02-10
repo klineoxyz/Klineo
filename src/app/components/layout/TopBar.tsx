@@ -1,7 +1,7 @@
 import { TopBarLogo } from "@/app/components/branding/Logo";
 import { Badge } from "@/app/components/ui/badge";
 import { Button } from "@/app/components/ui/button";
-import { Bell, User, Settings, LogOut, Clock, Pause, Menu, Loader2 } from "lucide-react";
+import { Bell, User, Settings, LogOut, Clock, Pause, Play, Menu, Loader2 } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -61,6 +61,13 @@ export function TopBar({
   const [currentTime, setCurrentTime] = useState(new Date());
   const [showPauseModal, setShowPauseModal] = useState(false);
   const [isPausing, setIsPausing] = useState(false);
+  const [isResuming, setIsResuming] = useState(false);
+
+  const toPause = liveData.copySetups.filter((s) => s.status === "active");
+  const toResume = liveData.copySetups.filter((s) => s.status === "paused");
+  const hasActive = toPause.length > 0;
+  const hasPaused = toResume.length > 0;
+  const showStartButton = hasPaused && !hasActive;
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -70,6 +77,21 @@ export function TopBar({
   const formatTime = (date: Date) => date.toISOString().substr(11, 8);
 
   const handleEmergencyPause = () => setShowPauseModal(true);
+
+  const handleStartAll = useCallback(async () => {
+    if (isDemoMode || toResume.length === 0) return;
+    setIsResuming(true);
+    try {
+      await Promise.all(toResume.map((s) => api.put(`/api/copy-setups/${s.id}`, { status: "active" })));
+      toast.success("Copy trading started");
+      liveData.refresh();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to start";
+      toast.error("Start failed", { description: msg });
+    } finally {
+      setIsResuming(false);
+    }
+  }, [isDemoMode, toResume, liveData]);
 
   const confirmPause = useCallback(async () => {
     if (isDemoMode) {
@@ -189,17 +211,32 @@ export function TopBar({
         </div>
 
         <div className="flex items-center gap-1 sm:gap-2 md:gap-3 shrink-0">
-          {/* Emergency Pause Button - icon only on small screens */}
-          <Button 
-            variant="outline" 
-            size="sm"
-            onClick={handleEmergencyPause}
-            className="border-amber-500/30 text-amber-500 hover:bg-red-500 hover:text-white hover:border-red-500 transition-all gap-2 size-9 sm:size-auto sm:px-3"
-            title="Pause all copy trading"
-          >
-            <Pause className="size-3 shrink-0" />
-            <span className="hidden sm:inline text-xs font-semibold">PAUSE ALL</span>
-          </Button>
+          {/* Pause / Start copy trading — when paused, show Start; when active, show PAUSE ALL */}
+          {showStartButton ? (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleStartAll}
+              disabled={isResuming || isDemoMode}
+              className="border-green-500/30 text-green-600 dark:text-green-400 hover:bg-green-500 hover:text-white hover:border-green-500 transition-all gap-2 size-9 sm:size-auto sm:px-3"
+              title="Start all copy trading"
+            >
+              {isResuming ? <Loader2 className="size-3 shrink-0 animate-spin" /> : <Play className="size-3 shrink-0" />}
+              <span className="hidden sm:inline text-xs font-semibold">{isResuming ? "Starting…" : "Start"}</span>
+            </Button>
+          ) : (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleEmergencyPause}
+              disabled={isDemoMode}
+              className="border-amber-500/30 text-amber-500 hover:bg-red-500 hover:text-white hover:border-red-500 transition-all gap-2 size-9 sm:size-auto sm:px-3"
+              title="Pause all copy trading"
+            >
+              <Pause className="size-3 shrink-0" />
+              <span className="hidden sm:inline text-xs font-semibold">PAUSE ALL</span>
+            </Button>
+          )}
 
           <ConnectionStatus status={connectionStatus} />
 
