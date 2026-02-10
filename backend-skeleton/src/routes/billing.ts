@@ -1,7 +1,18 @@
 import { Router } from 'express';
 import { body } from 'express-validator';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { verifySupabaseJWT, AuthenticatedRequest } from '../middleware/auth.js';
 import { validate } from '../middleware/validation.js';
+
+let supabase: SupabaseClient | null = null;
+function getSupabase(): SupabaseClient | null {
+  if (supabase) return supabase;
+  const url = process.env.SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) return null;
+  supabase = createClient(url, key);
+  return supabase;
+}
 
 export const billingRouter: Router = Router();
 
@@ -39,8 +50,17 @@ billingRouter.post(
       .withMessage('method must be manual, crypto, or stripe'),
   ]),
   async (req: AuthenticatedRequest, res) => {
+    const client = getSupabase();
+    if (client) {
+      const { data: profile } = await client.from('user_profiles').select('referred_by_user_id').eq('id', req.user!.id).single();
+      if (!(profile as { referred_by_user_id?: string } | null)?.referred_by_user_id) {
+        return res.status(400).json({
+          error: 'Referral code required',
+          message: 'Enter a referral code in Settings before you can pay the joining fee.',
+        });
+      }
+    }
     const method = (req.body?.method as string) || 'manual';
-    // MVP: no DB write; real implementation would create pending payment / user_entitlements
     res.status(200).json({
       status: 'ok',
       message: 'checkout_created',
@@ -67,9 +87,18 @@ billingRouter.post(
       .withMessage('method must be manual, crypto, or stripe'),
   ]),
   async (req: AuthenticatedRequest, res) => {
+    const client = getSupabase();
+    if (client) {
+      const { data: profile } = await client.from('user_profiles').select('referred_by_user_id').eq('id', req.user!.id).single();
+      if (!(profile as { referred_by_user_id?: string } | null)?.referred_by_user_id) {
+        return res.status(400).json({
+          error: 'Referral code required',
+          message: 'Enter a referral code in Settings before you can buy packages.',
+        });
+      }
+    }
     const { packageId } = req.body;
     const method = (req.body?.method as string) || 'manual';
-    // MVP: no DB write; real implementation would create pending payment and update allowance
     res.status(200).json({
       status: 'ok',
       message: 'checkout_created',

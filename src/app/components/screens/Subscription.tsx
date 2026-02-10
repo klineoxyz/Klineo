@@ -3,7 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
 import { Badge } from "@/app/components/ui/badge";
-import { Info, Loader2, Zap, ChevronDown, ChevronUp, Copy, Bot, Sparkles, Store, Check } from "lucide-react";
+import { Info, Loader2, Zap, ChevronDown, ChevronUp, Copy, Bot, Sparkles, Store, Check, Ticket, Settings } from "lucide-react";
 import { api } from "@/lib/api";
 import type { BillingPlansResponse, EntitlementResponse } from "@/lib/api";
 import { toast } from "@/app/lib/toast";
@@ -108,7 +108,14 @@ export function Subscription({ onNavigate }: SubscriptionProps) {
           description: "Go to Payments, add your BSC wallet in Settings, then create a joining fee intent.",
         });
       } else {
-        toast.error("Could not create payment", { description: msg });
+        if (String(msg).toLowerCase().includes("referral code required")) {
+          toast.error("Referral code required", {
+            description: "Enter a referral code in Settings before you can pay the joining fee.",
+            action: { label: "Open Settings", onClick: () => onNavigate("settings") },
+          });
+        } else {
+          toast.error("Could not create payment", { description: msg });
+        }
       }
     } finally {
       setJoiningFeeLoading(false);
@@ -161,7 +168,14 @@ export function Subscription({ onNavigate }: SubscriptionProps) {
           description: "Go to Payments, then create a package intent and follow the instructions.",
         });
       } else {
-        toast.error("Could not create payment", { description: msg });
+        if (String(msg).toLowerCase().includes("referral code required")) {
+          toast.error("Referral code required", {
+            description: "Enter a referral code in Settings before you can buy packages.",
+            action: { label: "Open Settings", onClick: () => onNavigate("settings") },
+          });
+        } else {
+          toast.error("Could not create payment", { description: msg });
+        }
       }
     } finally {
       setPackageLoading(null);
@@ -206,12 +220,16 @@ export function Subscription({ onNavigate }: SubscriptionProps) {
           revenueOpen={revenueOpen}
           onRevenueOpenChange={setRevenueOpen}
           joiningFeePaid={entitlement?.joiningFeePaid ?? false}
+          hasReferral={entitlement?.hasReferral !== false}
+          onNavigateToSettings={() => onNavigate("settings")}
         />
       </div>
     );
   }
 
   if (!plans) return null;
+
+  const hasReferral = entitlement?.hasReferral !== false;
 
   return (
     <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
@@ -222,6 +240,26 @@ export function Subscription({ onNavigate }: SubscriptionProps) {
         </p>
       </div>
 
+      {entitlement && !hasReferral && (
+        <Card className="p-4 sm:p-6 border-amber-500/30 bg-amber-500/10">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+            <div className="flex items-start gap-2 flex-1">
+              <Ticket className="size-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+              <div>
+                <h3 className="font-semibold text-amber-800 dark:text-amber-200">Referral code required</h3>
+                <p className="text-sm text-amber-700 dark:text-amber-300 mt-1">
+                  You must enter a referral code in Settings before you can pay the joining fee or buy packages. Get a code from the person who referred you.
+                </p>
+              </div>
+            </div>
+            <Button variant="default" className="shrink-0" onClick={() => onNavigate("settings")}>
+              <Settings className="size-4 mr-2" />
+              Open Settings
+            </Button>
+          </div>
+        </Card>
+      )}
+
       <SubscriptionContent
         plans={plans}
         onJoiningFeeCheckout={handleJoiningFeeCheckout}
@@ -231,6 +269,8 @@ export function Subscription({ onNavigate }: SubscriptionProps) {
         revenueOpen={revenueOpen}
         onRevenueOpenChange={setRevenueOpen}
         joiningFeePaid={entitlement?.joiningFeePaid ?? false}
+        hasReferral={hasReferral}
+        onNavigateToSettings={() => onNavigate("settings")}
       />
 
       {/* Payment History */}
@@ -258,6 +298,8 @@ function SubscriptionContent({
   revenueOpen,
   onRevenueOpenChange,
   joiningFeePaid,
+  hasReferral,
+  onNavigateToSettings,
 }: {
   plans: BillingPlansResponse;
   onJoiningFeeCheckout: () => void;
@@ -267,8 +309,11 @@ function SubscriptionContent({
   revenueOpen: boolean;
   onRevenueOpenChange: (open: boolean) => void;
   joiningFeePaid: boolean;
+  hasReferral?: boolean;
+  onNavigateToSettings?: () => void;
 }) {
   const { joiningFee, packages, revenueSplit } = plans;
+  const canPay = hasReferral !== false;
 
   return (
     <>
@@ -297,11 +342,13 @@ function SubscriptionContent({
           {!joiningFeePaid && (
             <Button
               className="w-full sm:w-auto shrink-0"
-              onClick={onJoiningFeeCheckout}
+              onClick={canPay ? onJoiningFeeCheckout : onNavigateToSettings}
               disabled={joiningFeeLoading}
             >
               {joiningFeeLoading ? (
                 <Loader2 className="size-4 animate-spin" />
+              ) : !canPay ? (
+                "Enter referral code in Settings"
               ) : (
                 "Pay joining fee"
               )}
@@ -412,11 +459,13 @@ function SubscriptionContent({
                     <Button
                       className="mt-4 w-full"
                       variant={popular ? "default" : "outline"}
-                      onClick={() => onPackageCheckout(pkg.id)}
-                      disabled={!!packageLoading || !joiningFeePaid}
+                      onClick={() => (canPay ? onPackageCheckout(pkg.id) : onNavigateToSettings?.())}
+                      disabled={!!packageLoading || !joiningFeePaid || !canPay}
                     >
                       {packageLoading === pkg.id ? (
                         <Loader2 className="size-4 animate-spin" />
+                      ) : !canPay ? (
+                        "Enter referral code in Settings"
                       ) : !joiningFeePaid ? (
                         "Pay joining fee first"
                       ) : (

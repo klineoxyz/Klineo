@@ -80,6 +80,11 @@ export function Settings({ onNavigate }: SettingsProps) {
   const [updateCredsLoading, setUpdateCredsLoading] = useState(false);
   const [manageFuturesConn, setManageFuturesConn] = useState<ExchangeConnection | null>(null);
 
+  // Referral code (required to use platform / buy packages)
+  const [hasReferral, setHasReferral] = useState(false);
+  const [referralCodeInput, setReferralCodeInput] = useState("");
+  const [claimReferralLoading, setClaimReferralLoading] = useState(false);
+
   // My discounts (assigned by admin)
   type MyDiscount = {
     id: string;
@@ -142,6 +147,7 @@ export function Settings({ onNavigate }: SettingsProps) {
         setAvatarImageError(false);
         setReferralWallet(data.referralWallet ?? "");
         setPaymentWalletBsc(data.paymentWalletBsc ?? "");
+        setHasReferral(!!(data as { hasReferral?: boolean }).hasReferral);
         setProfileLoading(false);
       })
       .catch((err: any) => {
@@ -664,6 +670,61 @@ export function Settings({ onNavigate }: SettingsProps) {
             >
               {saveLoading ? "Saving..." : "Save Changes"}
             </Button>
+          </Card>
+
+          <Card className="p-4 sm:p-6 space-y-4 border-amber-500/20 bg-amber-500/5">
+            <h3 className="text-base sm:text-lg font-semibold flex items-center gap-2">
+              <Ticket className="size-5" />
+              Referral code
+            </h3>
+            <p className="text-sm text-muted-foreground">
+              A referral code is required to use the platform and to pay the joining fee or buy packages. Enter the code from the person who referred you.
+            </p>
+            {hasReferral ? (
+              <div className="flex items-center gap-2 text-sm text-[#10B981]">
+                <CheckCircle2 className="size-5 shrink-0" />
+                <span>You have entered a referral code. You can use the platform and purchase packages.</span>
+              </div>
+            ) : (
+              <div className="flex flex-col sm:flex-row gap-2 max-w-md">
+                <Input
+                  placeholder="e.g. KLINEO-ABC12XYZ"
+                  value={referralCodeInput}
+                  onChange={(e) => setReferralCodeInput(e.target.value.trim().toUpperCase())}
+                  disabled={profileLoading || claimReferralLoading}
+                  className="font-mono"
+                />
+                <Button
+                  onClick={async () => {
+                    const code = referralCodeInput.trim().toUpperCase();
+                    if (!code) {
+                      toast.error("Enter a referral code");
+                      return;
+                    }
+                    setClaimReferralLoading(true);
+                    try {
+                      await api.post("/api/referrals/claim", { code });
+                      toast.success("Referral code accepted");
+                      setHasReferral(true);
+                      setReferralCodeInput("");
+                      setProfileLoading(true);
+                      const data = await api.get<{ hasReferral?: boolean }>("/api/me/profile");
+                      setHasReferral(!!data.hasReferral);
+                    } catch (err: unknown) {
+                      const msg = err instanceof Error ? err.message : getApiErrorMessage(err);
+                      toast.error("Invalid referral code", { description: msg });
+                    } finally {
+                      setClaimReferralLoading(false);
+                      setProfileLoading(false);
+                    }
+                  }}
+                  disabled={profileLoading || claimReferralLoading || !referralCodeInput.trim()}
+                >
+                  {claimReferralLoading ? <Loader2 className="size-4 animate-spin" /> : null}
+                  Submit code
+                </Button>
+              </div>
+            )}
           </Card>
 
           <Card className="p-6 space-y-4">

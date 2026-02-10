@@ -195,6 +195,7 @@ export interface EntitlementResponse {
   profitAllowanceUsd: number;
   profitUsedUsd: number;
   remainingUsd: number;
+  hasReferral?: boolean;
 }
 
 // Billing / Packages (credit-based model)

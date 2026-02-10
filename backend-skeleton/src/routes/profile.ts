@@ -44,7 +44,7 @@ profileRouter.get('/entitlement', async (req: AuthenticatedRequest, res) => {
         .maybeSingle(),
       client
         .from('user_profiles')
-        .select('member_active, active_package_code, package_started_at')
+        .select('member_active, active_package_code, package_started_at, referred_by_user_id')
         .eq('id', userId)
         .single(),
     ]);
@@ -72,6 +72,8 @@ profileRouter.get('/entitlement', async (req: AuthenticatedRequest, res) => {
     }
     const remainingUsd = Math.max(0, profitAllowanceUsd - profitUsedUsd);
 
+    const hasReferral = !!(profile as { referred_by_user_id?: string } | null)?.referred_by_user_id;
+
     res.json({
       joiningFeePaid,
       status,
@@ -79,6 +81,7 @@ profileRouter.get('/entitlement', async (req: AuthenticatedRequest, res) => {
       profitAllowanceUsd,
       profitUsedUsd,
       remainingUsd,
+      hasReferral,
     });
   } catch (err) {
     console.error('Entitlement get error:', err);
@@ -99,7 +102,7 @@ profileRouter.get('/profile', async (req: AuthenticatedRequest, res) => {
   try {
     const { data: profile, error } = await client
       .from('user_profiles')
-      .select('id, email, role, full_name, username, timezone, referral_wallet, payout_wallet_address, payment_wallet_bsc, avatar_url, status, created_at, updated_at')
+      .select('id, email, role, full_name, username, timezone, referral_wallet, payout_wallet_address, payment_wallet_bsc, avatar_url, status, referred_by_user_id, created_at, updated_at')
       .eq('id', req.user!.id)
       .single();
 
@@ -124,6 +127,7 @@ profileRouter.get('/profile', async (req: AuthenticatedRequest, res) => {
       paymentWalletBsc: profile.payment_wallet_bsc,
       avatarUrl: profile.avatar_url ?? null,
       status: profile.status || 'active',
+      hasReferral: !!profile.referred_by_user_id,
       createdAt: profile.created_at,
       updatedAt: profile.updated_at,
     });
