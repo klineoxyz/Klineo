@@ -43,10 +43,28 @@ interface TraderDetails {
   }>;
 }
 
+type PerformancePeriod = "1m" | "3m" | "6m" | "1y" | "all";
+
+function filterPerformanceByPeriod(
+  performance: TraderDetails["performance"],
+  period: PerformancePeriod
+): TraderDetails["performance"] {
+  if (!performance.length || period === "all") return performance;
+  const now = Date.now();
+  const ms = (n: number) => n * 24 * 60 * 60 * 1000;
+  const cutoff =
+    period === "1m" ? now - ms(31) :
+    period === "3m" ? now - ms(92) :
+    period === "6m" ? now - ms(183) :
+    period === "1y" ? now - ms(365) : 0;
+  return performance.filter((p) => new Date(p.periodEnd).getTime() >= cutoff);
+}
+
 export function TraderProfile({ onNavigate, traderData }: TraderProfileProps) {
   const [trader, setTrader] = useState<TraderDetails | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [performancePeriod, setPerformancePeriod] = useState<PerformancePeriod>("all");
 
   const traderId = traderData?.id || traderData?.slug;
 
@@ -107,16 +125,27 @@ export function TraderProfile({ onNavigate, traderData }: TraderProfileProps) {
     );
   }
 
-  // Determine risk level from drawdown
-  const risk = trader.stats.maxDrawdown > -10 ? "Low" : trader.stats.maxDrawdown > -15 ? "Medium" : "High";
+  // Defensive: ensure stats exist (API may return slightly different shape)
+  const stats = trader.stats ?? {
+    totalPnl: 0,
+    avgRoi: 0,
+    maxDrawdown: 0,
+    totalVolume: 0,
+    performancePoints: 0,
+  };
+  const performance = Array.isArray(trader.performance) ? trader.performance : [];
 
-  // Format performance data for chart
-  const chartData = trader.performance
+  // Determine risk level from drawdown
+  const risk = (stats.maxDrawdown ?? 0) > -10 ? "Low" : (stats.maxDrawdown ?? 0) > -15 ? "Medium" : "High";
+
+  // Filter performance by selected period, then build chart data (chronological for display)
+  const filteredPerformance = filterPerformanceByPeriod(performance, performancePeriod);
+  const chartData = filteredPerformance
     .slice()
     .reverse()
     .map((p, i) => ({
       date: new Date(p.periodEnd).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
-      value: 10000 + trader.performance.slice(0, i + 1).reduce((sum, perf) => sum + perf.pnl, 0),
+      value: 10000 + filteredPerformance.slice(0, i + 1).reduce((sum, perf) => sum + perf.pnl, 0),
     }));
 
   return (
@@ -161,45 +190,45 @@ export function TraderProfile({ onNavigate, traderData }: TraderProfileProps) {
       </div>
 
       {/* Key Metrics */}
-      <div className="grid grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
         <Card className="p-4 space-y-2">
           <div className="text-xs text-muted-foreground uppercase tracking-wide">ROI</div>
-          <div className={`text-2xl font-semibold flex items-center gap-1 ${trader.stats.avgRoi > 0 ? "text-[#10B981]" : "text-[#EF4444]"}`}>
-            {trader.stats.avgRoi > 0 ? <TrendingUp className="size-5" /> : <TrendingDown className="size-5" />}
-            {trader.stats.avgRoi > 0 ? "+" : ""}{trader.stats.avgRoi.toFixed(1)}%
+          <div className={`text-2xl font-semibold flex items-center gap-1 ${(stats.avgRoi ?? 0) > 0 ? "text-[#10B981]" : (stats.avgRoi ?? 0) < 0 ? "text-[#EF4444]" : "text-foreground"}`}>
+            {(stats.avgRoi ?? 0) > 0 ? <TrendingUp className="size-5" /> : (stats.avgRoi ?? 0) < 0 ? <TrendingDown className="size-5" /> : null}
+            {(stats.avgRoi ?? 0) > 0 ? "+" : ""}{(stats.avgRoi ?? 0).toFixed(1)}%
           </div>
         </Card>
 
         <Card className="p-4 space-y-2">
           <div className="text-xs text-muted-foreground uppercase tracking-wide">Max Drawdown</div>
-          <div className="text-2xl font-semibold text-[#EF4444]">{trader.stats.maxDrawdown.toFixed(1)}%</div>
+          <div className="text-2xl font-semibold text-[#EF4444]">{(stats.maxDrawdown ?? 0).toFixed(1)}%</div>
         </Card>
 
         <Card className="p-4 space-y-2">
           <div className="text-xs text-muted-foreground uppercase tracking-wide">Total Volume</div>
-          <div className="text-2xl font-semibold">${(trader.stats.totalVolume / 1000).toFixed(1)}k</div>
+          <div className="text-2xl font-semibold">${((stats.totalVolume ?? 0) / 1000).toFixed(1)}k</div>
         </Card>
 
         <Card className="p-4 space-y-2">
           <div className="text-xs text-muted-foreground uppercase tracking-wide">Followers</div>
           <div className="text-2xl font-semibold flex items-center gap-2">
             <Users className="size-5" />
-            {trader.followers}
+            {trader.followers ?? 0}
           </div>
         </Card>
 
         <Card className="p-4 space-y-2">
           <div className="text-xs text-muted-foreground uppercase tracking-wide">Performance Points</div>
-          <div className="text-2xl font-semibold">{trader.stats.performancePoints}</div>
+          <div className="text-2xl font-semibold">{stats.performancePoints ?? 0}</div>
         </Card>
       </div>
 
       {/* Performance Chart */}
-      {chartData.length > 0 && (
+      {(chartData.length > 0 || performance.length > 0) && (
         <Card className="p-6">
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
             <h3 className="text-lg font-semibold">Performance</h3>
-            <Tabs defaultValue="all" className="w-auto">
+            <Tabs value={performancePeriod} onValueChange={(v) => setPerformancePeriod(v as PerformancePeriod)} className="w-auto">
               <TabsList>
                 <TabsTrigger value="1m">1M</TabsTrigger>
                 <TabsTrigger value="3m">3M</TabsTrigger>
@@ -209,21 +238,27 @@ export function TraderProfile({ onNavigate, traderData }: TraderProfileProps) {
               </TabsList>
             </Tabs>
           </div>
-          <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#2A2D35" />
-              <XAxis dataKey="date" stroke="#8B8B8B" />
-              <YAxis stroke="#8B8B8B" />
-              <Tooltip 
-                contentStyle={{ 
-                  backgroundColor: "#12151A", 
-                  border: "1px solid #2A2D35",
-                  borderRadius: "4px"
-                }}
-              />
-              <Line type="monotone" dataKey="value" stroke="#10B981" strokeWidth={2} dot={false} />
-            </LineChart>
-          </ResponsiveContainer>
+          {chartData.length > 0 ? (
+            <ResponsiveContainer width="100%" height={300}>
+              <LineChart data={chartData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#2A2D35" />
+                <XAxis dataKey="date" stroke="#8B8B8B" />
+                <YAxis stroke="#8B8B8B" />
+                <Tooltip 
+                  contentStyle={{ 
+                    backgroundColor: "#12151A", 
+                    border: "1px solid #2A2D35",
+                    borderRadius: "4px"
+                  }}
+                />
+                <Line type="monotone" dataKey="value" stroke="#10B981" strokeWidth={2} dot={false} />
+              </LineChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="flex items-center justify-center h-[300px] text-sm text-muted-foreground">
+              No performance data in this period
+            </div>
+          )}
         </Card>
       )}
 
