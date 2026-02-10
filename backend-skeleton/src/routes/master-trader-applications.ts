@@ -10,6 +10,7 @@ import { verifySupabaseJWT, AuthenticatedRequest } from '../middleware/auth.js';
 import { validate } from '../middleware/validation.js';
 import { body } from 'express-validator';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { sendMasterTraderApplicationCopy } from '../lib/email.js';
 
 let supabase: SupabaseClient | null = null;
 
@@ -163,6 +164,29 @@ masterTraderApplicationsRouter.post(
       }
 
       const inserted = row as { id: string; status: string; created_at: string };
+      const copyTo = process.env.MASTER_TRADER_COPY_TO_EMAIL || 'klineoxyz@gmail.com';
+      sendMasterTraderApplicationCopy({
+        to: copyTo,
+        formData: {
+          fullName,
+          email,
+          country,
+          telegram: telegram || null,
+          primaryExchange,
+          yearsExperience: Number(yearsExperience),
+          tradingStyle,
+          preferredMarkets,
+          avgMonthlyReturn: avgMonthlyReturn != null ? String(avgMonthlyReturn) : null,
+          strategyDescription,
+          whyMasterTrader,
+          profileUrl: profileUrl || null,
+        },
+        proofUrl,
+        applicationId: inserted.id,
+      }).then((r) => {
+        if (!r.ok) console.warn('[Master Trader] Email copy not sent:', r.error);
+      });
+
       res.status(201).json({
         id: inserted.id,
         status: inserted.status,
