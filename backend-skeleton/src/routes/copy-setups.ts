@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { verifySupabaseJWT, AuthenticatedRequest } from '../middleware/auth.js';
-import { requireJoiningFee, requireActiveAllowance, fetchEntitlement } from '../middleware/requireEntitlement.js';
+import { requireJoiningFeeOrAdmin, requireActiveAllowanceOrAdmin, fetchEntitlement } from '../middleware/requireEntitlement.js';
 import { validate, uuidParam, statusBody } from '../middleware/validation.js';
 import { body } from 'express-validator';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
@@ -113,8 +113,8 @@ copySetupsRouter.get('/', async (req: AuthenticatedRequest, res) => {
  * Create a new copy setup (requires joining fee + active allowance)
  */
 copySetupsRouter.post('/',
-  requireJoiningFee,
-  requireActiveAllowance,
+  requireJoiningFeeOrAdmin,
+  requireActiveAllowanceOrAdmin,
   validate([
     body('traderId').isUUID().withMessage('traderId must be a valid UUID'),
     body('allocationPct').optional().isFloat({ min: 0, max: 100 }).withMessage('allocationPct must be between 0 and 100'),
@@ -252,8 +252,8 @@ copySetupsRouter.put('/:id',
         return res.status(403).json({ error: 'Access denied' });
       }
 
-      // Resuming/starting (status -> active) requires active allowance
-      if (status === 'active') {
+      // Resuming/starting (status -> active) requires active allowance (admins bypass)
+      if (status === 'active' && req.user?.role !== 'admin') {
         const ent = await fetchEntitlement(client, req.user!.id);
         const allowance = parseFloat(String(ent?.profit_allowance_usd ?? 0));
         const used = parseFloat(String(ent?.profit_used_usd ?? 0));

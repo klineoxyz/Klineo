@@ -37,6 +37,32 @@ export async function fetchEntitlement(client: SupabaseClient, userId: string): 
 }
 
 /**
+ * Require joining fee paid unless user is admin. Use after verifySupabaseJWT.
+ * Admins (e.g. mmxinthi@gmail.com) can create copy setups and use copy trading without paying joining fee.
+ */
+export async function requireJoiningFeeOrAdmin(
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction
+) {
+  if (req.user?.role === 'admin') return next();
+  return requireJoiningFee(req, res, next);
+}
+
+/**
+ * Require active allowance unless user is admin. Use after verifySupabaseJWT.
+ * Admins can create/activate copy setups without package allowance.
+ */
+export async function requireActiveAllowanceOrAdmin(
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction
+) {
+  if (req.user?.role === 'admin') return next();
+  return requireActiveAllowance(req, res, next);
+}
+
+/**
  * Require joining fee paid. Use after verifySupabaseJWT.
  * Joining fee is considered paid if user_entitlements.joining_fee_paid OR user_profiles.member_active
  * (aligned with GET /api/me/entitlement and admin approval flow).
