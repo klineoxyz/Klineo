@@ -414,25 +414,42 @@ function timeframeIntervalMs(tf: string): number {
   return map[tf] ?? 60 * 60 * 1000;
 }
 
-/** Generate OHLC candles for the exact date range and timeframe (matches backtest period; no lookahead). Max 10k for 1y at 1h. */
+/** Max candles to use for backtest (avoids huge memory for 1m + 1y). Cap at 100k so 1m gets ~70 days, 1h gets full 1y. */
+const BACKTEST_MAX_CANDLES = 100_000;
+
+/** Compute how many candles fit in [dateFrom, dateTo] for the given timeframe, capped at BACKTEST_MAX_CANDLES. */
+function getBacktestCandleLimit(dateFrom: string, dateTo: string, timeframe: string): number {
+  const start = new Date(dateFrom + "T00:00:00.000Z").getTime();
+  const end = new Date(dateTo + "T23:59:59.999Z").getTime();
+  const step = timeframeIntervalMs(timeframe);
+  const spanMs = end - start + 1;
+  const count = Math.floor(spanMs / step);
+  return Math.min(Math.max(count, 1), BACKTEST_MAX_CANDLES);
+}
+
+/** Generate OHLC candles for the exact date range and timeframe (matches backtest period; no lookahead). */
 function generateSyntheticCandlesInRange(
   dateFrom: string,
   dateTo: string,
   timeframe: string,
-  maxCandles: number = 10000
+  maxCandles?: number
 ): KlineCandle[] {
+  const limit = maxCandles ?? getBacktestCandleLimit(dateFrom, dateTo, timeframe);
   const start = new Date(dateFrom + "T00:00:00.000Z").getTime();
   const end = new Date(dateTo + "T23:59:59.999Z").getTime();
   const step = timeframeIntervalMs(timeframe);
   const candles: KlineCandle[] = [];
-  let currentPrice = 45000;
+  const basePrice = 45000;
+  let currentPrice = basePrice;
   let t = start;
-  while (t <= end && candles.length < maxCandles) {
-    const change = (Math.random() - 0.5) * 500;
+  while (t <= end && candles.length < limit) {
+    const drift = (Math.random() - 0.5) * 400;
+    const meanReversion = (basePrice - currentPrice) * 0.02;
+    const change = drift + meanReversion;
     const open = currentPrice;
-    const close = currentPrice + change;
-    const high = Math.max(open, close) + Math.random() * 200;
-    const low = Math.min(open, close) - Math.random() * 200;
+    const close = Math.max(35000, Math.min(65000, currentPrice + change));
+    const high = Math.max(open, close) + Math.random() * 150;
+    const low = Math.min(open, close) - Math.random() * 150;
     candles.push({ time: t, open, high, low, close });
     currentPrice = close;
     t += step;
@@ -897,15 +914,34 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
       try {
         const startTime = new Date(dateFrom + "T00:00:00.000Z").getTime();
         const endTime = new Date(dateTo + "T23:59:59.999Z").getTime();
-        const { candles: rawCandles } = await candlesApi.getKlines({
-          exchange,
-          symbol: symbolClean,
-          interval: timeframe,
-          limit: 1500,
-          env,
-          startTime,
-          endTime,
-        });
+        const maxCandles = getBacktestCandleLimit(dateFrom, dateTo, timeframe);
+        const pageSize = 1500;
+        const allCandles: KlineCandle[] = [];
+        let nextStart: number | undefined = startTime;
+        while (allCandles.length < maxCandles && nextStart != null && nextStart <= endTime) {
+          const { candles: page } = await candlesApi.getKlines({
+            exchange,
+            symbol: symbolClean,
+            interval: timeframe,
+            limit: pageSize,
+            env,
+            startTime: nextStart,
+            endTime,
+          });
+          if (page.length === 0) break;
+          const existingTimes = new Set(allCandles.map((c) => c.time));
+          for (const c of page) {
+            if (!existingTimes.has(c.time) && c.time <= endTime) {
+              allCandles.push(c);
+              existingTimes.add(c.time);
+            }
+          }
+          allCandles.sort((a, b) => a.time - b.time);
+          const lastTime = page[page.length - 1]?.time;
+          if (lastTime == null || lastTime >= endTime || page.length < pageSize) break;
+          nextStart = lastTime + timeframeIntervalMs(timeframe);
+        }
+        const rawCandles = allCandles;
         if (rawCandles.length > 0) {
           lastCandlesRef.current = rawCandles;
           const result = runBacktestFromRealCandles(rawCandles, backtestConfig);
@@ -913,9 +949,9 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
           setBacktestDataSource("live");
           setBacktestExchangeLabel(`${dataConnection.exchange}${env === "testnet" ? " (testnet)" : ""}`);
           setHasResults(true);
-          toast.success("Backtest completed with live data for " + dateFrom + " – " + dateTo);
+          toast.success("Backtest completed with live data for " + dateFrom + " – " + dateTo + " (" + rawCandles.length.toLocaleString() + " candles).");
         } else {
-          const synthetic = generateSyntheticCandlesInRange(dateFrom, dateTo, timeframe, 2000);
+          const synthetic = generateSyntheticCandlesInRange(dateFrom, dateTo, timeframe);
           lastCandlesRef.current = synthetic;
           const result = runBacktestFromRealCandles(synthetic, backtestConfig);
           setBacktestResult(result);
@@ -926,7 +962,7 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
       } catch (e) {
         const msg = e instanceof Error ? e.message : "Failed to load klines";
         setKlinesError(msg);
-        const synthetic = generateSyntheticCandlesInRange(dateFrom, dateTo, timeframe, 2000);
+        const synthetic = generateSyntheticCandlesInRange(dateFrom, dateTo, timeframe);
         lastCandlesRef.current = synthetic;
         const result = runBacktestFromRealCandles(synthetic, backtestConfig);
         setBacktestResult(result);
@@ -935,13 +971,14 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
         toast.warning("Using synthetic data for selected period — " + msg);
       }
     } else {
-      const synthetic = generateSyntheticCandlesInRange(dateFrom, dateTo, timeframe, 2000);
+      const synthetic = generateSyntheticCandlesInRange(dateFrom, dateTo, timeframe);
       lastCandlesRef.current = synthetic;
       const result = runBacktestFromRealCandles(synthetic, backtestConfig);
       setBacktestResult(result);
       setBacktestDataSource("synthetic");
       setHasResults(true);
-      toast.success("Backtest completed for " + dateFrom + " – " + dateTo + " (synthetic). Connect an exchange for live data.");
+      const capNote = synthetic.length >= BACKTEST_MAX_CANDLES ? " (capped at " + BACKTEST_MAX_CANDLES.toLocaleString() + " candles for performance)" : "";
+      toast.success("Backtest completed for " + dateFrom + " – " + dateTo + " (" + synthetic.length.toLocaleString() + " candles, synthetic). Connect an exchange for live data." + capNote);
     }
 
       setIsBacktesting(false);
@@ -970,12 +1007,12 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
             limit: 500,
             env,
           });
-          candles = raw.length > 0 ? raw : generateSyntheticCandlesInRange(dateFrom, dateTo, timeframe, 2000);
+          candles = raw.length > 0 ? raw : generateSyntheticCandlesInRange(dateFrom, dateTo, timeframe);
         } catch {
-          candles = generateSyntheticCandlesInRange(dateFrom, dateTo, timeframe, 2000);
+          candles = generateSyntheticCandlesInRange(dateFrom, dateTo, timeframe);
         }
       } else {
-        candles = generateSyntheticCandlesInRange(dateFrom, dateTo, timeframe, 2000);
+        candles = generateSyntheticCandlesInRange(dateFrom, dateTo, timeframe);
       }
       lastCandlesRef.current = candles;
     }
