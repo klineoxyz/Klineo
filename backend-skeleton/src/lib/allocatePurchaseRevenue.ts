@@ -1,17 +1,17 @@
 /**
  * KLINEO: Allocate purchase revenue (onboarding fee + package) to 7-level referral pool,
- * platform, and marketing. Fully atomic via PostgreSQL function; no partial credits.
- * Idempotent per purchase. Rounding: per-share to 2 decimals; remainder → marketing.
+ * platform, and marketing. 50% of each purchase is distributed among L1–L7 (e.g. $50 on a $100 package).
+ * Fully atomic via PostgreSQL function; no partial credits. Idempotent per purchase.
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
 
-const LEVEL_WEIGHTS = [30, 20, 10, 8, 6, 4, 2] as const; // sum = 80; 70% pool split
+const LEVEL_WEIGHTS = [30, 20, 10, 8, 6, 4, 2] as const; // sum = 80; share of the 50% pool
 const WEIGHT_SUM = 80;
-const POOL_PCT = 70;
+const POOL_PCT = 50; // 50% of purchase distributed among 7 levels (e.g. $50 on $100 package)
 const PLATFORM_PCT = 20;
-const MARKETING_PCT = 10;
+const MARKETING_PCT = 30; // remainder after 50% pool + 20% platform
 
-/** Level percentages of purchase (70% pool × weight/80). L1…L7. */
+/** Level percentages of purchase (50% pool × weight/80). L1…L7. */
 export const LEVEL_PCT = LEVEL_WEIGHTS.map((w) => (w / WEIGHT_SUM) * POOL_PCT);
 
 /**

@@ -103,7 +103,7 @@ export function Referrals({ onNavigate }: ReferralsProps) {
     <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
       <div>
         <h1 className="text-xl sm:text-2xl font-semibold mb-1">Community Rewards</h1>
-        <p className="text-sm text-muted-foreground">Earn from the 70% community rewards pool when people in your network pay onboarding fees or buy packages</p>
+        <p className="text-sm text-muted-foreground">50% of every onboarding fee and package purchase is distributed among the 7 levels when people in your network pay</p>
       </div>
 
       {/* Referral Info — Your Referral Details + Community Rewards visible on UI */}
@@ -152,9 +152,9 @@ export function Referrals({ onNavigate }: ReferralsProps) {
         <Separator />
 
         <section className="p-4 bg-secondary/30 rounded-lg space-y-4">
-          <h4 className="font-semibold text-sm">Community Rewards (70% pool)</h4>
+          <h4 className="font-semibold text-sm">Community Rewards (50% distributed)</h4>
           <ul className="space-y-1 text-sm text-muted-foreground">
-            <li>• <span className="text-primary font-medium">70%</span> of every onboarding fee and package purchase goes to the community rewards pool</li>
+            <li>• <span className="text-primary font-medium">50%</span> of every onboarding fee and package purchase is distributed among the 7 levels (e.g. $50 on a $100 package)</li>
             <li>• Rewards are from purchases only—not from trading PnL or balances</li>
             <li>• Minimum payout: $50.00 USDT</li>
           </ul>
@@ -225,8 +225,8 @@ export function Referrals({ onNavigate }: ReferralsProps) {
           </div>
           {/* Reward split diagram: each segment (bar) with label directly underneath */}
           <div className="space-y-2">
-            <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Pool split (of 70%)</div>
-            <div className="space-y-1" role="img" aria-label="Community rewards pool: Level 1 30%, Level 2 20%, Level 3 10%, Level 4 8%, Level 5 6%, Level 6 4%, Level 7 2%">
+            <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Pool split (of 50% distributed)</div>
+            <div className="space-y-1" role="img" aria-label="Community rewards: 50% of purchase split L1 30%, L2 20%, L3 10%, L4 8%, L5 6%, L6 4%, L7 2%">
               {/* Proportional bar: segments only, no per-segment labels */}
               <div className="flex min-w-0 rounded-md border border-border/50 overflow-hidden">
                 {[
@@ -270,8 +270,8 @@ export function Referrals({ onNavigate }: ReferralsProps) {
 
         <Card className="p-4 space-y-2">
           <div className="text-xs text-muted-foreground uppercase tracking-wide">Pool share</div>
-          <div className="text-2xl font-semibold text-primary">70%</div>
-          <div className="text-xs text-muted-foreground">Onboarding + packages</div>
+          <div className="text-2xl font-semibold text-primary">50%</div>
+          <div className="text-xs text-muted-foreground">Distributed to 7 levels</div>
         </Card>
 
         <Card className="p-3 sm:p-4 space-y-2">
