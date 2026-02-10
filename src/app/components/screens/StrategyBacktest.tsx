@@ -1492,31 +1492,31 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
                 </Button>
               </div>
 
-              {/* KPI Cards — pro copy-trading style */}
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
-                <div className="rounded-lg border border-border/60 bg-card/40 px-4 py-3 min-w-0">
-                  <div className="text-[11px] uppercase tracking-wider text-muted-foreground mb-0.5">Total trades</div>
-                  <div className="text-xl sm:text-2xl font-bold tabular-nums">{kpis.totalTrades}</div>
+              {/* KPI Cards — responsive numbers to fit boxes */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-4">
+                <div className="rounded-lg border border-border/60 bg-card/40 px-2.5 py-2 sm:px-4 sm:py-3 min-w-0 overflow-hidden">
+                  <div className="text-[10px] sm:text-[11px] uppercase tracking-wider text-muted-foreground mb-0.5 truncate">Total trades</div>
+                  <div className="text-base sm:text-lg lg:text-xl font-bold tabular-nums truncate" title={String(kpis.totalTrades)}>{kpis.totalTrades}</div>
                 </div>
-                <div className="rounded-lg border border-border/60 bg-card/40 px-4 py-3 min-w-0">
-                  <div className="text-[11px] uppercase tracking-wider text-muted-foreground mb-0.5">Win rate</div>
-                  <div className="text-xl sm:text-2xl font-bold text-green-500 tabular-nums">{kpis.winRate.toFixed(1)}%</div>
+                <div className="rounded-lg border border-border/60 bg-card/40 px-2.5 py-2 sm:px-4 sm:py-3 min-w-0 overflow-hidden">
+                  <div className="text-[10px] sm:text-[11px] uppercase tracking-wider text-muted-foreground mb-0.5 truncate">Win rate</div>
+                  <div className="text-base sm:text-lg lg:text-xl font-bold text-green-500 tabular-nums truncate" title={`${kpis.winRate.toFixed(1)}%`}>{kpis.winRate.toFixed(1)}%</div>
                 </div>
-                <div className="rounded-lg border border-border/60 bg-card/40 px-4 py-3 min-w-0">
-                  <div className="text-[11px] uppercase tracking-wider text-muted-foreground mb-0.5">PnL (USDT)</div>
-                  <div className={`text-xl sm:text-2xl font-bold tabular-nums ${kpis.netPnl >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                <div className="rounded-lg border border-border/60 bg-card/40 px-2.5 py-2 sm:px-4 sm:py-3 min-w-0 overflow-hidden">
+                  <div className="text-[10px] sm:text-[11px] uppercase tracking-wider text-muted-foreground mb-0.5 truncate">PnL (USDT)</div>
+                  <div className={`text-base sm:text-lg lg:text-xl font-bold tabular-nums truncate ${kpis.netPnl >= 0 ? 'text-green-500' : 'text-red-500'}`} title={`${kpis.netPnl >= 0 ? '+' : ''}$${kpis.netPnl.toFixed(2)}`}>
                     {kpis.netPnl >= 0 ? '+' : ''}${kpis.netPnl.toFixed(2)}
                   </div>
                 </div>
-                <div className="rounded-lg border border-border/60 bg-card/40 px-4 py-3 min-w-0">
-                  <div className="text-[11px] uppercase tracking-wider text-muted-foreground mb-0.5">PnL (%)</div>
-                  <div className={`text-xl sm:text-2xl font-bold tabular-nums ${kpis.roi >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                <div className="rounded-lg border border-border/60 bg-card/40 px-2.5 py-2 sm:px-4 sm:py-3 min-w-0 overflow-hidden">
+                  <div className="text-[10px] sm:text-[11px] uppercase tracking-wider text-muted-foreground mb-0.5 truncate">PnL (%)</div>
+                  <div className={`text-base sm:text-lg lg:text-xl font-bold tabular-nums truncate ${kpis.roi >= 0 ? 'text-green-500' : 'text-red-500'}`} title={`${kpis.roi >= 0 ? '+' : ''}${kpis.roi.toFixed(2)}%`}>
                     {kpis.roi >= 0 ? '+' : ''}{kpis.roi.toFixed(2)}%
                   </div>
                 </div>
-                <div className="rounded-lg border border-border/60 bg-card/40 px-4 py-3 min-w-0">
-                  <div className="text-[11px] uppercase tracking-wider text-muted-foreground mb-0.5">Avg / trade</div>
-                  <div className={`text-xl sm:text-2xl font-bold tabular-nums ${kpis.avgPnl >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                <div className="rounded-lg border border-border/60 bg-card/40 px-2.5 py-2 sm:px-4 sm:py-3 min-w-0 overflow-hidden">
+                  <div className="text-[10px] sm:text-[11px] uppercase tracking-wider text-muted-foreground mb-0.5 truncate">Avg / trade</div>
+                  <div className={`text-base sm:text-lg lg:text-xl font-bold tabular-nums truncate ${kpis.avgPnl >= 0 ? 'text-green-500' : 'text-red-500'}`} title={`${kpis.avgPnl >= 0 ? '+' : ''}$${kpis.avgPnl.toFixed(2)}`}>
                     {kpis.avgPnl >= 0 ? '+' : ''}${kpis.avgPnl.toFixed(2)}
                   </div>
                 </div>
