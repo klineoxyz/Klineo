@@ -5,7 +5,7 @@ import { Badge } from "@/app/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/app/components/ui/select";
 import { Search, TrendingUp, TrendingDown, Users, Eye, RefreshCw, AlertTriangle, Clock } from "lucide-react";
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { ROUTES } from "@/app/config/routes";
 import { MarketplaceLoading } from "./MarketplaceLoading";
 import { LoadingWrapper } from "@/app/components/ui/loading-wrapper";
@@ -33,7 +33,6 @@ interface MarketplaceProps {
 }
 
 export function Marketplace({ onNavigate }: MarketplaceProps) {
-  const navigate = useNavigate();
   const [traders, setTraders] = useState<Trader[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -93,11 +92,11 @@ export function Marketplace({ onNavigate }: MarketplaceProps) {
             <h1 className="text-xl sm:text-2xl font-semibold mb-1">Marketplace</h1>
             <p className="text-sm text-muted-foreground">Browse and copy professional traders</p>
           </div>
-          <Button 
-            onClick={() => navigate(ROUTES.masterTraderApplication)}
+          <Button
+            asChild
             className="bg-primary text-primary-foreground w-full sm:w-auto"
           >
-            Become a Master Trader
+            <Link to={ROUTES.masterTraderApplication}>Become a Master Trader</Link>
           </Button>
         </div>
 
