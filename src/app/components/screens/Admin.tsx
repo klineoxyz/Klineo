@@ -1614,7 +1614,7 @@ export function Admin() {
           <Card>
             <div className="p-4 border-b border-border">
               <h3 className="text-lg font-semibold">Master Trader Requests</h3>
-              <p className="text-sm text-muted-foreground">Review and approve or reject applications. Approved traders can submit strategies and compete for TOP 10 monthly campaign rewards. Rejected applicants see the reason on their application page and can apply again.</p>
+              <p className="text-sm text-muted-foreground">Review and approve or reject applications. Use <strong>View</strong> to see the full application (all form fields: personal info, trading experience, proof screenshot, profile URL, strategy). Approved traders can submit strategies and compete for TOP 10 monthly campaign rewards. Rejected applicants see the reason on their application page and can apply again.</p>
             </div>
             {masterTraderApplicationsLoading ? (
               <div className="p-8 text-center text-muted-foreground">Loading applications...</div>
@@ -1628,6 +1628,7 @@ export function Admin() {
                     <TableHead>Exchange / Experience</TableHead>
                     <TableHead>Trading Style</TableHead>
                     <TableHead>Preferred Markets</TableHead>
+                    <TableHead>Avg. return</TableHead>
                     <TableHead>Trading proof</TableHead>
                     <TableHead>Package Benefit</TableHead>
                     <TableHead>Status</TableHead>
@@ -1638,7 +1639,7 @@ export function Admin() {
                 <TableBody>
                   {masterTraderApplications.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={11} className="text-center text-muted-foreground py-8">
+                      <TableCell colSpan={12} className="text-center text-muted-foreground py-8">
                         No Master Trader applications yet.
                       </TableCell>
                     </TableRow>
@@ -1658,6 +1659,7 @@ export function Admin() {
                           </TableCell>
                           <TableCell className="text-xs">{get("tradingStyle") ? (tradingStyleLabel[String(get("tradingStyle"))] ?? get("tradingStyle")) : "—"}</TableCell>
                           <TableCell className="text-xs">{get("preferredMarkets") ? (marketsLabel[String(get("preferredMarkets"))] ?? get("preferredMarkets")) : "—"}</TableCell>
+                          <TableCell className="text-xs">{get("avgMonthlyReturn") != null && get("avgMonthlyReturn") !== "" ? `${get("avgMonthlyReturn")}%` : "—"}</TableCell>
                           <TableCell className="text-xs">
                             {app.proofUrl ? (
                               <a href={app.proofUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">View screenshot</a>
