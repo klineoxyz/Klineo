@@ -615,8 +615,9 @@ exchangeConnectionsRouter.patch(
 
 /**
  * GET /api/exchange-connections/balance
- * Fetch account balances from first Binance connection (for trading terminal).
- * Returns USDT and all asset balances so UI can show Available for buy/sell.
+ * Fetch account balances from first Binance/Bybit connection.
+ * Returns 200 with connected: true/false so the UI shows Connected or Disconnected instead of "Connection Error".
+ * Only returns 5xx when the server truly fails (e.g. 503 DB unavailable).
  */
 exchangeConnectionsRouter.get('/balance', async (req: AuthenticatedRequest, res) => {
   const client = getSupabase();
@@ -636,7 +637,18 @@ exchangeConnectionsRouter.get('/balance', async (req: AuthenticatedRequest, res)
       .order('created_at', { ascending: false })
       .limit(1);
 
-    if (listError || !connections?.length) {
+    if (listError) {
+      console.warn(`[${requestId}] Balance: list connections failed`, listError.message);
+      return res.status(200).json({
+        connected: false,
+        exchange: null,
+        connectionId: null,
+        balances: {},
+        requestId,
+      });
+    }
+
+    if (!connections?.length) {
       return res.status(200).json({
         connected: false,
         exchange: null,
@@ -660,6 +672,7 @@ exchangeConnectionsRouter.get('/balance', async (req: AuthenticatedRequest, res)
 
     const env = (connection.environment || 'production') as 'production' | 'testnet';
     let balances: Record<string, { free: string; locked: string }> = {};
+
     try {
       const decryptedJson = await decrypt(connection.encrypted_config_b64);
       const parsed = JSON.parse(decryptedJson);
@@ -680,16 +693,20 @@ exchangeConnectionsRouter.get('/balance', async (req: AuthenticatedRequest, res)
           }
         }
       }
-    } catch (decryptError) {
-      console.error(`[${requestId}] Balance: decryption failed`);
-      return res.status(500).json({
-        error: 'Failed to decrypt credentials',
-        message: 'Use **Update credentials** in Settings to re-enter your API key and secret.',
+    } catch (innerErr) {
+      const msg = innerErr instanceof Error ? innerErr.message : String(innerErr);
+      const sanitized = msg.replace(/api[_-]?key/gi, '[REDACTED]').replace(/secret/gi, '[REDACTED]');
+      console.warn(`[${requestId}] Balance: decrypt or exchange API failed:`, sanitized);
+      return res.status(200).json({
+        connected: false,
+        exchange: connection.exchange,
+        connectionId: connection.id,
+        balances: {},
         requestId,
       });
     }
 
-    res.json({
+    return res.json({
       connected: true,
       exchange: connection.exchange,
       connectionId: connection.id,
@@ -698,10 +715,12 @@ exchangeConnectionsRouter.get('/balance', async (req: AuthenticatedRequest, res)
     });
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : 'Unknown error';
-    console.error(`[${requestId}] Balance error:`, errorMessage);
-    res.status(500).json({
-      error: 'Failed to fetch balance',
-      message: errorMessage.replace(/api[_-]?key/gi, '[REDACTED]').replace(/secret/gi, '[REDACTED]'),
+    console.error(`[${requestId}] Balance unexpected error:`, errorMessage);
+    return res.status(200).json({
+      connected: false,
+      exchange: null,
+      connectionId: null,
+      balances: {},
       requestId,
     });
   }
