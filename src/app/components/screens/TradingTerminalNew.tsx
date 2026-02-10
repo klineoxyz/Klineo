@@ -729,8 +729,8 @@ export function TradingTerminalNew({ onNavigate }: TradingTerminalProps) {
       {/* Main Content */}
       <div className="flex-1 flex flex-col lg:flex-row overflow-hidden min-h-0">
         {/* Left - Order Book (hidden < lg; use Sheet on mobile/tablet) */}
-        <div className="hidden lg:flex lg:w-[260px] xl:w-[280px] border-r border-border bg-card/30 overflow-hidden flex-col shrink-0">
-          <div className="p-2.5 sm:p-3 border-b border-border flex items-center justify-between gap-2">
+        <div className="hidden lg:flex lg:w-[260px] xl:w-[280px] border-r border-border bg-card overflow-hidden flex-col shrink-0 min-h-0">
+          <div className="p-2.5 sm:p-3 border-b border-border flex items-center justify-between gap-2 shrink-0">
             <div className="text-sm font-semibold">Order Book</div>
             <div className="flex items-center gap-1.5 shrink-0">
               {orderBookLoading && (
@@ -752,64 +752,79 @@ export function TradingTerminalNew({ onNavigate }: TradingTerminalProps) {
               </span>
             </div>
           </div>
-          
-          <div className="flex-1 overflow-y-auto">
-            <div className="text-xs font-mono">
-              {(() => {
-                const asks = [...orderBookData.asks].reverse();
-                const maxAskTotal = Math.max(...asks.map((a) => parseFloat(a.total)), 1);
-                return asks.map((ask, i) => (
-                  <div
-                    key={`ask-${i}`}
-                    className="grid grid-cols-3 gap-2 px-3 py-0.5 hover:bg-red-500/5 relative"
-                  >
+
+          {/* Asks */}
+          <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
+            <div className="grid grid-cols-[1fr_1fr_1fr] gap-1 px-2 py-1.5 border-b border-border/50 text-[10px] font-medium text-muted-foreground uppercase tracking-wide shrink-0">
+              <span>Price</span>
+              <span className="text-right">Amount</span>
+              <span className="text-right">Total</span>
+            </div>
+            <div className="flex-1 min-h-0 overflow-y-auto">
+              <div className="text-xs font-mono tabular-nums">
+                {(() => {
+                  const asks = [...orderBookData.asks].reverse();
+                  const maxAskTotal = Math.max(...asks.map((a) => parseFloat(a.total)), 1);
+                  return asks.map((ask, i) => (
                     <div
-                      className="absolute inset-0 bg-red-500/10"
-                      style={{ width: `${Math.min(100, (parseFloat(ask.total) / maxAskTotal) * 80 + 10)}%`, right: 0 }}
-                    />
-                    <div className="text-red-500 relative z-10">{ask.price}</div>
-                    <div className="text-right relative z-10">{ask.amount}</div>
-                    <div className="text-right text-muted-foreground relative z-10 text-[10px]">
-                      {ask.total}
+                      key={`ask-${i}`}
+                      className="grid grid-cols-[1fr_1fr_1fr] gap-1 px-2 py-1 hover:bg-red-500/5 relative items-center min-h-[22px]"
+                    >
+                      <div
+                        className="absolute inset-0 bg-red-500/10 pointer-events-none"
+                        style={{ width: `${Math.min(70, (parseFloat(ask.total) / maxAskTotal) * 60 + 5)}%`, right: 0 }}
+                        aria-hidden
+                      />
+                      <span className="text-red-500 relative z-10 truncate">{ask.price}</span>
+                      <span className="text-right relative z-10 truncate">{ask.amount}</span>
+                      <span className="text-right text-muted-foreground relative z-10 truncate">{ask.total}</span>
                     </div>
-                  </div>
-                ));
-              })()}
+                  ));
+                })()}
+              </div>
             </div>
           </div>
 
-          <div className="px-3 py-2 border-y border-border bg-green-500/10">
-            <div className="flex items-center justify-between">
-              <div className="text-lg font-mono font-bold text-green-500">
+          {/* Mid price */}
+          <div className="px-3 py-2 border-y border-border bg-muted/30 shrink-0">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-base font-mono font-bold text-foreground tabular-nums">
                 {currentPrice.toFixed(2)}
-              </div>
-              <div className="text-xs text-muted-foreground">
+              </span>
+              <span className="text-xs text-muted-foreground tabular-nums">
                 ${currentPrice.toFixed(2)}
-              </div>
+              </span>
             </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto">
-            <div className="text-xs font-mono">
-              {(() => {
-                const maxBidTotal = Math.max(...orderBookData.bids.map((b) => parseFloat(b.total)), 1);
-                return orderBookData.bids.map((bid, i) => (
-                  <div
-                    key={`bid-${i}`}
-                    className="grid grid-cols-3 gap-2 px-3 py-0.5 hover:bg-green-500/5 relative"
-                  >
+          {/* Bids */}
+          <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
+            <div className="grid grid-cols-[1fr_1fr_1fr] gap-1 px-2 py-1.5 border-b border-border/50 text-[10px] font-medium text-muted-foreground uppercase tracking-wide shrink-0">
+              <span>Price</span>
+              <span className="text-right">Amount</span>
+              <span className="text-right">Total</span>
+            </div>
+            <div className="flex-1 min-h-0 overflow-y-auto">
+              <div className="text-xs font-mono tabular-nums">
+                {(() => {
+                  const maxBidTotal = Math.max(...orderBookData.bids.map((b) => parseFloat(b.total)), 1);
+                  return orderBookData.bids.map((bid, i) => (
                     <div
-                      className="absolute inset-0 bg-green-500/10"
-                      style={{ width: `${Math.min(100, (parseFloat(bid.total) / maxBidTotal) * 80 + 10)}%`, right: 0 }}
-                    />
-                    <div className="text-green-500 relative z-10">{bid.price}</div>
-                    <div className="text-right relative z-10">{bid.amount}</div>
-                    <div className="text-right text-muted-foreground relative z-10 text-[10px]">
-                      {bid.total}
+                      key={`bid-${i}`}
+                      className="grid grid-cols-[1fr_1fr_1fr] gap-1 px-2 py-1 hover:bg-green-500/5 relative items-center min-h-[22px]"
+                    >
+                      <div
+                        className="absolute inset-0 bg-green-500/10 pointer-events-none"
+                        style={{ width: `${Math.min(70, (parseFloat(bid.total) / maxBidTotal) * 60 + 5)}%`, right: 0 }}
+                        aria-hidden
+                      />
+                      <span className="text-green-500 relative z-10 truncate">{bid.price}</span>
+                      <span className="text-right relative z-10 truncate">{bid.amount}</span>
+                      <span className="text-right text-muted-foreground relative z-10 truncate">{bid.total}</span>
                     </div>
-                  </div>
-                ));
-              })()}
+                  ));
+                })()}
+              </div>
             </div>
           </div>
         </div>
@@ -834,8 +849,8 @@ export function TradingTerminalNew({ onNavigate }: TradingTerminalProps) {
                       Order book
                     </button>
                   </SheetTrigger>
-                  <SheetContent side="left" className="w-[85vw] max-w-[320px] sm:max-w-[340px] flex flex-col p-0 gap-0">
-                    <SheetHeader className="p-3 pr-12 border-b border-border flex flex-row items-center justify-between space-y-0">
+                  <SheetContent side="left" className="w-[85vw] max-w-[320px] sm:max-w-[340px] flex flex-col p-0 gap-0 bg-card">
+                    <SheetHeader className="p-3 pr-12 border-b border-border flex flex-row items-center justify-between space-y-0 shrink-0">
                       <SheetTitle className="text-sm font-semibold">Order Book</SheetTitle>
                       <div className="flex items-center gap-1.5">
                         {orderBookLoading && <Loader2 className="size-3.5 text-muted-foreground animate-spin" />}
@@ -845,33 +860,41 @@ export function TradingTerminalNew({ onNavigate }: TradingTerminalProps) {
                       </div>
                     </SheetHeader>
                     <div className="flex-1 overflow-y-auto flex flex-col min-h-0">
-                      <div className="text-xs font-mono">
+                      <div className="grid grid-cols-[1fr_1fr_1fr] gap-1 px-2 py-1.5 border-b border-border/50 text-[10px] font-medium text-muted-foreground uppercase tracking-wide shrink-0">
+                        <span>Price</span>
+                        <span className="text-right">Amount</span>
+                        <span className="text-right">Total</span>
+                      </div>
+                      <div className="text-xs font-mono tabular-nums">
                         {[...orderBookData.asks].reverse().map((ask, i) => {
                           const maxAskTotal = Math.max(...orderBookData.asks.map((a) => parseFloat(a.total)), 1);
                           return (
-                            <div key={`ask-sheet-${i}`} className="grid grid-cols-3 gap-2 px-3 py-0.5 hover:bg-red-500/5 relative">
-                              <div className="absolute inset-0 bg-red-500/10" style={{ width: `${Math.min(100, (parseFloat(ask.total) / maxAskTotal) * 80 + 10)}%`, right: 0 }} />
-                              <div className="text-red-500 relative z-10">{ask.price}</div>
-                              <div className="text-right relative z-10">{ask.amount}</div>
-                              <div className="text-right text-muted-foreground relative z-10 text-[10px]">{ask.total}</div>
+                            <div key={`ask-sheet-${i}`} className="grid grid-cols-[1fr_1fr_1fr] gap-1 px-2 py-1 hover:bg-red-500/5 relative items-center min-h-[22px]">
+                              <div className="absolute inset-0 bg-red-500/10 pointer-events-none" style={{ width: `${Math.min(70, (parseFloat(ask.total) / maxAskTotal) * 60 + 5)}%`, right: 0 }} aria-hidden />
+                              <span className="text-red-500 relative z-10 truncate">{ask.price}</span>
+                              <span className="text-right relative z-10 truncate">{ask.amount}</span>
+                              <span className="text-right text-muted-foreground relative z-10 truncate">{ask.total}</span>
                             </div>
                           );
                         })}
                       </div>
-                      <div className="px-3 py-2 border-y border-border bg-green-500/10">
-                        <div className="flex items-center justify-between">
-                          <div className="text-base font-mono font-bold text-green-500">{currentPrice.toFixed(2)}</div>
-                        </div>
+                      <div className="px-3 py-2 border-y border-border bg-muted/30 shrink-0">
+                        <div className="text-base font-mono font-bold text-foreground tabular-nums">{currentPrice.toFixed(2)}</div>
                       </div>
-                      <div className="text-xs font-mono">
+                      <div className="grid grid-cols-[1fr_1fr_1fr] gap-1 px-2 py-1.5 border-b border-border/50 text-[10px] font-medium text-muted-foreground uppercase tracking-wide shrink-0">
+                        <span>Price</span>
+                        <span className="text-right">Amount</span>
+                        <span className="text-right">Total</span>
+                      </div>
+                      <div className="text-xs font-mono tabular-nums">
                         {orderBookData.bids.map((bid, i) => {
                           const maxBidTotal = Math.max(...orderBookData.bids.map((b) => parseFloat(b.total)), 1);
                           return (
-                            <div key={`bid-sheet-${i}`} className="grid grid-cols-3 gap-2 px-3 py-0.5 hover:bg-green-500/5 relative">
-                              <div className="absolute inset-0 bg-green-500/10" style={{ width: `${Math.min(100, (parseFloat(bid.total) / maxBidTotal) * 80 + 10)}%`, right: 0 }} />
-                              <div className="text-green-500 relative z-10">{bid.price}</div>
-                              <div className="text-right relative z-10">{bid.amount}</div>
-                              <div className="text-right text-muted-foreground relative z-10 text-[10px]">{bid.total}</div>
+                            <div key={`bid-sheet-${i}`} className="grid grid-cols-[1fr_1fr_1fr] gap-1 px-2 py-1 hover:bg-green-500/5 relative items-center min-h-[22px]">
+                              <div className="absolute inset-0 bg-green-500/10 pointer-events-none" style={{ width: `${Math.min(70, (parseFloat(bid.total) / maxBidTotal) * 60 + 5)}%`, right: 0 }} aria-hidden />
+                              <span className="text-green-500 relative z-10 truncate">{bid.price}</span>
+                              <span className="text-right relative z-10 truncate">{bid.amount}</span>
+                              <span className="text-right text-muted-foreground relative z-10 truncate">{bid.total}</span>
                             </div>
                           );
                         })}
@@ -1414,9 +1437,19 @@ export function TradingTerminalNew({ onNavigate }: TradingTerminalProps) {
           {/* Order Entry Panel */}
           <div className="flex-1 overflow-y-auto p-3 sm:p-4 min-h-0">
             <Tabs defaultValue="buy" className="w-full">
-              <TabsList className="w-full grid grid-cols-2 mb-3 sm:mb-4 h-9 sm:h-8">
-                <TabsTrigger value="buy" className="text-xs sm:text-sm">Buy</TabsTrigger>
-                <TabsTrigger value="sell" className="text-xs sm:text-sm">Sell</TabsTrigger>
+              <TabsList className="w-full grid grid-cols-2 mb-3 sm:mb-4 h-9 sm:h-8 bg-muted text-muted-foreground items-center justify-center rounded-xl p-[3px]">
+                <TabsTrigger
+                  value="buy"
+                  className="text-xs sm:text-sm font-semibold border border-transparent rounded-lg data-[state=active]:!bg-green-500/25 data-[state=active]:!text-green-700 data-[state=active]:!border-green-500/50 data-[state=active]:shadow-sm dark:data-[state=active]:!bg-green-500/30 dark:data-[state=active]:!text-green-300"
+                >
+                  Buy
+                </TabsTrigger>
+                <TabsTrigger
+                  value="sell"
+                  className="text-xs sm:text-sm font-semibold border border-transparent rounded-lg data-[state=active]:!bg-red-500/25 data-[state=active]:!text-red-700 data-[state=active]:!border-red-500/50 data-[state=active]:shadow-sm dark:data-[state=active]:!bg-red-500/30 dark:data-[state=active]:!text-red-300"
+                >
+                  Sell
+                </TabsTrigger>
               </TabsList>
 
               <TabsContent value="buy" className="space-y-2.5 sm:space-y-3 mt-0">
