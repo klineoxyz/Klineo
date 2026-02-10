@@ -596,6 +596,7 @@ interface StrategyBacktestProps {
 export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
   const { user } = useAuth();
   const { addDemoFromBacktest, isDemoMode } = useDemo();
+  const [launchMode, setLaunchMode] = useState<"demo" | "live">("demo");
   // When platform is live (not in demo mode), do not show Demo/Live choice — only live launch
   const effectiveLaunchMode = isDemoMode ? launchMode : "live";
   const [entitlement, setEntitlement] = useState<{
@@ -609,7 +610,6 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
   const [isBacktesting, setIsBacktesting] = useState(false);
   const [hasResults, setHasResults] = useState(false);
   const [expandedTrade, setExpandedTrade] = useState<number | null>(null);
-  const [launchMode, setLaunchMode] = useState<"demo" | "live">("demo");
   const [riskAccepted, setRiskAccepted] = useState(false);
   const [tradeBreakdownExpanded, setTradeBreakdownExpanded] = useState(true);
 
