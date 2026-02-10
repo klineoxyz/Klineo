@@ -586,19 +586,19 @@ const calculateTradeStatsFromTrades = (
   let winningTrades = 0;
   let totalPnl = 0;
   let totalPnlPercent = 0;
-
+  
   trades.forEach((trade) => {
     const pnl =
       trade.direction === 'long'
-        ? trade.exitPrice - trade.entryPrice
-        : trade.entryPrice - trade.exitPrice;
+      ? trade.exitPrice - trade.entryPrice 
+      : trade.entryPrice - trade.exitPrice;
     const pnlPercent = (pnl / trade.entryPrice) * 100;
-
+    
     totalPnl += pnl;
     totalPnlPercent += pnlPercent;
     if (pnl > 0) winningTrades++;
   });
-
+  
   return {
     totalTrades,
     winRate: totalTrades > 0 ? (winningTrades / totalTrades) * 100 : 0,
@@ -944,7 +944,7 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
       toast.success("Backtest completed for " + dateFrom + " – " + dateTo + " (synthetic). Connect an exchange for live data.");
     }
 
-    setIsBacktesting(false);
+      setIsBacktesting(false);
   };
 
   const handleOptimize = async () => {
@@ -1357,7 +1357,7 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
                           <SelectItem value="ema">EMA</SelectItem>
                         </SelectContent>
                       </Select>
-                    </div>
+            </div>
                     <div className="space-y-1">
                       <Label className="text-xs">Fast MA period</Label>
                       <Input type="number" min={1} max={99} value={maFastPeriod} onChange={(e) => setMaFastPeriod(e.target.value)} className="h-8 text-xs" />
@@ -1627,7 +1627,7 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
                     <Button variant="outline" size="sm" className="gap-2" onClick={handleOptimize} disabled={isOptimizing}>
                       {isOptimizing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
                       {isOptimizing ? "Optimizing…" : "Optimize"}
-                    </Button>
+                </Button>
                   </TooltipTrigger>
                   <TooltipContent side="bottom" className="max-w-xs">
                     Optimization changes parameters, not market conditions.
@@ -1795,7 +1795,7 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
                         {longShortCounts.short} Short
                       </span>
                       <span className="text-[10px] text-muted-foreground">(opens & exits on chart)</span>
-                    </div>
+                  </div>
                     {backtestDataSource === "live" && backtestExchangeLabel && (
                       <p className="text-xs text-green-600 dark:text-green-400 mt-0.5">
                         Live data from {backtestExchangeLabel}
@@ -1809,7 +1809,7 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
                     {klinesError && (
                       <p className="text-xs text-muted-foreground mt-0.5">Fallback: {klinesError}</p>
                     )}
-                  </div>
+                </div>
                 </div>
                 <Button variant="outline" size="sm" className="shrink-0 w-full sm:w-auto" onClick={handleShare}>
                   <Share2 className="h-4 w-4 mr-2" />
@@ -1854,7 +1854,7 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
                     <Button className="bg-[#FFB000] hover:bg-[#FFB000]/90 text-black font-semibold w-full sm:w-auto min-h-[44px] sm:min-h-0" onClick={handleOptimize} disabled={isOptimizing}>
                       {isOptimizing ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
                       {isOptimizing ? "Optimizing…" : "Optimize"}
-                    </Button>
+                </Button>
                   </TooltipTrigger>
                   <TooltipContent side="left" className="max-w-xs">
                     Optimization changes parameters, not market conditions.
@@ -1891,7 +1891,7 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
                       </span>
                     </>
                   )}
-                </div>
+                  </div>
                 <BacktestLightweightChart
                   data={backtestCandles}
                   trades={generatedTrades}
@@ -2261,34 +2261,34 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
 
           {/* Mode Selector — only when platform is in demo mode; when live, no Demo option */}
           {isDemoMode && (
-            <div className="space-y-2">
-              <Label>Launch Mode</Label>
-              <Tabs value={launchMode} onValueChange={(v: any) => setLaunchMode(v)}>
-                <TabsList className="w-full">
-                  <TabsTrigger value="demo" className="flex-1">
-                    Demo
-                  </TabsTrigger>
-                  <TabsTrigger value="live" className="flex-1">
-                    Live
-                  </TabsTrigger>
-                </TabsList>
-              </Tabs>
-              {launchMode === "demo" ? (
-                <Alert className="border-primary/50 bg-primary/10">
-                  <CheckCircle2 className="h-4 w-4 text-primary" />
-                  <AlertDescription className="text-xs">
-                    Demo mode uses simulated trading with no real funds
-                  </AlertDescription>
-                </Alert>
-              ) : (
-                <Alert className="border-destructive/50 bg-destructive/10">
-                  <AlertTriangle className="h-4 w-4 text-destructive" />
-                  <AlertDescription className="text-xs text-destructive">
-                    Live mode trades with real funds. Losses are possible.
-                  </AlertDescription>
-                </Alert>
-              )}
-            </div>
+          <div className="space-y-2">
+            <Label>Launch Mode</Label>
+            <Tabs value={launchMode} onValueChange={(v: any) => setLaunchMode(v)}>
+              <TabsList className="w-full">
+                <TabsTrigger value="demo" className="flex-1">
+                  Demo
+                </TabsTrigger>
+                <TabsTrigger value="live" className="flex-1">
+                  Live
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
+            {launchMode === "demo" ? (
+              <Alert className="border-primary/50 bg-primary/10">
+                <CheckCircle2 className="h-4 w-4 text-primary" />
+                <AlertDescription className="text-xs">
+                  Demo mode uses simulated trading with no real funds
+                </AlertDescription>
+              </Alert>
+            ) : (
+              <Alert className="border-destructive/50 bg-destructive/10">
+                <AlertTriangle className="h-4 w-4 text-destructive" />
+                <AlertDescription className="text-xs text-destructive">
+                  Live mode trades with real funds. Losses are possible.
+                </AlertDescription>
+              </Alert>
+            )}
+          </div>
           )}
 
           {isHighRisk && (

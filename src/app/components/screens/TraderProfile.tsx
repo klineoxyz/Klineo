@@ -261,19 +261,28 @@ export function TraderProfile({ onNavigate, traderData }: TraderProfileProps) {
           {chartData.length > 0 ? (
             <ResponsiveContainer width="100%" height={300}>
               <LineChart data={chartData} margin={{ top: 8, right: 8, left: 8, bottom: 8 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                <XAxis dataKey="date" stroke="hsl(var(--muted-foreground))" fontSize={12} />
-                <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} tickFormatter={(v) => `$${Number(v).toLocaleString()}`} />
+                <CartesianGrid strokeDasharray="3 3" stroke="#2A2D35" vertical={true} horizontal={true} />
+                <XAxis dataKey="date" stroke="#8B8B8B" fontSize={12} tick={{ fill: "#8B8B8B" }} />
+                <YAxis stroke="#8B8B8B" fontSize={12} tick={{ fill: "#8B8B8B" }} tickFormatter={(v) => `$${Number(v).toLocaleString()}`} />
                 <Tooltip
                   formatter={(value: number) => [`$${Number(value).toLocaleString(undefined, { minimumFractionDigits: 2 })}`, "Equity"]}
                   contentStyle={{
-                    backgroundColor: "hsl(var(--card))",
-                    border: "1px solid hsl(var(--border))",
+                    backgroundColor: "var(--card)",
+                    border: "1px solid var(--border)",
                     borderRadius: "8px",
                   }}
-                  labelStyle={{ color: "hsl(var(--foreground))" }}
+                  labelStyle={{ color: "var(--foreground)" }}
                 />
-                <Line type="monotone" dataKey="value" stroke="hsl(var(--chart-1, 142 76% 36%))" strokeWidth={2} dot={false} name="Equity" />
+                <Line
+                  type="monotone"
+                  dataKey="value"
+                  stroke="#10B981"
+                  strokeWidth={2.5}
+                  dot={{ fill: "#10B981", strokeWidth: 0, r: 4 }}
+                  activeDot={{ r: 6, fill: "#10B981", stroke: "#0B0D10", strokeWidth: 2 }}
+                  name="Equity"
+                  connectNulls
+                />
               </LineChart>
             </ResponsiveContainer>
           ) : (
