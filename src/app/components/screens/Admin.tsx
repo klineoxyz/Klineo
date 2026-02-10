@@ -131,7 +131,7 @@ export function Admin() {
   const [masterTraderApplications, setMasterTraderApplications] = useState<any[]>([]);
   const [masterTraderApplicationsLoading, setMasterTraderApplicationsLoading] = useState(false);
   const [masterTraderReviewApp, setMasterTraderReviewApp] = useState<{ id: string; userEmail: string; formData?: Record<string, unknown>; proofUrl?: string | null } | null>(null);
-  const [masterTraderReviewStatus, setMasterTraderReviewStatus] = useState<"approved" | "rejected">("approved");
+  const [masterTraderReviewStatus, setMasterTraderReviewStatus] = useState<"view" | "approved" | "rejected">("view");
   const [masterTraderReviewMessage, setMasterTraderReviewMessage] = useState("");
   const [masterTraderReviewLoading, setMasterTraderReviewLoading] = useState(false);
 
@@ -203,7 +203,7 @@ export function Admin() {
   };
 
   const handleMasterTraderReview = async () => {
-    if (!masterTraderReviewApp) return;
+    if (!masterTraderReviewApp || masterTraderReviewStatus === "view") return;
     setMasterTraderReviewLoading(true);
     try {
       await api.patch(`/api/admin/master-trader-applications/${masterTraderReviewApp.id}`, {
@@ -213,6 +213,7 @@ export function Admin() {
       toast.success(masterTraderReviewStatus === "approved" ? "Application approved" : "Application rejected");
       setMasterTraderReviewApp(null);
       setMasterTraderReviewMessage("");
+      setMasterTraderReviewStatus("view");
       loadMasterTraderApplications();
     } catch (err: any) {
       toast.error("Failed to update", { description: err?.message });
@@ -1659,34 +1660,47 @@ export function Admin() {
                             {app.createdAt ? new Date(app.createdAt).toLocaleDateString() : "—"}
                           </TableCell>
                           <TableCell className="text-right">
-                            {app.status === "pending" && (
-                              <div className="flex justify-end gap-2">
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  className="text-[#10B981] border-[#10B981]/50"
-                                  onClick={() => {
-                                    setMasterTraderReviewApp({ id: app.id, userEmail: app.userEmail, formData: app.formData, proofUrl: app.proofUrl });
-                                    setMasterTraderReviewStatus("approved");
-                                    setMasterTraderReviewMessage("");
-                                  }}
-                                >
-                                  Approve
-                                </Button>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  className="text-[#EF4444] border-[#EF4444]/50"
-                                  onClick={() => {
-                                    setMasterTraderReviewApp({ id: app.id, userEmail: app.userEmail, formData: app.formData, proofUrl: app.proofUrl });
-                                    setMasterTraderReviewStatus("rejected");
-                                    setMasterTraderReviewMessage("");
-                                  }}
-                                >
-                                  Reject
-                                </Button>
-                              </div>
-                            )}
+                            <div className="flex justify-end gap-2">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => {
+                                  setMasterTraderReviewApp({ id: app.id, userEmail: app.userEmail, formData: app.formData, proofUrl: app.proofUrl });
+                                  setMasterTraderReviewStatus("view");
+                                  setMasterTraderReviewMessage("");
+                                }}
+                              >
+                                View
+                              </Button>
+                              {app.status === "pending" && (
+                                <>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="text-[#10B981] border-[#10B981]/50"
+                                    onClick={() => {
+                                      setMasterTraderReviewApp({ id: app.id, userEmail: app.userEmail, formData: app.formData, proofUrl: app.proofUrl });
+                                      setMasterTraderReviewStatus("approved");
+                                      setMasterTraderReviewMessage("");
+                                    }}
+                                  >
+                                    Approve
+                                  </Button>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="text-[#EF4444] border-[#EF4444]/50"
+                                    onClick={() => {
+                                      setMasterTraderReviewApp({ id: app.id, userEmail: app.userEmail, formData: app.formData, proofUrl: app.proofUrl });
+                                      setMasterTraderReviewStatus("rejected");
+                                      setMasterTraderReviewMessage("");
+                                    }}
+                                  >
+                                    Reject
+                                  </Button>
+                                </>
+                              )}
+                            </div>
                           </TableCell>
                         </TableRow>
                       );
@@ -1700,7 +1714,9 @@ export function Admin() {
           <Dialog open={!!masterTraderReviewApp} onOpenChange={(open) => !open && setMasterTraderReviewApp(null)}>
             <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
-                <DialogTitle>{masterTraderReviewStatus === "approved" ? "Approve" : "Reject"} Application</DialogTitle>
+                <DialogTitle>
+                  {masterTraderReviewStatus === "view" ? "Review Application" : masterTraderReviewStatus === "approved" ? "Approve" : "Reject"} Application
+                </DialogTitle>
               </DialogHeader>
               {masterTraderReviewApp && (() => {
                 const fd = masterTraderReviewApp.formData || {};
@@ -1785,14 +1801,23 @@ export function Admin() {
                 );
               })()}
               <DialogFooter>
-                <Button variant="outline" onClick={() => setMasterTraderReviewApp(null)}>Cancel</Button>
-                <Button
-                  onClick={handleMasterTraderReview}
-                  disabled={masterTraderReviewLoading}
-                  className={masterTraderReviewStatus === "approved" ? "bg-[#10B981] hover:bg-[#10B981]/90" : "bg-[#EF4444] hover:bg-[#EF4444]/90"}
-                >
-                  {masterTraderReviewLoading ? "Processing..." : "Confirm"}
+                <Button variant="outline" onClick={() => { setMasterTraderReviewApp(null); setMasterTraderReviewStatus("view"); }}>
+                  {masterTraderReviewStatus === "view" ? "Close" : "Cancel"}
                 </Button>
+                {masterTraderReviewStatus === "view" ? (
+                  <>
+                    <Button size="sm" className="bg-[#10B981] hover:bg-[#10B981]/90" onClick={() => setMasterTraderReviewStatus("approved")}>Approve</Button>
+                    <Button size="sm" variant="destructive" onClick={() => setMasterTraderReviewStatus("rejected")}>Reject</Button>
+                  </>
+                ) : (
+                  <Button
+                    onClick={handleMasterTraderReview}
+                    disabled={masterTraderReviewLoading}
+                    className={masterTraderReviewStatus === "approved" ? "bg-[#10B981] hover:bg-[#10B981]/90" : "bg-[#EF4444] hover:bg-[#EF4444]/90"}
+                  >
+                    {masterTraderReviewLoading ? "Processing..." : "Confirm"}
+                  </Button>
+                )}
               </DialogFooter>
             </DialogContent>
           </Dialog>
