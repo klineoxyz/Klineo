@@ -4,8 +4,8 @@ import { Badge } from "@/app/components/ui/badge";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import { Textarea } from "@/app/components/ui/textarea";
-import { ArrowLeft, TrendingUp, Users, Shield, Clock, CheckCircle2, Upload, Loader2 } from "lucide-react";
-import { useState } from "react";
+import { ArrowLeft, TrendingUp, Users, Shield, Clock, CheckCircle2, Upload, Loader2, XCircle, Trophy } from "lucide-react";
+import { useState, useEffect } from "react";
 import { api } from "@/lib/api";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/app/contexts/AuthContext";
@@ -18,9 +18,21 @@ interface MasterTraderApplicationProps {
   onNavigate: (view: string) => void;
 }
 
+type AppStatus = "form" | "review" | "approved" | "rejected";
+
+interface MyApplication {
+  id: string;
+  status: "pending" | "approved" | "rejected";
+  message: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export function MasterTraderApplication({ onNavigate }: MasterTraderApplicationProps) {
   const { user } = useAuth();
-  const [applicationStatus, setApplicationStatus] = useState<"form" | "review" | "approved" | "rejected">("form");
+  const [applicationStatus, setApplicationStatus] = useState<AppStatus>("form");
+  const [myApplication, setMyApplication] = useState<MyApplication | null>(null);
+  const [statusLoading, setStatusLoading] = useState(true);
   const [exchangeProof, setExchangeProof] = useState<File | null>(null);
   const [submitLoading, setSubmitLoading] = useState(false);
   const [formData, setFormData] = useState({
@@ -37,6 +49,32 @@ export function MasterTraderApplication({ onNavigate }: MasterTraderApplicationP
     whyMasterTrader: "",
     profileUrl: "",
   });
+
+  // Fetch current user's latest application so they see real status (pending/approved/rejected)
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setStatusLoading(true);
+      try {
+        const res = await api.get<{ application: MyApplication | null }>("/api/master-trader-applications/me");
+        if (cancelled) return;
+        const app = res.application;
+        setMyApplication(app ?? null);
+        if (app) {
+          if (app.status === "pending") setApplicationStatus("review");
+          else if (app.status === "approved") setApplicationStatus("approved");
+          else if (app.status === "rejected") setApplicationStatus("rejected");
+        } else {
+          setApplicationStatus("form");
+        }
+      } catch {
+        if (!cancelled) setApplicationStatus("form");
+      } finally {
+        if (!cancelled) setStatusLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -82,7 +120,8 @@ export function MasterTraderApplication({ onNavigate }: MasterTraderApplicationP
         proofUrl,
       });
       setApplicationStatus("review");
-      toast.success("Application submitted", { description: "We will review within 2–5 business days." });
+      setMyApplication({ id: "", status: "pending", message: null, createdAt: "", updatedAt: "" });
+      toast.success("Application submitted", { description: "Admins will review in Master Trader Requests. You'll see the result here once decided." });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Failed to submit";
       toast.error("Submission failed", { description: msg });
@@ -90,6 +129,16 @@ export function MasterTraderApplication({ onNavigate }: MasterTraderApplicationP
       setSubmitLoading(false);
     }
   };
+
+  if (statusLoading) {
+    return (
+      <div className="p-6 space-y-6">
+        <div className="flex items-center justify-center py-24">
+          <Loader2 className="size-8 animate-spin text-muted-foreground" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 space-y-6">
@@ -382,28 +431,47 @@ export function MasterTraderApplication({ onNavigate }: MasterTraderApplicationP
           <div className="inline-flex items-center justify-center size-16 rounded-full bg-accent/20 mb-6">
             <Clock className="size-8 text-accent" />
           </div>
-          <h2 className="text-2xl font-semibold mb-3">Application Submitted!</h2>
+          <h2 className="text-2xl font-semibold mb-3">Application Under Review</h2>
           <p className="text-muted-foreground mb-8">
-            Thank you for applying to become a Master Trader. Our team is reviewing your application
-            and will get back to you within 2-5 business days.
+            Thank you for applying. Your application appears in Admin → Master Trader Requests.
+            Admins will approve or reject within 2–5 business days. This page will update automatically when a decision is made.
           </p>
           <div className="p-6 bg-secondary/30 rounded border border-border mb-6 text-left">
             <h4 className="font-semibold mb-3">What happens next?</h4>
             <div className="space-y-2 text-sm text-muted-foreground">
-              <p>✓ We'll verify your trading history and performance</p>
-              <p>✓ Our compliance team will review your profile</p>
-              <p>✓ You'll receive an email with the decision</p>
-              <p>✓ If approved, you can start accepting copiers immediately</p>
+              <p>✓ We verify your trading history and performance</p>
+              <p>✓ If approved, you can submit trading strategies and compete in monthly TOP 10 campaigns for rewards</p>
+              <p>✓ If rejected, you'll see the reason here and can apply again</p>
             </div>
           </div>
-          <div className="flex gap-3 justify-center">
-            <Button variant="outline" onClick={() => onNavigate("dashboard")}>
-              Go to Dashboard
-            </Button>
-            <Button onClick={() => setApplicationStatus("approved")} className="bg-primary text-primary-foreground">
-              View Application Status
-            </Button>
+          <Button variant="outline" onClick={() => onNavigate("dashboard")}>
+            Go to Dashboard
+          </Button>
+        </Card>
+      )}
+
+      {applicationStatus === "rejected" && (
+        <Card className="p-12 text-center max-w-2xl mx-auto">
+          <div className="inline-flex items-center justify-center size-16 rounded-full bg-red-500/20 mb-6">
+            <XCircle className="size-8 text-red-500" />
           </div>
+          <Badge className="mb-4 bg-red-500 text-white">Rejected</Badge>
+          <h2 className="text-2xl font-semibold mb-3">Application Not Approved</h2>
+          <p className="text-muted-foreground mb-4">
+            Unfortunately your Master Trader application was not approved at this time.
+          </p>
+          {myApplication?.message && (
+            <div className="p-4 bg-muted/50 rounded border border-border text-left text-sm mb-6">
+              <span className="font-semibold text-foreground">Reason: </span>
+              <span className="text-muted-foreground">{myApplication.message}</span>
+            </div>
+          )}
+          <p className="text-sm text-muted-foreground mb-6">
+            You can apply again after addressing the feedback above. We encourage you to reapply when your trading history or profile is stronger.
+          </p>
+          <Button onClick={() => { setApplicationStatus("form"); setMyApplication(null); }} className="bg-primary text-primary-foreground">
+            Apply Again
+          </Button>
         </Card>
       )}
 
@@ -414,10 +482,22 @@ export function MasterTraderApplication({ onNavigate }: MasterTraderApplicationP
           </div>
           <Badge className="mb-4 bg-[#10B981] text-white">Approved</Badge>
           <h2 className="text-2xl font-semibold mb-3">Welcome, Master Trader!</h2>
-          <p className="text-muted-foreground mb-8">
-            Congratulations! Your application has been approved. You're now listed in the marketplace
-            and can start earning commission from copiers.
+          <p className="text-muted-foreground mb-6">
+            Your application has been approved. You're listed in the marketplace and can earn commission from copiers.
           </p>
+          <div className="p-6 bg-primary/5 rounded border border-primary/20 text-left mb-6">
+            <h4 className="font-semibold mb-2 flex items-center gap-2">
+              <Trophy className="size-4 text-primary" />
+              Submit strategies & compete for rewards
+            </h4>
+            <p className="text-sm text-muted-foreground mb-2">
+              As an approved Master Trader you can submit your trading strategies. During monthly campaigns,
+              the <strong className="text-foreground">TOP 10 Trading Strategies</strong> earn rewards. Build your following and compete for leaderboard rewards.
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Go to Strategy Backtest to prepare strategies, then share your profile in the Marketplace.
+            </p>
+          </div>
           <div className="grid grid-cols-3 gap-4 mb-8">
             <div className="p-4 bg-secondary/30 rounded border border-border">
               <div className="text-2xl font-bold text-primary mb-1">0</div>
@@ -428,13 +508,18 @@ export function MasterTraderApplication({ onNavigate }: MasterTraderApplicationP
               <div className="text-xs text-muted-foreground">Earned This Month</div>
             </div>
             <div className="p-4 bg-secondary/30 rounded border border-border">
-              <div className="text-2xl font-bold text-[#10B981] mb-1">NEW</div>
-              <div className="text-xs text-muted-foreground">Your Status</div>
+              <div className="text-2xl font-bold text-[#10B981] mb-1">Active</div>
+              <div className="text-xs text-muted-foreground">Master Trader</div>
             </div>
           </div>
-          <Button onClick={() => onNavigate("marketplace")} className="bg-primary text-primary-foreground">
-            View My Profile in Marketplace
-          </Button>
+          <div className="flex flex-wrap gap-3 justify-center">
+            <Button onClick={() => onNavigate("marketplace")} className="bg-primary text-primary-foreground">
+              View My Profile in Marketplace
+            </Button>
+            <Button variant="outline" onClick={() => onNavigate("strategy-backtest")}>
+              Strategy Backtest
+            </Button>
+          </div>
         </Card>
       )}
     </div>

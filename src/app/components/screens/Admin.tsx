@@ -1612,8 +1612,8 @@ export function Admin() {
         <TabsContent value="master-trader-requests" className="space-y-6" onFocus={() => loadMasterTraderApplications()}>
           <Card>
             <div className="p-4 border-b border-border">
-              <h3 className="text-lg font-semibold">Master Trader Applications</h3>
-              <p className="text-sm text-muted-foreground">Review and approve or reject applications. Qualified Master Traders get 6 months – 1 year free (configurable via discounts later).</p>
+              <h3 className="text-lg font-semibold">Master Trader Requests</h3>
+              <p className="text-sm text-muted-foreground">Review and approve or reject applications. Approved traders can submit strategies and compete for TOP 10 monthly campaign rewards. Rejected applicants see the reason on their application page and can apply again.</p>
             </div>
             {masterTraderApplicationsLoading ? (
               <div className="p-8 text-center text-muted-foreground">Loading applications...</div>

@@ -25,6 +25,52 @@ function getSupabase(): SupabaseClient | null {
 export const masterTraderApplicationsRouter: ExpressRouter = Router();
 
 /**
+ * GET /api/master-trader-applications/me
+ * Get the current user's latest Master Trader application (so they can see pending/approved/rejected).
+ */
+masterTraderApplicationsRouter.get(
+  '/me',
+  verifySupabaseJWT,
+  async (req: AuthenticatedRequest, res) => {
+    const client = getSupabase();
+    if (!client) return res.status(503).json({ error: 'Database unavailable' });
+
+    try {
+      const userId = req.user!.id;
+      const { data: row, error } = await client
+        .from('master_trader_applications')
+        .select('id, status, message, created_at, updated_at')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (error) {
+        console.error('Master trader application get me error:', error);
+        return res.status(500).json({ error: 'Failed to fetch application' });
+      }
+
+      if (!row) {
+        return res.json({ application: null });
+      }
+
+      res.json({
+        application: {
+          id: (row as any).id,
+          status: (row as any).status,
+          message: (row as any).message || null,
+          createdAt: (row as any).created_at,
+          updatedAt: (row as any).updated_at,
+        },
+      });
+    } catch (err) {
+      console.error('Master trader application get me error:', err);
+      res.status(500).json({ error: 'Failed to fetch application' });
+    }
+  }
+);
+
+/**
  * POST /api/master-trader-applications
  * Submit Master Trader application. No entitlement/package required.
  */
