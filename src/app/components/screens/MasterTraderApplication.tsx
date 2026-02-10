@@ -171,7 +171,7 @@ export function MasterTraderApplication({ onNavigate }: MasterTraderApplicationP
                   </div>
                   <div>
                     <div className="font-semibold text-sm">Earn Commission</div>
-                    <div className="text-xs text-muted-foreground">5% of platform fees to top creators when your copiers pay or buy packages</div>
+                    <div className="text-xs text-muted-foreground">5% of platform fees to TOP Creators</div>
                   </div>
                 </div>
                 <div className="flex items-start gap-3">
