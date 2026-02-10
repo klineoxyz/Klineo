@@ -223,31 +223,30 @@ export function Referrals({ onNavigate }: ReferralsProps) {
             </div>
             <p className="text-[10px] text-muted-foreground text-center">L1 → L2 → … → L7 · Rewards flow down your network</p>
           </div>
-          {/* Reward split diagram: each segment (bar) with label directly underneath */}
+          {/* Reward split diagram: 50% of each purchase is the pool; these are each level's share of that pool (sum = 100%). */}
           <div className="space-y-2">
-            <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Pool split (of 50% distributed)</div>
-            <div className="space-y-1" role="img" aria-label="Community rewards: 50% of purchase split L1 30%, L2 20%, L3 10%, L4 8%, L5 6%, L6 4%, L7 2%">
-              {/* Proportional bar: segments only, no per-segment labels */}
+            <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Pool split (each level’s share of the 50% distributed)</div>
+            <div className="space-y-1" role="img" aria-label="L1 37.5%, L2 25%, L3 12.5%, L4 10%, L5 7.5%, L6 5%, L7 2.5% of the distributed pool">
+              {/* Bar: proportions 30:20:10:8:6:4:2 (weights) = same as actual distribution; labels show % of pool */}
               <div className="flex min-w-0 rounded-md border border-border/50 overflow-hidden">
                 {[
-                  { flex: 30, barClass: "bg-primary/90 hover:bg-primary" },
-                  { flex: 20, barClass: "bg-primary/80 hover:bg-primary/90" },
-                  { flex: 10, barClass: "bg-primary/70 hover:bg-primary/80" },
-                  { flex: 8, barClass: "bg-primary/60 hover:bg-primary/70" },
-                  { flex: 6, barClass: "bg-primary/50 hover:bg-primary/60" },
-                  { flex: 4, barClass: "bg-primary/40 hover:bg-primary/50" },
-                  { flex: 2, barClass: "bg-primary/30 hover:bg-primary/40 rounded-r-md" },
+                  { flex: 30, pctOfPool: 37.5, barClass: "bg-primary/90 hover:bg-primary" },
+                  { flex: 20, pctOfPool: 25, barClass: "bg-primary/80 hover:bg-primary/90" },
+                  { flex: 10, pctOfPool: 12.5, barClass: "bg-primary/70 hover:bg-primary/80" },
+                  { flex: 8, pctOfPool: 10, barClass: "bg-primary/60 hover:bg-primary/70" },
+                  { flex: 6, pctOfPool: 7.5, barClass: "bg-primary/50 hover:bg-primary/60" },
+                  { flex: 4, pctOfPool: 5, barClass: "bg-primary/40 hover:bg-primary/50" },
+                  { flex: 2, pctOfPool: 2.5, barClass: "bg-primary/30 hover:bg-primary/40 rounded-r-md" },
                 ].map((item, i) => (
-                  <div key={i} className="flex-1 min-w-0 h-10 flex items-center justify-center" style={{ flex: item.flex }} title={`L${i + 1} ${item.flex}%`}>
+                  <div key={i} className="flex-1 min-w-0 h-10 flex items-center justify-center" style={{ flex: item.flex }} title={`L${i + 1}: ${item.pctOfPool}% of distributed pool`}>
                     <div className={`w-full h-full flex items-center justify-center text-[10px] font-medium text-primary-foreground ${item.barClass}`}>
-                      {item.flex}%
+                      {item.pctOfPool}%
                     </div>
                   </div>
                 ))}
               </div>
-              {/* Labels in one row with equal space so L7 2% is never squished */}
               <div className="grid grid-cols-7 gap-0.5 text-center">
-                {["L1 30%", "L2 20%", "L3 10%", "L4 8%", "L5 6%", "L6 4%", "L7 2%"].map((label, i) => (
+                {["L1 37.5%", "L2 25%", "L3 12.5%", "L4 10%", "L5 7.5%", "L6 5%", "L7 2.5%"].map((label, i) => (
                   <div key={i} className="py-1 text-[10px] sm:text-xs text-muted-foreground font-medium truncate px-0.5" title={label}>
                     {label}
                   </div>
