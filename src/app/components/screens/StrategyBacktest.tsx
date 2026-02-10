@@ -74,6 +74,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/app/components/ui/dialog";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/app/components/ui/tooltip";
 
 // Helper: Calculate SMA (for chart overlays: array of objects with key)
 const calculateSMA = (data: any[], period: number, key: string) => {
@@ -580,13 +581,76 @@ const calculateTradeStatsFromTrades = (
   };
 };
 
-const strategyOptions = [
-  { id: "rsi-oversold", name: "RSI Oversold/Overbought", description: "Buy when RSI < 30, Sell when RSI > 70" },
-  { id: "ma-crossover", name: "MA Crossover", description: "Golden/Death cross strategy" },
-  { id: "breakout", name: "Breakout Strategy", description: "Trade channel breakouts" },
-  { id: "mean-reversion", name: "Mean Reversion", description: "Fade extreme moves" },
-  { id: "momentum", name: "Momentum Following", description: "Follow strong trends" },
-  { id: "custom", name: "Custom Strategy", description: "Upload your own logic" },
+// --- Risk Tier & Marketplace data model (UI only, no backend change) ---
+// Scoring: 0–40 = LOW, 41–70 = MEDIUM, 71+ = HIGH. Lower score = lower risk.
+// Factors: max drawdown (higher DD → higher score), trade count (more trades → lower score),
+// ROI volatility proxy (higher abs ROI → higher score), avg trade duration (shorter → slightly higher).
+function computeMaxDrawdownPercent(
+  candles: Array<{ timestamp: number; close: number }>,
+  trades: Array<{ entryIndex: number; exitIndex: number; entryPrice: number; exitPrice: number; direction: string }>,
+  initialBalance: number
+): number {
+  if (!candles.length || !trades.length) return 0;
+  let equity = initialBalance;
+  let peak = initialBalance;
+  let maxDd = 0;
+  const sortedTrades = [...trades].sort((a, b) => a.exitIndex - b.exitIndex);
+  for (const t of sortedTrades) {
+    const pnl = t.direction === "long" ? t.exitPrice - t.entryPrice : t.entryPrice - t.exitPrice;
+    equity += pnl;
+    if (equity > peak) peak = equity;
+    const dd = peak > 0 ? ((peak - equity) / peak) * 100 : 0;
+    if (dd > maxDd) maxDd = dd;
+  }
+  return maxDd;
+}
+
+export type RiskTier = "LOW" | "MEDIUM" | "HIGH";
+
+function getRiskTierFromMetrics(metrics: {
+  maxDrawdownPercent: number;
+  totalTrades: number;
+  roi: number;
+  avgTradeDurationMinutes: number | null;
+}): RiskTier {
+  const dd = metrics.maxDrawdownPercent;
+  const trades = metrics.totalTrades;
+  const roi = metrics.roi;
+  const dur = metrics.avgTradeDurationMinutes ?? 60;
+  let score = 0;
+  if (dd <= 5) score += 10;
+  else if (dd <= 10) score += 25;
+  else if (dd <= 20) score += 45;
+  else score += 70;
+  if (trades <= 5) score += 25;
+  else if (trades <= 20) score += 10;
+  else score += 0;
+  if (Math.abs(roi) >= 20) score += 20;
+  else if (Math.abs(roi) >= 10) score += 10;
+  if (dur < 30) score += 15;
+  else if (dur < 120) score += 5;
+  if (score <= 40) return "LOW";
+  if (score <= 70) return "MEDIUM";
+  return "HIGH";
+}
+
+const STRATEGY_TYPE_OPTIONS = ["Trend", "Mean Reversion", "Breakout", "Risk Managed", "Multi-Timeframe"] as const;
+export type StrategyTypeLabel = (typeof STRATEGY_TYPE_OPTIONS)[number];
+
+const CURATED_BACKTEST_PAIRS = ["BTC/USDT", "ETH/USDT", "SOL/USDT", "BNB/USDT"] as const;
+
+const strategyOptions: Array<{
+  id: string;
+  name: string;
+  description: string;
+  strategy_type: StrategyTypeLabel;
+}> = [
+  { id: "rsi-oversold", name: "RSI Oversold/Overbought", description: "Buy when RSI < 30, Sell when RSI > 70", strategy_type: "Mean Reversion" },
+  { id: "ma-crossover", name: "MA Crossover", description: "Golden/Death cross strategy", strategy_type: "Trend" },
+  { id: "breakout", name: "Breakout Strategy", description: "Trade channel breakouts", strategy_type: "Breakout" },
+  { id: "mean-reversion", name: "Mean Reversion", description: "Fade extreme moves", strategy_type: "Mean Reversion" },
+  { id: "momentum", name: "Momentum Following", description: "Follow strong trends", strategy_type: "Trend" },
+  { id: "custom", name: "Custom Strategy", description: "Upload your own logic", strategy_type: "Trend" },
 ];
 
 interface StrategyBacktestProps {
@@ -679,19 +743,55 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
   const [isOptimizing, setIsOptimizing] = useState(false);
   const lastCandlesRef = React.useRef<KlineCandle[] | null>(null);
 
+  // Top-bar filters (UI only; strategy/backtest logic unchanged)
+  const [strategyTypeFilter, setStrategyTypeFilter] = useState<StrategyTypeLabel | "all">("all");
+  const [riskTierFilter, setRiskTierFilter] = useState<RiskTier | "all">("all");
+  const [backtestMode, setBacktestMode] = useState<"single" | "multi">("single");
+
   const backtestCandles = backtestResult.data;
   const generatedTrades = backtestResult.trades;
 
   const tradeStats = React.useMemo(() => calculateTradeStatsFromTrades(generatedTrades), [generatedTrades]);
+
+  const avgTradeDurationMinutes = React.useMemo(() => {
+    if (!generatedTrades.length || !backtestCandles.length) return null;
+    let totalMin = 0;
+    generatedTrades.forEach((t) => {
+      const entryTs = backtestCandles[t.entryIndex]?.timestamp ?? 0;
+      const exitTs = backtestCandles[t.exitIndex]?.timestamp ?? 0;
+      totalMin += (exitTs - entryTs) / (60 * 1000);
+    });
+    return totalMin / generatedTrades.length;
+  }, [generatedTrades, backtestCandles]);
+
+  const maxDrawdownPercent = React.useMemo(
+    () => computeMaxDrawdownPercent(backtestCandles, generatedTrades, 10000),
+    [backtestCandles, generatedTrades]
+  );
+
+  const riskTier = React.useMemo(
+    () =>
+      getRiskTierFromMetrics({
+        maxDrawdownPercent,
+        totalTrades: tradeStats.totalTrades,
+        roi: tradeStats.totalPnlPercent,
+        avgTradeDurationMinutes,
+      }),
+    [maxDrawdownPercent, tradeStats.totalTrades, tradeStats.totalPnlPercent, avgTradeDurationMinutes]
+  );
+
   const kpis = {
     totalTrades: tradeStats.totalTrades,
     winRate: tradeStats.winRate,
     netPnl: tradeStats.totalPnl,
     roi: tradeStats.totalPnlPercent,
     avgPnl: tradeStats.avgPnl,
-    maxDrawdown: -8.34,
+    maxDrawdown: maxDrawdownPercent,
+    maxDrawdownPercent,
     sharpeRatio: 1.87,
     profitFactor: 2.34,
+    avgTradeDurationMinutes,
+    riskTier,
   };
 
   // Trade list for table: derived from generated trades so it stays in sync with chart
@@ -1075,21 +1175,27 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
 
             <Separator />
 
-            {/* Symbol Selector — same pairs as Terminal (from exchange) */}
+            {/* Symbol — curated pairs only for backtest (do not affect live copy settings) */}
             <div className="space-y-2">
               <Label>Trading Symbol</Label>
-              <Select value={symbol} onValueChange={setSymbol}>
+              <Select
+                value={CURATED_BACKTEST_PAIRS.includes(symbol as any) ? symbol : "BTC/USDT"}
+                onValueChange={(v) => setSymbol(v)}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="Select pair" />
                 </SelectTrigger>
                 <SelectContent>
-                  {availablePairs.map((p) => (
-                    <SelectItem key={p.symbol} value={p.symbol}>
-                      {p.symbol}
+                  {CURATED_BACKTEST_PAIRS.map((p) => (
+                    <SelectItem key={p} value={p}>
+                      {p}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+              <p className="text-[10px] text-muted-foreground">
+                Backtest pairs do not affect live copy settings.
+              </p>
             </div>
 
             {/* Strategy Selector */}
@@ -1433,10 +1539,17 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
                   <RefreshCw className="h-4 w-4" />
                   Re-run
                 </Button>
-                <Button variant="outline" size="sm" className="gap-2" onClick={handleOptimize} disabled={isOptimizing}>
-                  {isOptimizing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
-                  {isOptimizing ? "Optimizing…" : "Optimize"}
-                </Button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button variant="outline" size="sm" className="gap-2" onClick={handleOptimize} disabled={isOptimizing}>
+                      {isOptimizing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
+                      {isOptimizing ? "Optimizing…" : "Optimize"}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="max-w-xs">
+                    Optimization changes parameters, not market conditions.
+                  </TooltipContent>
+                </Tooltip>
                 <Button variant="outline" size="sm" className="gap-2" onClick={() => toast.info("Share", { description: "Share backtest results coming soon" })}>
                   <Share2 className="h-4 w-4" />
                   Share
@@ -1445,9 +1558,132 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
             )}
           </div>
 
+          {/* Top-of-page controls: Strategy Type, Risk Tier, Timeframe, Pairs, Backtest Mode */}
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3 py-3 px-3 rounded-lg bg-muted/30 border border-border/60">
+            <span className="text-xs font-medium text-muted-foreground mr-1 sm:mr-0">Filters</span>
+            <Select value={strategyTypeFilter} onValueChange={(v: StrategyTypeLabel | "all") => setStrategyTypeFilter(v)}>
+              <SelectTrigger className="w-[160px] h-9 text-xs">
+                <SelectValue placeholder="Strategy Type">{strategyTypeFilter === "all" ? "All types" : strategyTypeFilter}</SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All types</SelectItem>
+                {STRATEGY_TYPE_OPTIONS.map((t) => (
+                  <SelectItem key={t} value={t}>
+                    {t}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <span className="text-[10px] text-muted-foreground hidden sm:inline">Risk</span>
+            <div className="flex items-center gap-1 rounded-md border border-border/60 p-0.5">
+              {(["LOW", "MEDIUM", "HIGH"] as const).map((tier) => (
+                <button
+                  key={tier}
+                  type="button"
+                  onClick={() => setRiskTierFilter(riskTierFilter === tier ? "all" : tier)}
+                  className={`px-2 py-1 text-[10px] font-medium rounded transition-colors ${
+                    riskTierFilter === tier
+                      ? tier === "LOW"
+                        ? "bg-green-500/20 text-green-600 dark:text-green-400"
+                        : tier === "MEDIUM"
+                          ? "bg-amber-500/20 text-amber-600 dark:text-amber-400"
+                          : "bg-red-500/20 text-red-600 dark:text-red-400"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {tier}
+                </button>
+              ))}
+            </div>
+            <Select value={timeframe} onValueChange={setTimeframe}>
+              <SelectTrigger className="w-[72px] h-9 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="5m">5m</SelectItem>
+                <SelectItem value="15m">15m</SelectItem>
+                <SelectItem value="1h">1h</SelectItem>
+                <SelectItem value="4h">4h</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={symbol} onValueChange={setSymbol}>
+              <SelectTrigger className="w-[100px] h-9 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {CURATED_BACKTEST_PAIRS.map((p) => (
+                  <SelectItem key={p} value={p}>
+                    {p.replace("/USDT", "")}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-[10px] text-muted-foreground hidden sm:inline">
+              More pairs = more variance in results
+            </p>
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] text-muted-foreground whitespace-nowrap">Mode:</span>
+              <button
+                type="button"
+                onClick={() => setBacktestMode(backtestMode === "single" ? "multi" : "single")}
+                className={`text-[10px] font-medium px-2 py-1 rounded border ${
+                  backtestMode === "single"
+                    ? "border-primary bg-primary/10 text-primary"
+                    : "border-border text-muted-foreground"
+                }`}
+              >
+                Single Pair
+              </button>
+              <button
+                type="button"
+                onClick={() => setBacktestMode(backtestMode === "multi" ? "single" : "multi")}
+                className={`text-[10px] font-medium px-2 py-1 rounded border ${
+                  backtestMode === "multi"
+                    ? "border-primary bg-primary/10 text-primary"
+                    : "border-border text-muted-foreground"
+                }`}
+              >
+                Multi Pair
+              </button>
+            </div>
+            {backtestMode === "multi" && (
+              <p className="text-[10px] text-muted-foreground w-full sm:w-auto">
+                Multi Pair: aggregated results (weighted by pair). Single backtest runs on selected pair.
+              </p>
+            )}
+          </div>
+
           {/* Summary Statistics Header — only after a backtest run; KPIs update when user re-runs */}
           {hasResults && (
             <div className="space-y-5">
+              {/* Strategy Summary Row — institutional style */}
+              <div className="rounded-lg border border-border/60 bg-card/40 px-4 py-3">
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
+                  <span className="font-semibold text-foreground">{selectedStrategy?.name || "Strategy"}</span>
+                  <span className="text-muted-foreground">
+                    {selectedStrategy?.strategy_type ?? "—"}
+                  </span>
+                  <Badge
+                    variant="outline"
+                    className={
+                      kpis.riskTier === "LOW"
+                        ? "bg-green-500/10 text-green-600 border-green-500/30"
+                        : kpis.riskTier === "MEDIUM"
+                          ? "bg-amber-500/10 text-amber-600 border-amber-500/30"
+                          : "bg-red-500/10 text-red-600 border-red-500/30"
+                    }
+                  >
+                    {kpis.riskTier} risk
+                  </Badge>
+                  <span className="text-muted-foreground">Pairs: {symbol}</span>
+                  <span className="text-muted-foreground">TF: {timeframe}</span>
+                  <span className="text-muted-foreground">Data: Binance (public)</span>
+                  <span className="text-muted-foreground">
+                    Period: {new Date(dateFrom).toLocaleDateString("en-US", { month: "short", year: "numeric" })} – {new Date(dateTo).toLocaleDateString("en-US", { month: "short", year: "numeric" })}
+                  </span>
+                </div>
+              </div>
+
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                 <div className="flex items-center gap-3 min-w-0">
                   <Badge className="bg-[#FFB000] text-black font-semibold px-2.5 py-1 shrink-0">
@@ -1524,10 +1760,17 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
 
               {/* Optimize Button */}
               <div className="flex justify-end">
-                <Button className="bg-[#FFB000] hover:bg-[#FFB000]/90 text-black font-semibold w-full sm:w-auto min-h-[44px] sm:min-h-0" onClick={handleOptimize} disabled={isOptimizing}>
-                  {isOptimizing ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                  {isOptimizing ? "Optimizing…" : "Optimize"}
-                </Button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button className="bg-[#FFB000] hover:bg-[#FFB000]/90 text-black font-semibold w-full sm:w-auto min-h-[44px] sm:min-h-0" onClick={handleOptimize} disabled={isOptimizing}>
+                      {isOptimizing ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                      {isOptimizing ? "Optimizing…" : "Optimize"}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="left" className="max-w-xs">
+                    Optimization changes parameters, not market conditions.
+                  </TooltipContent>
+                </Tooltip>
               </div>
 
               {/* Price Chart — Live market data when connected, else demo */}
@@ -1576,6 +1819,80 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
                     TradingView Lightweight Charts™
                   </a>
                 </p>
+              </Card>
+
+              {/* Marketplace Strategy Card — how this strategy appears in Klineo Marketplace */}
+              <Card className="p-4 sm:p-5 bg-card/50 border-border/60">
+                <h3 className="text-sm font-semibold text-muted-foreground mb-3">Preview in Marketplace</h3>
+                <div className="rounded-xl border border-border/60 bg-background/50 p-4 space-y-4">
+                  {/* Top: Name, Risk badge, Type */}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-semibold">{selectedStrategy?.name || "Strategy"}</span>
+                    <Badge
+                      variant="outline"
+                      className={
+                        kpis.riskTier === "LOW"
+                          ? "bg-green-500/10 text-green-600 border-green-500/30 text-[10px]"
+                          : kpis.riskTier === "MEDIUM"
+                            ? "bg-amber-500/10 text-amber-600 border-amber-500/30 text-[10px]"
+                            : "bg-red-500/10 text-red-600 border-red-500/30 text-[10px]"
+                      }
+                    >
+                      {kpis.riskTier} risk
+                    </Badge>
+                    <span className="text-xs text-muted-foreground">{selectedStrategy?.strategy_type ?? "Trend"}</span>
+                    <Badge variant="secondary" className="text-[10px]">Backtested</Badge>
+                    {kpis.riskTier === "LOW" && (
+                      <Badge variant="outline" className="text-[10px] border-green-500/30 text-green-600">Beginner friendly</Badge>
+                    )}
+                  </div>
+                  {/* Middle: Key metrics */}
+                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-xs">
+                    <div>
+                      <div className="text-muted-foreground">Win rate</div>
+                      <div className="font-semibold tabular-nums">{kpis.winRate.toFixed(1)}%</div>
+                    </div>
+                    <div>
+                      <div className="text-muted-foreground">Max drawdown</div>
+                      <div className="font-semibold tabular-nums text-red-500">{kpis.maxDrawdownPercent.toFixed(1)}%</div>
+                    </div>
+                    <div>
+                      <div className="text-muted-foreground">Total trades</div>
+                      <div className="font-semibold tabular-nums">{kpis.totalTrades}</div>
+                    </div>
+                    <div>
+                      <div className="text-muted-foreground">PnL %</div>
+                      <div className={`font-semibold tabular-nums ${kpis.roi >= 0 ? "text-green-500" : "text-red-500"}`}>
+                        {kpis.roi >= 0 ? "+" : ""}{kpis.roi.toFixed(2)}%
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-muted-foreground">Avg duration</div>
+                      <div className="font-semibold tabular-nums">
+                        {kpis.avgTradeDurationMinutes != null ? `${Math.round(kpis.avgTradeDurationMinutes)}m` : "—"}
+                      </div>
+                    </div>
+                  </div>
+                  {/* Bottom: CTAs + disclaimer */}
+                  <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-border/60">
+                    <Button size="sm" variant="outline" className="text-xs">
+                      View backtest
+                    </Button>
+                    <Button size="sm" className="text-xs bg-[#FFB000] hover:bg-[#FFB000]/90 text-black">
+                      Copy strategy
+                    </Button>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span className="text-[10px] text-muted-foreground cursor-help border-b border-dotted border-muted-foreground">
+                          Past performance does not guarantee future results.
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent side="top" className="max-w-xs">
+                        Backtest results are based on historical data. Live results may differ.
+                      </TooltipContent>
+                    </Tooltip>
+                  </div>
+                </div>
               </Card>
             </div>
           )}
