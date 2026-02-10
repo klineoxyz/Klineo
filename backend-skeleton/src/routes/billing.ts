@@ -50,16 +50,6 @@ billingRouter.post(
       .withMessage('method must be manual, crypto, or stripe'),
   ]),
   async (req: AuthenticatedRequest, res) => {
-    const client = getSupabase();
-    if (client) {
-      const { data: profile } = await client.from('user_profiles').select('referred_by_user_id').eq('id', req.user!.id).single();
-      if (!(profile as { referred_by_user_id?: string } | null)?.referred_by_user_id) {
-        return res.status(400).json({
-          error: 'Referral code required',
-          message: 'Enter a referral code in Settings before you can pay the joining fee.',
-        });
-      }
-    }
     const method = (req.body?.method as string) || 'manual';
     res.status(200).json({
       status: 'ok',
@@ -87,16 +77,6 @@ billingRouter.post(
       .withMessage('method must be manual, crypto, or stripe'),
   ]),
   async (req: AuthenticatedRequest, res) => {
-    const client = getSupabase();
-    if (client) {
-      const { data: profile } = await client.from('user_profiles').select('referred_by_user_id').eq('id', req.user!.id).single();
-      if (!(profile as { referred_by_user_id?: string } | null)?.referred_by_user_id) {
-        return res.status(400).json({
-          error: 'Referral code required',
-          message: 'Enter a referral code in Settings before you can buy packages.',
-        });
-      }
-    }
     const { packageId } = req.body;
     const method = (req.body?.method as string) || 'manual';
     res.status(200).json({

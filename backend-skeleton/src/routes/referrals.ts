@@ -66,7 +66,9 @@ referralsRouter.use(verifySupabaseJWT);
 /**
  * GET /api/referrals/me
  * Returns user's referral code, link, earnings summary, payout wallet, payout requests.
- * Auto-generates referral_code on first access if missing.
+ * Referral code and link are only generated/returned when the user has entered a referrer
+ * (referred_by_user_id set). Without a referrer, users can use the platform but cannot
+ * participate in referral campaigns or get their own link/code until they enter one.
  */
 referralsRouter.get('/me', async (req: AuthenticatedRequest, res: Response) => {
   const client = getSupabase();
@@ -78,14 +80,16 @@ referralsRouter.get('/me', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { data: profile, error: profErr } = await client
       .from('user_profiles')
-      .select('referral_code')
+      .select('referral_code, referred_by_user_id')
       .eq('id', userId)
       .single();
 
     if (profErr) return res.status(500).json({ error: 'Failed to load profile' });
 
-    let referralCode = (profile as { referral_code?: string } | null)?.referral_code?.trim();
-    if (!referralCode) {
+    const hasReferrer = !!(profile as { referred_by_user_id?: string } | null)?.referred_by_user_id;
+    let referralCode: string | null = (profile as { referral_code?: string } | null)?.referral_code?.trim() || null;
+
+    if (hasReferrer && !referralCode) {
       for (let attempt = 0; attempt < 10; attempt++) {
         referralCode = generateReferralCode();
         const { error: upErr } = await client
@@ -97,6 +101,7 @@ referralsRouter.get('/me', async (req: AuthenticatedRequest, res: Response) => {
         if (attempt === 9) return res.status(500).json({ error: 'Failed to generate referral code' });
       }
     }
+    if (!hasReferrer) referralCode = null;
 
     const referralLink = referralCode ? `${baseUrl}/ref/${encodeURIComponent(referralCode)}` : null;
     const available = await getAvailableRewardsUsd(client, userId);

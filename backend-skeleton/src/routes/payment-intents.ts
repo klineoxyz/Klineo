@@ -216,16 +216,6 @@ paymentIntentsRouter.post(
     const { kind, package_code, coupon_code } = req.body;
     const pkgCode = kind === 'package' ? ((package_code as string) || 'ENTRY_100') : null;
 
-    const { data: profile } = await client.from('user_profiles').select('referred_by_user_id').eq('id', userId).single();
-    if (!profile?.referred_by_user_id) {
-      return res.status(400).json({
-        error: 'Referral code required',
-        message: kind === 'joining_fee'
-          ? 'Enter a referral code in Settings before you can pay the joining fee.'
-          : 'Enter a referral code in Settings before you can buy packages.',
-      });
-    }
-
     let amountUsdt: number;
     let couponApplied: { code: string; discountPercent: number } | null = null;
 

@@ -5,7 +5,7 @@ import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import { Separator } from "@/app/components/ui/separator";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/app/components/ui/table";
-import { Copy, Check, ExternalLink, Loader2 } from "lucide-react";
+import { Copy, Check, ExternalLink, Loader2, Settings, Ticket } from "lucide-react";
 import { useState, useEffect } from "react";
 import { toast } from "@/app/lib/toast";
 import { copyToClipboard } from "@/app/lib/clipboard";
@@ -114,6 +114,22 @@ export function Referrals({ onNavigate }: ReferralsProps) {
             <div className="flex gap-2 py-4 text-sm text-muted-foreground">
               <Loader2 className="size-4 animate-spin" />
               Loading…
+            </div>
+          ) : !referralMe?.referralCode && !referralMe?.referralLink ? (
+            <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-4 space-y-3">
+              <div className="flex items-start gap-2">
+                <Ticket className="size-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                <div>
+                  <h4 className="font-semibold text-amber-800 dark:text-amber-200">Activate your referral link & code</h4>
+                  <p className="text-sm text-amber-700 dark:text-amber-300 mt-1">
+                    To get your referral link and code and participate in referral campaigns, enter a referral code in Settings from someone who invited you. If you signed up via a referral link, the code was applied automatically.
+                  </p>
+                </div>
+              </div>
+              <Button variant="default" size="sm" onClick={() => onNavigate("settings")}>
+                <Settings className="size-4 mr-2" />
+                Open Settings
+              </Button>
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">

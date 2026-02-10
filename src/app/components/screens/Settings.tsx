@@ -683,13 +683,13 @@ export function Settings({ onNavigate }: SettingsProps) {
               Referral code
             </h3>
             <p className="text-sm text-muted-foreground">
-              A referral code is required to use the platform and to pay the joining fee or buy packages. Enter the code from the person who referred you.
+              You can use the platform without a referral code. To participate in referral campaigns and get your own referral link and code, enter the code from the person who invited you. If you signed up via a referral link, the code is applied automatically.
             </p>
             {hasReferral ? (
               <div className="space-y-2">
                 <div className="flex items-center gap-2 text-sm text-[#10B981]">
                   <CheckCircle2 className="size-5 shrink-0" />
-                  <span>You have entered a referral code. You can use the platform and purchase packages.</span>
+                  <span>You have entered a referral code. You can share your referral link and participate in Community Rewards.</span>
                 </div>
                 {(referralCodeDisplay || referrerNameDisplay) && (
                   <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground pt-1">
@@ -707,6 +707,7 @@ export function Settings({ onNavigate }: SettingsProps) {
                     )}
                   </div>
                 )}
+                <p className="text-xs text-muted-foreground pt-1">This cannot be changed.</p>
               </div>
             ) : (
               <div className="flex flex-col sm:flex-row gap-2 max-w-md">
