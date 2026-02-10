@@ -1191,7 +1191,7 @@ export function Admin() {
 
         <TabsContent value="referrals" className="space-y-4" onFocus={() => { loadReferrals(); loadPayoutRequests(); }}>
           <p className="text-sm text-muted-foreground">
-            Community rewards from the 70% referral pool. Allocated automatically when users pay onboarding fees or buy packages (7-level upline: L1 30%, L2 20%, L3 10%, L4 8%, L5 6%, L6 4%, L7 2%). No per-trade fees.
+            Community rewards: 50% of each purchase is distributed among the 7 levels. Allocated automatically when users pay onboarding fees or buy packages (L1 30%, L2 20%, L3 10%, L4 8%, L5 6%, L6 4%, L7 2% of that 50%). No per-trade fees.
           </p>
           <Card className="p-6 space-y-4">
             <div className="grid grid-cols-2 gap-4">

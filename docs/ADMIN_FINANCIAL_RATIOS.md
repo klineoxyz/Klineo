@@ -31,9 +31,9 @@ Views (admin/service_role only):
 |------|---------|--------|
 | **Gross Revenue** | Sum of `eligible_purchases.amount` where `status = 'completed'` in period | |
 | **Net Revenue** | Gross − refunds (sum of amount where `status = 'refunded'`) | |
-| **Marketing Allocation** | `MARKETING_PCT` (default 10%) of gross | Configurable via env |
+| **Marketing Allocation** | `MARKETING_PCT` (default 30%) of gross | Configurable via env |
 | **Platform Allocation** | `PLATFORM_PCT` (default 20%) of gross | Configurable via env |
-| **Referral Rewards Pool** | `REFERRAL_POOL_PCT` (default 70%) of gross | Configurable via env |
+| **Referral Rewards Pool** | `REFERRAL_POOL_PCT` (default 50%) of gross, distributed to 7 levels | Configurable via env |
 | **ARPU** | gross_revenue / max(active_users, new_users, 1) | Per-user revenue |
 | **ARPPU** | gross_revenue / paying_users (or 0) | Per paying user |
 | **Take Rate** | platform_share / gross_revenue (when gross > 0) | Platform share ratio |

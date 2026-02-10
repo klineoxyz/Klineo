@@ -336,7 +336,7 @@ export function MasterTraderApplication({ onNavigate }: MasterTraderApplicationP
                       </p>
                       <ul className="text-muted-foreground text-xs mt-2 space-y-1">
                         <li>• KLINEO will verify my trading performance before approval</li>
-                        <li>• I will earn from the referral pool when my copiers pay joining fee or buy packages</li>
+                        <li>• I will earn from the community rewards pool (50% of each purchase distributed to 7 levels) when my copiers pay joining fee or buy packages</li>
                         <li>• I can be removed from the platform for suspicious activity</li>
                         <li>• I agree to maintain transparent and ethical trading practices</li>
                       </ul>
@@ -396,7 +396,7 @@ export function MasterTraderApplication({ onNavigate }: MasterTraderApplicationP
                 <p className="font-semibold text-foreground">What you get:</p>
                 <p>✓ 6 months to 1 year full platform access — free</p>
                 <p>✓ No onboarding fee</p>
-                <p>✓ Earn from referral pool when your copiers pay or buy packages</p>
+                <p>✓ Earn from community rewards (50% of each purchase to 7 levels) when your copiers pay or buy packages</p>
                 <p className="text-primary mt-2">Applications are reviewed within 2–5 business days.</p>
               </div>
             </Card>

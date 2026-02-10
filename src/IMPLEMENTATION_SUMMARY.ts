@@ -14,7 +14,7 @@
  * 8. Orders - Open, filled, and cancelled order management
  * 9. Trade History - Complete execution history with leader/follower mapping
  * 10. Fees - Profit allowance usage and payment history (credit-based model)
- * 11. Referrals - 7-level referral system (70% of joining fee & package revenue)
+ * 11. Referrals - 7-level referral system (50% of joining fee & package revenue distributed to 7 levels)
  * 12. Packages - Joining fee $100 + trading packages (Entry/Level 2/Level 3) with profit allowance
  * 13. Payments - Payment history and invoice management
  * 14. Settings - Profile, security, exchange API, notifications
@@ -29,7 +29,7 @@
  * - Collapsible left sidebar with all navigation
  * - Complete copy trading flow (browse → profile → setup → monitor)
  * - Credit-based profit allowance (pay packages, trade until cap, buy again)
- * - 7-level referral system (70% of joining fee & package revenue)
+ * - 7-level referral system (50% of joining fee & package revenue distributed to 7 levels)
  * - Joining fee $100 + trading packages (Entry $100/$300, Level 2 $200/$1k, Level 3 $500/$5k)
  * - Comprehensive risk controls and monitoring
  * - Admin operations panel for platform management

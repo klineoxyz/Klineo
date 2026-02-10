@@ -77,7 +77,7 @@ KLINEO is a **professional crypto copy-trading platform** for centralized exchan
 ### 5.3 Monetization Flow
 - **Joining fee** — One-time to access copy trading
 - **Packages** — Profit allowance ($100 / $200 / $500 tiers)
-- **Referrals** — 7-level MLM; 70% of joining + package revenue to referral pool
+- **Referrals** — 7-level MLM; 50% of joining + package revenue distributed to 7 levels
 - **Platform fees** — % of volume (configurable per tier)
 
 ---

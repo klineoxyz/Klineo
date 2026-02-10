@@ -153,15 +153,15 @@ export function PricingPage({ onNavigate }: PricingPageProps) {
             <div className="mt-8 pt-8 border-t border-border">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-center">
                 <div>
-                  <div className="text-3xl font-mono font-bold text-accent mb-2">70%</div>
-                  <div className="text-sm text-muted-foreground">Referral rewards pool</div>
+                  <div className="text-3xl font-mono font-bold text-accent mb-2">50%</div>
+                  <div className="text-sm text-muted-foreground">Distributed to 7 levels</div>
                 </div>
                 <div>
                   <div className="text-3xl font-mono font-bold text-accent mb-2">20%</div>
                   <div className="text-sm text-muted-foreground">Platform revenue</div>
                 </div>
                 <div>
-                  <div className="text-3xl font-mono font-bold text-accent mb-2">10%</div>
+                  <div className="text-3xl font-mono font-bold text-accent mb-2">30%</div>
                   <div className="text-sm text-muted-foreground">Marketing</div>
                 </div>
               </div>
@@ -296,18 +296,18 @@ export function PricingPage({ onNavigate }: PricingPageProps) {
               <Badge variant="outline" className="mb-3 bg-accent/10 text-accent border-accent/30">
                 Transparent economics
               </Badge>
-              <h2 className="text-2xl font-bold mb-2">70% Referral Rewards Pool (7 Levels)</h2>
+              <h2 className="text-2xl font-bold mb-2">50% Distributed to 7 Levels (Community Rewards)</h2>
               <p className="text-muted-foreground">
-                From every onboarding fee and package (credit) purchase: 70% goes to your upline referral rewards, 20% to platform revenue, 10% to marketing.
+                From every onboarding fee and package (credit) purchase: 50% is distributed among your upline (7 levels), 20% to platform revenue, 30% to marketing.
               </p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-3xl mx-auto mb-6">
               <div className="text-center p-5 rounded-lg bg-card border border-border">
-                <div className="text-3xl font-mono font-bold text-accent mb-2">70%</div>
-                <div className="font-semibold mb-1.5 text-sm">Referral rewards pool</div>
+                <div className="text-3xl font-mono font-bold text-accent mb-2">50%</div>
+                <div className="font-semibold mb-1.5 text-sm">Distributed to 7 levels</div>
                 <div className="text-xs text-muted-foreground">
-                  Distributed across 7 levels (L1–L7) when someone you referred—or in your upline—pays an onboarding fee or buys a package
+                  When someone you referred—or in your upline—pays an onboarding fee or buys a package (e.g. $50 on a $100 purchase)
                 </div>
               </div>
               <div className="text-center p-5 rounded-lg bg-card border border-border">
@@ -318,7 +318,7 @@ export function PricingPage({ onNavigate }: PricingPageProps) {
                 </div>
               </div>
               <div className="text-center p-5 rounded-lg bg-card border border-border">
-                <div className="text-3xl font-mono font-bold text-accent mb-2">10%</div>
+                <div className="text-3xl font-mono font-bold text-accent mb-2">30%</div>
                 <div className="font-semibold mb-1.5 text-sm">Marketing</div>
                 <div className="text-xs text-muted-foreground">
                   Marketing pool; unused referral levels also roll here
@@ -381,7 +381,7 @@ export function PricingPage({ onNavigate }: PricingPageProps) {
             <Card className="p-6">
               <h3 className="font-semibold mb-2">What is the revenue split?</h3>
               <p className="text-sm text-muted-foreground leading-relaxed">
-                70% of joining fee and package revenue goes to the referral rewards pool, 20% to platform revenue, 10% to marketing. Rewards are based on purchases only, not on trading PnL.
+                50% of joining fee and package revenue is distributed among the 7 referral levels, 20% to platform revenue, 30% to marketing. Rewards are based on purchases only, not on trading PnL.
               </p>
             </Card>
           </div>

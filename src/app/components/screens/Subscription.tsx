@@ -51,7 +51,7 @@ export function Subscription({ onNavigate }: SubscriptionProps) {
             { id: "pro_200", priceUsd: 200, multiplier: 5, profitAllowanceUsd: 1000 },
             { id: "elite_500", priceUsd: 500, multiplier: 10, profitAllowanceUsd: 5000 },
           ],
-          revenueSplit: { mlmPct: 70, platformPct: 20, marketingPct: 10 },
+          revenueSplit: { mlmPct: 50, platformPct: 20, marketingPct: 30 },
         });
         return; // finally block will run and setLoading(false)
       }
@@ -197,7 +197,7 @@ export function Subscription({ onNavigate }: SubscriptionProps) {
               { id: "pro_200", priceUsd: 200, multiplier: 5, profitAllowanceUsd: 1000 },
               { id: "elite_500", priceUsd: 500, multiplier: 10, profitAllowanceUsd: 5000 },
             ],
-            revenueSplit: { mlmPct: 70, platformPct: 20, marketingPct: 10 },
+            revenueSplit: { mlmPct: 50, platformPct: 20, marketingPct: 30 },
           }}
           onJoiningFeeCheckout={handleJoiningFeeCheckout}
           onPackageCheckout={handlePackageCheckout}

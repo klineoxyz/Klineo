@@ -101,7 +101,7 @@ const faqCategories = [
     questions: [
       {
         q: "How does the referral program work?",
-        a: "From every onboarding fee and package (credit) purchase, 70% goes to a 7-level referral rewards pool (L1 30%, L2 20%, L3 10%, L4 8%, L5 6%, L6 4%, L7 2% of that pool), 20% to platform revenue, and 10% to marketing. Rewards are based only on purchases—not on trading PnL or balances."
+        a: "From every onboarding fee and package (credit) purchase, 50% is distributed among the 7 referral levels (L1 30%, L2 20%, L3 10%, L4 8%, L5 6%, L6 4%, L7 2% of that 50%), 20% to platform revenue, and 30% to marketing. Rewards are based only on purchases—not on trading PnL or balances."
       },
       {
         q: "How do I get my referral link?",
@@ -109,11 +109,11 @@ const faqCategories = [
       },
       {
         q: "When do I receive referral rewards?",
-        a: "Referral rewards from the 70% pool are paid out according to your referral level when referred users complete onboarding or buy packages. Minimum payout threshold is $50."
+        a: "Referral rewards from the 50% distributed pool are paid out according to your referral level when referred users complete onboarding or buy packages. Minimum payout threshold is $50."
       },
       {
         q: "Is there a limit to how much I can earn?",
-        a: "No. There is no cap on referral earnings. You can have unlimited direct referrals, and each eligible purchase allocates 70% across up to 7 levels."
+        a: "No. There is no cap on referral earnings. You can have unlimited direct referrals, and each eligible purchase allocates 50% across up to 7 levels."
       }
     ]
   },
