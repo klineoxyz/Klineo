@@ -1623,8 +1623,11 @@ export function Admin() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>User</TableHead>
-                    <TableHead>Name</TableHead>
+                    <TableHead>Full Name</TableHead>
+                    <TableHead>Country</TableHead>
                     <TableHead>Exchange / Experience</TableHead>
+                    <TableHead>Trading Style</TableHead>
+                    <TableHead>Preferred Markets</TableHead>
                     <TableHead>Package Benefit</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Submitted</TableHead>
@@ -1634,20 +1637,26 @@ export function Admin() {
                 <TableBody>
                   {masterTraderApplications.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+                      <TableCell colSpan={10} className="text-center text-muted-foreground py-8">
                         No Master Trader applications yet.
                       </TableCell>
                     </TableRow>
                   ) : (
                     masterTraderApplications.map((app: any) => {
                       const fd = app.formData || {};
+                      const get = (camel: string) => fd[camel] ?? fd[camel.replace(/([A-Z])/g, (m: string) => "_" + m.toLowerCase())];
+                      const tradingStyleLabel: Record<string, string> = { day: "Day Trading", swing: "Swing Trading", scalping: "Scalping", position: "Position Trading" };
+                      const marketsLabel: Record<string, string> = { spot: "Spot Only", futures: "Futures Only", both: "Both Spot & Futures" };
                       return (
                         <TableRow key={app.id}>
                           <TableCell className="font-medium">{app.userEmail}</TableCell>
-                          <TableCell>{fd.fullName || "—"}</TableCell>
+                          <TableCell>{get("fullName") ?? "—"}</TableCell>
+                          <TableCell className="text-xs">{get("country") ?? "—"}</TableCell>
                           <TableCell className="text-xs">
-                            {fd.primaryExchange || "—"} / {fd.yearsExperience != null ? `${fd.yearsExperience} yrs` : "—"}
+                            {get("primaryExchange") ?? "—"} / {get("yearsExperience") != null ? `${get("yearsExperience")} yrs` : "—"}
                           </TableCell>
+                          <TableCell className="text-xs">{get("tradingStyle") ? (tradingStyleLabel[String(get("tradingStyle"))] ?? get("tradingStyle")) : "—"}</TableCell>
+                          <TableCell className="text-xs">{get("preferredMarkets") ? (marketsLabel[String(get("preferredMarkets"))] ?? get("preferredMarkets")) : "—"}</TableCell>
                           <TableCell className="text-xs text-muted-foreground">
                             6 mo – 1 yr free
                           </TableCell>
@@ -1719,7 +1728,8 @@ export function Admin() {
                 </DialogTitle>
               </DialogHeader>
               {masterTraderReviewApp && (() => {
-                const fd = masterTraderReviewApp.formData || {};
+                const raw = masterTraderReviewApp.formData || {};
+                const get = (camel: string) => raw[camel] ?? raw[camel.replace(/([A-Z])/g, (m: string) => "_" + m.toLowerCase())];
                 const v = (x: unknown) => (x != null && String(x).trim() !== "" ? String(x).trim() : null);
                 const tradingStyleLabel: Record<string, string> = { day: "Day Trading", swing: "Swing Trading", scalping: "Scalping", position: "Position Trading" };
                 const marketsLabel: Record<string, string> = { spot: "Spot Only", futures: "Futures Only", both: "Both Spot & Futures" };
@@ -1727,38 +1737,38 @@ export function Admin() {
                 <div className="space-y-4">
                   <p className="text-sm text-muted-foreground">Account: {masterTraderReviewApp.userEmail}</p>
 
-                  {/* 1. Personal Information — matches form section */}
+                  {/* 1. Personal Information — exact labels from application form */}
                   <div className="rounded border border-border p-4 space-y-2 bg-muted/30">
                     <h4 className="text-sm font-semibold">Personal Information</h4>
                     <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
-                      <><dt className="text-muted-foreground">Full Name</dt><dd>{v(fd.fullName) ?? "—"}</dd></>
-                      <><dt className="text-muted-foreground">Email</dt><dd>{v(fd.email) ?? masterTraderReviewApp.userEmail ?? "—"}</dd></>
-                      <><dt className="text-muted-foreground">Country</dt><dd>{v(fd.country) ?? "—"}</dd></>
-                      <><dt className="text-muted-foreground">Telegram</dt><dd>{v(fd.telegram) ?? "—"}</dd></>
+                      <><dt className="text-muted-foreground">Full Name *</dt><dd>{v(get("fullName")) ?? "—"}</dd></>
+                      <><dt className="text-muted-foreground">Email Address *</dt><dd>{v(get("email")) ?? masterTraderReviewApp.userEmail ?? "—"}</dd></>
+                      <><dt className="text-muted-foreground">Country *</dt><dd>{v(get("country")) ?? "—"}</dd></>
+                      <><dt className="text-muted-foreground">Telegram Handle</dt><dd>{v(get("telegram")) ?? "—"}</dd></>
                     </dl>
                   </div>
 
-                  {/* 2. Trading Experience — matches form section */}
+                  {/* 2. Trading Experience — exact labels from application form */}
                   <div className="rounded border border-border p-4 space-y-2 bg-muted/30">
                     <h4 className="text-sm font-semibold">Trading Experience</h4>
                     <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
-                      <><dt className="text-muted-foreground">Primary Exchange</dt><dd>{v(fd.primaryExchange) ?? "—"}</dd></>
-                      <><dt className="text-muted-foreground">Years of Experience</dt><dd>{fd.yearsExperience != null ? `${fd.yearsExperience} yrs` : "—"}</dd></>
-                      <><dt className="text-muted-foreground">Primary Trading Style</dt><dd>{v(fd.tradingStyle) ? (tradingStyleLabel[fd.tradingStyle as string] ?? fd.tradingStyle) : "—"}</dd></>
-                      <><dt className="text-muted-foreground">Preferred Markets</dt><dd>{v(fd.preferredMarkets) ? (marketsLabel[fd.preferredMarkets as string] ?? fd.preferredMarkets) : "—"}</dd></>
-                      <><dt className="text-muted-foreground">Average Monthly Return (%)</dt><dd>{v(fd.avgMonthlyReturn) != null ? `${fd.avgMonthlyReturn}%` : "—"}</dd></>
+                      <><dt className="text-muted-foreground">Primary Exchange *</dt><dd>{v(get("primaryExchange")) ?? "—"}</dd></>
+                      <><dt className="text-muted-foreground">Years of Trading Experience *</dt><dd>{get("yearsExperience") != null ? `${get("yearsExperience")} yrs` : "—"}</dd></>
+                      <><dt className="text-muted-foreground">Primary Trading Style *</dt><dd>{v(get("tradingStyle")) ? (tradingStyleLabel[String(get("tradingStyle"))] ?? get("tradingStyle")) : "—"}</dd></>
+                      <><dt className="text-muted-foreground">Preferred Markets *</dt><dd>{v(get("preferredMarkets")) ? (marketsLabel[String(get("preferredMarkets"))] ?? get("preferredMarkets")) : "—"}</dd></>
+                      <><dt className="text-muted-foreground">Average Monthly Return (%)</dt><dd>{v(get("avgMonthlyReturn")) != null ? `${get("avgMonthlyReturn")}%` : "—"}</dd></>
                     </dl>
                   </div>
 
-                  {/* 3. Proof of Performance — matches form section */}
+                  {/* 3. Proof of Performance — exact labels from application form */}
                   <div className="rounded border border-border p-4 space-y-2 bg-muted/30">
                     <h4 className="text-sm font-semibold">Proof of Performance</h4>
                     <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
-                      <><dt className="text-muted-foreground">TradingView / Profile URL</dt><dd>{v(fd.profileUrl) ? <a href={fd.profileUrl as string} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline truncate block">Open link</a> : "—"}</dd></>
+                      <><dt className="text-muted-foreground">TradingView or Exchange Profile URL</dt><dd>{v(get("profileUrl")) ? <a href={String(get("profileUrl"))} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline truncate block">Open link</a> : "—"}</dd></>
                     </dl>
                     {masterTraderReviewApp.proofUrl ? (
                       <div className="pt-2 border-t border-border mt-2">
-                        <dt className="text-muted-foreground text-xs mb-1">Trading history screenshot</dt>
+                        <dt className="text-muted-foreground text-xs mb-1">Trading History Screenshot *</dt>
                         <dd>
                           <a href={masterTraderReviewApp.proofUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline">Open in new tab</a>
                           <img src={masterTraderReviewApp.proofUrl} alt="Trading history proof" className="max-w-full max-h-64 object-contain rounded border border-border bg-background mt-2" />
@@ -1769,17 +1779,17 @@ export function Admin() {
                     )}
                   </div>
 
-                  {/* 4. Trading Strategy — matches form section */}
+                  {/* 4. Trading Strategy — exact labels from application form */}
                   <div className="rounded border border-border p-4 space-y-2 bg-muted/30">
                     <h4 className="text-sm font-semibold">Trading Strategy</h4>
                     <div className="space-y-3 text-xs">
                       <div>
-                        <dt className="text-muted-foreground mb-1">Describe your trading strategy</dt>
-                        <dd className="whitespace-pre-wrap text-foreground">{(v(fd.strategyDescription) ?? "—")}</dd>
+                        <dt className="text-muted-foreground mb-1">Describe Your Trading Strategy *</dt>
+                        <dd className="whitespace-pre-wrap text-foreground">{(v(get("strategyDescription")) ?? "—")}</dd>
                       </div>
                       <div className="pt-2 border-t border-border">
-                        <dt className="text-muted-foreground mb-1">Why do you want to become a Master Trader?</dt>
-                        <dd className="whitespace-pre-wrap text-foreground">{(v(fd.whyMasterTrader) ?? "—")}</dd>
+                        <dt className="text-muted-foreground mb-1">Why Do You Want to Become a Master Trader? *</dt>
+                        <dd className="whitespace-pre-wrap text-foreground">{(v(get("whyMasterTrader")) ?? "—")}</dd>
                       </div>
                     </div>
                   </div>
