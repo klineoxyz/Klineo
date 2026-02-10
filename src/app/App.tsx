@@ -213,7 +213,7 @@ export default function App() {
       case "portfolio":
         return <Portfolio />;
       case "positions":
-        return <Positions />;
+        return <Positions onNavigate={handleNavigate} />;
       case "orders":
         return <Orders />;
       case "trade-history":
