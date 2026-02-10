@@ -1,5 +1,5 @@
 import { Card } from "@/app/components/ui/card";
-import { AlertCircle, TrendingUp, TrendingDown, Activity, RefreshCw, Package } from "lucide-react";
+import { AlertCircle, TrendingUp, TrendingDown, Activity, RefreshCw, Package, LayoutGrid, Loader2, Plus } from "lucide-react";
 import { Alert, AlertDescription } from "@/app/components/ui/alert";
 import { Badge } from "@/app/components/ui/badge";
 import { Button } from "@/app/components/ui/button";
@@ -10,6 +10,8 @@ import { Sparkline, generateSparklineData } from "@/app/components/ui/sparkline"
 import { api, exchangeConnections } from "@/lib/api";
 import type { EntitlementResponse } from "@/lib/api";
 import { useDemo } from "@/app/contexts/DemoContext";
+import { useDcaBotSummary } from "@/app/hooks/useDcaBotSummary";
+import { CreateBotModal } from "@/app/components/screens/dca/CreateBotModal";
 
 interface DashboardProps {
   onNavigate?: (view: string) => void;
@@ -39,6 +41,9 @@ export function Dashboard({ onNavigate }: DashboardProps) {
   const [portfolioSummary, setPortfolioSummary] = useState<PortfolioSummary | null>(null);
   const [copySetups, setCopySetups] = useState<CopySetup[]>([]);
   const [usdtEquity, setUsdtEquity] = useState<number | null>(null);
+  const [dcaCreateModalOpen, setDcaCreateModalOpen] = useState(false);
+
+  const dcaSummary = useDcaBotSummary(!isDemoMode);
 
   useEffect(() => {
     const base = import.meta.env.VITE_API_BASE_URL ?? "";
@@ -212,7 +217,7 @@ export function Dashboard({ onNavigate }: DashboardProps) {
         </div>
 
         {/* Secondary Metrics - real in Live where available */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
           <Card className="p-2.5 sm:p-3 space-y-1">
             <div className="text-[10px] sm:text-xs text-muted-foreground uppercase tracking-wide">Platform Fees</div>
             <div className="text-base sm:text-lg font-mono font-bold">{isDemoMode ? "$45.23" : "—"}</div>
@@ -232,6 +237,90 @@ export function Dashboard({ onNavigate }: DashboardProps) {
               <span className="font-medium text-sm">Running</span>
             </div>
             <div className="text-[10px] text-muted-foreground">{isDemoMode ? "Last sync: 2s ago" : "Live"}</div>
+          </Card>
+
+          {/* DCA Bots widget */}
+          <Card className="p-2.5 sm:p-3 space-y-1.5 flex flex-col min-h-0">
+            <div className="text-[10px] sm:text-xs text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
+              <LayoutGrid className="size-3 shrink-0" />
+              DCA Bots
+            </div>
+            {dcaSummary.loading ? (
+              <div className="flex items-center gap-1.5 text-sm text-muted-foreground py-1">
+                <Loader2 className="size-3.5 animate-spin shrink-0" />
+                Loading…
+              </div>
+            ) : dcaSummary.error ? (
+              <div className="text-xs text-muted-foreground py-1">Could not load DCA bots</div>
+            ) : dcaSummary.totalBots === 0 ? (
+              <>
+                <div className="text-xs text-muted-foreground py-0.5">No DCA Bots yet</div>
+                <div className="flex flex-col gap-1.5 mt-1">
+                  <Button
+                    size="sm"
+                    className="h-7 text-xs w-full"
+                    onClick={() => setDcaCreateModalOpen(true)}
+                  >
+                    <Plus className="size-3 mr-1" />
+                    Create your first bot
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-xs w-full"
+                    onClick={() => onNavigate?.("dca-bots")}
+                  >
+                    Browse presets
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="flex items-center gap-1.5">
+                  <div
+                    className={`size-1.5 rounded-full shrink-0 ${
+                      dcaSummary.activeBotsCount > 0
+                        ? "bg-[#10B981]"
+                        : dcaSummary.pausedBotsCount > 0
+                          ? "bg-[#FFB000]"
+                          : "bg-muted-foreground/50"
+                    }`}
+                  />
+                  <span className="font-medium text-sm">
+                    {dcaSummary.activeBotsCount > 0
+                      ? "Running"
+                      : dcaSummary.pausedBotsCount > 0
+                        ? "Paused"
+                        : "No bots"}
+                  </span>
+                </div>
+                <div className="text-base sm:text-lg font-mono font-bold">{dcaSummary.activeBotsCount}</div>
+                <div className="text-[10px] text-muted-foreground">
+                  Paused: {dcaSummary.pausedBotsCount} · Total: {dcaSummary.totalBots}
+                </div>
+                <div className="text-[10px] text-muted-foreground">
+                  Allocated: {dcaSummary.totalAllocatedUSDT != null ? `${dcaSummary.totalAllocatedUSDT.toFixed(0)} USDT` : "—"}
+                </div>
+                <div className="flex gap-1.5 mt-1 flex-wrap">
+                  <Button
+                    size="sm"
+                    variant="default"
+                    className="h-7 text-xs flex-1 min-w-0"
+                    onClick={() => onNavigate?.("dca-bots")}
+                  >
+                    Open DCA Bots
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-xs shrink-0"
+                    onClick={() => setDcaCreateModalOpen(true)}
+                  >
+                    <Plus className="size-3" />
+                  </Button>
+                </div>
+              </>
+            )}
           </Card>
         </div>
 
@@ -277,6 +366,16 @@ export function Dashboard({ onNavigate }: DashboardProps) {
             )}
           </div>
         </Card>
+
+        <CreateBotModal
+          open={dcaCreateModalOpen}
+          onOpenChange={setDcaCreateModalOpen}
+          onSuccess={() => {
+            dcaSummary.refetch();
+            setDcaCreateModalOpen(false);
+          }}
+          preset={null}
+        />
       </div>
     </LoadingWrapper>
   );
