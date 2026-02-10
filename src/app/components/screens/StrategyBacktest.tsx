@@ -1224,9 +1224,6 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
 
   const selectedStrategy = strategyOptions.find((s) => s.id === strategy);
 
-  // Strategy Template dropdown always shows ALL templates (user can change to any template).
-  const filteredStrategyOptions = strategyOptions;
-
   // When user changes Strategy Type in the Filters bar, switch to first template of that type so panel stays in sync
   React.useEffect(() => {
     if (strategyTypeFilter === "all") return;
@@ -1293,7 +1290,7 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
               Synced with Filters bar — changes here update the bar and vice versa.
             </p>
 
-            {/* Strategy Template — syncs Strategy Type in Filters bar when changed */}
+            {/* Strategy Template — always show ALL 6 templates; syncs Strategy Type in Filters bar when changed */}
             <div className="space-y-2">
               <Label>Strategy Template</Label>
               <Select
@@ -1307,8 +1304,8 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
-                  {filteredStrategyOptions.map((strat) => (
+                <SelectContent className="max-h-[300px]">
+                  {strategyOptions.map((strat) => (
                     <SelectItem key={strat.id} value={strat.id}>
                       {strat.name}
                     </SelectItem>
