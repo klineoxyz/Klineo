@@ -1209,9 +1209,62 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
 
             <Separator />
 
-            {/* Symbol — all pairs from connected exchange (backtest pairs do not affect live copy) */}
+            {/* Order matches Filters bar: Strategy type/template → Timeframe → Pairs (all synced) */}
+            <p className="text-[10px] text-muted-foreground -mt-1">
+              Synced with Filters bar — changes here update the bar and vice versa.
+            </p>
+
+            {/* Strategy Template — syncs Strategy Type in Filters bar when changed */}
             <div className="space-y-2">
-              <Label>Trading Symbol</Label>
+              <Label>Strategy Template</Label>
+              <Select
+                value={strategy}
+                onValueChange={(v) => {
+                  setStrategy(v);
+                  const nextType = strategyOptions.find((s) => s.id === v)?.strategy_type;
+                  if (nextType) setStrategyTypeFilter(nextType);
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {filteredStrategyOptions.map((strat) => (
+                    <SelectItem key={strat.id} value={strat.id}>
+                      {strat.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {selectedStrategy && (
+                <>
+                  <p className="text-[10px] text-muted-foreground">Type: {selectedStrategy.strategy_type}</p>
+                  <p className="text-xs text-muted-foreground">{selectedStrategy.description}</p>
+                </>
+              )}
+            </div>
+
+            {/* Timeframe — same state as Filters bar */}
+            <div className="space-y-2">
+              <Label>Timeframe</Label>
+              <Select value={timeframe} onValueChange={setTimeframe}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="1m">1m</SelectItem>
+                  <SelectItem value="5m">5m</SelectItem>
+                  <SelectItem value="15m">15m</SelectItem>
+                  <SelectItem value="1h">1h</SelectItem>
+                  <SelectItem value="4h">4h</SelectItem>
+                  <SelectItem value="1d">1d</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Trading Symbol (Pairs) — same state as Filters bar */}
+            <div className="space-y-2">
+              <Label>Pairs</Label>
               <Select value={symbol} onValueChange={setSymbol}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select pair" />
@@ -1227,26 +1280,6 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
               <p className="text-[10px] text-muted-foreground">
                 Backtest pairs do not affect live copy settings.
               </p>
-            </div>
-
-            {/* Strategy Selector — filtered by Strategy Type (top bar) when set */}
-            <div className="space-y-2">
-              <Label>Strategy Template</Label>
-              <Select value={strategy} onValueChange={setStrategy}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {filteredStrategyOptions.map((strat) => (
-                    <SelectItem key={strat.id} value={strat.id}>
-                      {strat.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {selectedStrategy && (
-                <p className="text-xs text-muted-foreground">{selectedStrategy.description}</p>
-              )}
             </div>
 
             {/* Strategy-specific parameters (expert) */}
@@ -1399,24 +1432,6 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
                   />
                 </div>
               </div>
-            </div>
-
-            {/* Timeframe */}
-            <div className="space-y-2">
-              <Label>Timeframe</Label>
-              <Select value={timeframe} onValueChange={setTimeframe}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="1m">1 Minute</SelectItem>
-                  <SelectItem value="5m">5 Minutes</SelectItem>
-                  <SelectItem value="15m">15 Minutes</SelectItem>
-                  <SelectItem value="1h">1 Hour</SelectItem>
-                  <SelectItem value="4h">4 Hours</SelectItem>
-                  <SelectItem value="1d">1 Day</SelectItem>
-                </SelectContent>
-              </Select>
             </div>
 
             {/* Direction */}
@@ -1589,9 +1604,10 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
             )}
           </div>
 
-          {/* Top-of-page controls: Strategy Type, Risk Tier, Timeframe, Pairs, Backtest Mode */}
-          <div className="flex flex-wrap items-center gap-2 sm:gap-3 py-3 px-3 rounded-lg bg-muted/30 border border-border/60">
+          {/* Top bar: same order as Strategy Config — Type, Timeframe, Pairs (synced); + Risk & Mode */}
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3 py-3 px-4 rounded-lg bg-muted/30 border border-border/60">
             <span className="text-xs font-medium text-muted-foreground mr-1 sm:mr-0">Filters</span>
+            <span className="text-[10px] text-muted-foreground/80 hidden sm:inline">(synced with Strategy Config)</span>
             <Select value={strategyTypeFilter} onValueChange={(v: StrategyTypeLabel | "all") => setStrategyTypeFilter(v)}>
               <SelectTrigger className="w-[160px] h-9 text-xs">
                 <SelectValue placeholder="Strategy Type">{strategyTypeFilter === "all" ? "All types" : strategyTypeFilter}</SelectValue>
