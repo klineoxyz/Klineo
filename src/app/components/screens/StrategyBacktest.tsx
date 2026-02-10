@@ -1175,20 +1175,17 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
 
             <Separator />
 
-            {/* Symbol — curated pairs only for backtest (do not affect live copy settings) */}
+            {/* Symbol — all pairs from connected exchange (backtest pairs do not affect live copy) */}
             <div className="space-y-2">
               <Label>Trading Symbol</Label>
-              <Select
-                value={CURATED_BACKTEST_PAIRS.includes(symbol as any) ? symbol : "BTC/USDT"}
-                onValueChange={(v) => setSymbol(v)}
-              >
+              <Select value={symbol} onValueChange={setSymbol}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select pair" />
                 </SelectTrigger>
                 <SelectContent>
-                  {CURATED_BACKTEST_PAIRS.map((p) => (
-                    <SelectItem key={p} value={p}>
-                      {p}
+                  {availablePairs.map((p) => (
+                    <SelectItem key={p.symbol} value={p.symbol}>
+                      {p.symbol}
                     </SelectItem>
                   ))}
                 </SelectContent>
