@@ -208,8 +208,13 @@ export function DcaBotsPage({ onNavigate }: DcaBotsPageProps) {
                 <div className="flex items-start justify-between gap-2">
                   <h4 className="font-medium">{preset.name}</h4>
                   <Badge
-                    variant={
-                      preset.risk === "low" ? "secondary" : preset.risk === "medium" ? "default" : "destructive"
+                    variant="outline"
+                    className={
+                      preset.risk === "low"
+                        ? "border-[#10B981]/50 text-[#10B981] bg-[#10B981]/10"
+                        : preset.risk === "medium"
+                          ? "border-amber-500/50 text-amber-600 dark:text-amber-400 bg-amber-500/10"
+                          : "border-[#EF4444]/50 text-[#EF4444] bg-[#EF4444]/10"
                     }
                   >
                     {preset.risk === "low" ? "Low" : preset.risk === "medium" ? "Medium" : "High"}
