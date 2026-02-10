@@ -1,0 +1,36 @@
+---
+description: Build KLINEO as a professional copy trading platform to expert standards
+globs: 
+  - "**/*.ts"
+  - "**/*.tsx"
+  - "**/docs/**"
+  - "**/guidelines/**"
+---
+
+# Pro Copy Trading Platform Standards
+
+KLINEO is a **professional copy trading platform**. All code and docs must meet expert-level standards.
+
+## Security (non-negotiable)
+- Never trust client-supplied `user_id` or identity; use JWT `req.user.id` only.
+- Any order placement (strategy runner, futures, future copy engine) must check the global kill switch and user/connection risk limits.
+- Exchange API keys: encrypted at rest; never log or return raw secrets.
+
+## Terminology (consistent)
+- Use **Master Trader** (not "bot" in user-facing copy unless intended).
+- Use **Copy Trader** for followers; **copy setup** for configuration; **allocation** for %.
+- **Demo** vs **Live** must be clearly labeled everywhere.
+
+## Copy trading scope
+- **Copy setups** = configuration (who to copy, allocation %, pause/stop). Fully implemented.
+- **Copy execution engine** = service that mirrors master trades to followers' exchanges. Not yet implemented; when added, it must use kill switch and risk checks.
+- Do not promise "trades replicate in real time" in a way that implies execution is already live unless it is. Prefer "configure copy trading" or "when copy execution is active."
+
+## New features checklist
+- Entitlement: new copy/trading features must respect joining fee + allowance unless admin bypass.
+- UX: no placeholder or mock text in production; numbers (PnL, %) from real or clearly synthetic data.
+- Docs: update `docs/PRO_COPY_TRADING_STANDARDS.md` and `docs/KLINEO_HIGH_LEVEL_OVERVIEW.md` when adding major capabilities.
+
+## References
+- `docs/PRO_COPY_TRADING_STANDARDS.md` — full checklist and status
+- `docs/PLATFORM_AUDIT_REPORT.md` — security and copy engine note

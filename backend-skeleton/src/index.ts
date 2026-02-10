@@ -32,7 +32,7 @@ import { launchRouter } from './routes/launch.js';
 import { masterTraderApplicationsRouter } from './routes/master-trader-applications.js';
 import { candlesRouter } from './routes/candles.js';
 import { verifySupabaseJWT } from './middleware/auth.js';
-import { apiLimiter, authLimiter, adminLimiter } from './middleware/rateLimit.js';
+import { apiLimiter, authLimiter, adminLimiter, tradersPublicLimiter } from './middleware/rateLimit.js';
 
 dotenv.config();
 
@@ -142,7 +142,7 @@ app.use((req, res, next) => {
 app.use('/health', healthRouter);
 app.use('/api/auth', authRouter);
 app.use('/api/admin', adminRouter);
-app.use('/api/traders', tradersRouter);
+app.use('/api/traders', tradersPublicLimiter, tradersRouter);
 app.use('/api/me', profileRouter);
 app.use('/api/copy-setups', copySetupsRouter);
 app.use('/api/portfolio', portfolioRouter);

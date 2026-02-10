@@ -7,7 +7,9 @@
 
 ## 1. What Is KLINEO?
 
-KLINEO is a **professional crypto copy-trading platform** for centralized exchanges. Users connect their Binance or Bybit account via API keys, browse verified Master Traders, set risk parameters, and the platform automatically replicates trades in real time. Users retain full custody of their funds on the exchange.
+KLINEO is a **professional crypto copy-trading platform** for centralized exchanges. Users connect their Binance or Bybit account via API keys, browse verified Master Traders, set risk parameters, and configure copy trading (allocation, risk limits). When the copy execution engine is live, the platform will replicate master trades to followers in real time. Users retain full custody of their funds on the exchange.
+
+**Implementation status:** Copy *configuration* (who to copy, allocation %, pause/stop) is fully supported. The *order-mirroring engine* that places trades on followers’ accounts when masters trade is planned; see `docs/PRO_COPY_TRADING_STANDARDS.md` and `docs/PLATFORM_AUDIT_REPORT.md` for current scope.
 
 ---
 
@@ -23,7 +25,7 @@ KLINEO is a **professional crypto copy-trading platform** for centralized exchan
 
 ## 3. Core Value Propositions
 
-- **Automated copy trading** — No manual execution; trades are copied as they happen
+- **Copy trading** — Configure Master Traders to copy; allocation and risk limits; when the copy engine is live, trades will replicate automatically
 - **Risk control** — Allocation %, max position %, daily loss limits, pause/stop
 - **Verified traders** — Master Traders are vetted before approval
 - **Multiple exchanges** — Binance and Bybit (spot + futures)
@@ -86,7 +88,7 @@ KLINEO is a **professional crypto copy-trading platform** for centralized exchan
 |------|----------|
 | **Marketplace** | Browse traders, filters, trader profiles, “Start Copying” |
 | **Copy Trading** | Active copies, allocations, Pause/Resume/Stop, summary cards |
-| **Dashboard** | Equity, PnL, active copies, alerts, copy engine status |
+| **Dashboard** | Equity, PnL, active copies, alerts |
 | **Portfolio** | Balances, PnL, equity chart |
 | **Terminal** | Charts, order book, place orders (spot/futures) |
 | **Strategy Backtest** | Backtest strategies, launch demo or live |
@@ -143,6 +145,8 @@ KLINEO is a **professional crypto copy-trading platform** for centralized exchan
 
 | Document | Description |
 |----------|-------------|
+| `docs/PRO_COPY_TRADING_STANDARDS.md` | **Pro copy trading checklist** — expert standards, implementation status, copy engine gap |
+| `docs/PLATFORM_AUDIT_REPORT.md` | Security audit, RLS, kill switch, copy engine note |
 | `docs/LIVE_MODE_AUDIT.md` | Live mode, data sources, access control |
 | `docs/PAYMENTS_FLOW.md` | Payments and checkout flow |
 | `DEPLOYMENT_GUIDE.md` | Deployment instructions |

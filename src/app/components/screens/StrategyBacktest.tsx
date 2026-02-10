@@ -681,6 +681,13 @@ function getRiskTierFromMetrics(metrics: {
 const STRATEGY_TYPE_OPTIONS = ["Trend", "Mean Reversion", "Breakout", "Risk Managed", "Multi-Timeframe"] as const;
 export type StrategyTypeLabel = (typeof STRATEGY_TYPE_OPTIONS)[number];
 
+// Freqtrade-style: major pairs supported on Binance/Bybit for backtesting (all templates use same list).
+const BACKTEST_PAIRS_DEFAULT = [
+  "BTC/USDT", "ETH/USDT", "BNB/USDT", "SOL/USDT", "XRP/USDT", "ADA/USDT", "DOGE/USDT", "AVAX/USDT",
+  "LINK/USDT", "MATIC/USDT", "DOT/USDT", "LTC/USDT", "BCH/USDT", "UNI/USDT", "ATOM/USDT", "ETC/USDT",
+  "XLM/USDT", "NEAR/USDT", "APT/USDT", "ARB/USDT", "OP/USDT", "INJ/USDT", "SUI/USDT", "SEI/USDT",
+  "TIA/USDT", "PEPE/USDT", "WIF/USDT", "FET/USDT", "RENDER/USDT", "STRK/USDT", "NOT/USDT",
+] as const;
 const CURATED_BACKTEST_PAIRS = ["BTC/USDT", "ETH/USDT", "SOL/USDT", "BNB/USDT"] as const;
 
 const strategyOptions: Array<{
@@ -721,13 +728,10 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
   const [riskAccepted, setRiskAccepted] = useState(false);
   const [tradeBreakdownExpanded, setTradeBreakdownExpanded] = useState(true);
 
-  // Available pairs (from Binance, same as Terminal) — loaded on mount
-  const [availablePairs, setAvailablePairs] = useState<Array<{ symbol: string }>>([
-    { symbol: "BTC/USDT" },
-    { symbol: "ETH/USDT" },
-    { symbol: "SOL/USDT" },
-    { symbol: "BNB/USDT" },
-  ]);
+  // Available pairs: default = Freqtrade-style list for all strategy templates; then merge with Binance top volume
+  const [availablePairs, setAvailablePairs] = useState<Array<{ symbol: string }>>(
+    BACKTEST_PAIRS_DEFAULT.map((s) => ({ symbol: s }))
+  );
   const [pairsLoaded, setPairsLoaded] = useState(false);
 
   // Strategy Configuration State
@@ -1111,11 +1115,20 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
       .catch(() => setConnectionsLoaded(true));
   }, []);
 
-  // Load available USDT pairs for symbol selector (same source as Terminal)
+  // Load available USDT pairs: merge Freqtrade-style default with Binance top volume (all templates use same list)
   useEffect(() => {
-    fetchUsdtPairs(150)
+    const defaultSymbols = new Set(BACKTEST_PAIRS_DEFAULT);
+    fetchUsdtPairs(200)
       .then((list) => {
-        setAvailablePairs(list.map((p) => ({ symbol: p.symbol })));
+        const fromApi = list.map((p) => ({ symbol: p.symbol }));
+        const merged = [...BACKTEST_PAIRS_DEFAULT.map((s) => ({ symbol: s }))];
+        fromApi.forEach((p) => {
+          if (!defaultSymbols.has(p.symbol as typeof BACKTEST_PAIRS_DEFAULT[number])) {
+            merged.push(p);
+            defaultSymbols.add(p.symbol);
+          }
+        });
+        setAvailablePairs(merged);
         setPairsLoaded(true);
       })
       .catch(() => setPairsLoaded(true));
@@ -1211,22 +1224,14 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
 
   const selectedStrategy = strategyOptions.find((s) => s.id === strategy);
 
-  // Filter strategy templates by Strategy Type (top bar filter)
-  const filteredStrategyOptions = React.useMemo(
-    () =>
-      strategyTypeFilter === "all"
-        ? strategyOptions
-        : strategyOptions.filter((s) => s.strategy_type === strategyTypeFilter),
-    [strategyTypeFilter]
-  );
+  // Strategy Template dropdown always shows ALL templates (user can change to any template).
+  const filteredStrategyOptions = strategyOptions;
 
-  // When Strategy Type filter changes, if current strategy is not in the filtered list, select first available
+  // When user changes Strategy Type in the Filters bar, switch to first template of that type so panel stays in sync
   React.useEffect(() => {
     if (strategyTypeFilter === "all") return;
-    const filtered = strategyOptions.filter((s) => s.strategy_type === strategyTypeFilter);
-    if (filtered.length === 0) return;
-    const currentInList = filtered.some((s) => s.id === strategy);
-    if (!currentInList) setStrategy(filtered[0].id);
+    const firstOfType = strategyOptions.find((s) => s.strategy_type === strategyTypeFilter);
+    if (firstOfType && firstOfType.id !== strategy) setStrategy(firstOfType.id);
   }, [strategyTypeFilter]);
 
   const handleShare = React.useCallback(async () => {

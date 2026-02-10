@@ -52,3 +52,15 @@ export const exchangeConnectionLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
 });
+
+/**
+ * Rate limiter for public /api/traders (marketplace listing).
+ * Pro robustness: 120 req/15min per IP so unauthenticated listing cannot be abused.
+ */
+export const tradersPublicLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 120,
+  message: 'Too many requests to marketplace. Please try again later.',
+  standardHeaders: true,
+  legacyHeaders: false,
+});

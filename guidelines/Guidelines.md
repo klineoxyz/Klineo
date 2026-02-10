@@ -1,3 +1,7 @@
+# KLINEO — Pro Copy Trading Platform
+
+**Expert standards:** All features and copy must align with our pro copy trading standards. See **`docs/PRO_COPY_TRADING_STANDARDS.md`** for the full checklist (security, terminology, copy engine status, new-feature checklist). Use consistent terminology: Master Trader, Copy Trader, copy setup, allocation; label Demo vs Live clearly.
+
 **Add your own guidelines here**
 <!--
 
