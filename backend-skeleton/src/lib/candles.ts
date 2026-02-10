@@ -45,13 +45,22 @@ export async function getBinanceFuturesKlines(
   symbol: string,
   interval: string,
   limit: number = 100,
-  env: ExchangeEnv = 'production'
+  env: ExchangeEnv = 'production',
+  startTime?: number,
+  endTime?: number
 ): Promise<Candle[]> {
   const base = env === 'testnet' ? BINANCE_FUTURES_TESTNET : BINANCE_FUTURES_PUBLIC;
   const sym = symbol.replace('/', '').toUpperCase();
   const int = binanceInterval(interval);
-  const url = `${base}/fapi/v1/klines?symbol=${sym}&interval=${int}&limit=${Math.min(limit, 500)}`;
-  const res = await binanceFetch(url, { signal: AbortSignal.timeout(10000) });
+  const params = new URLSearchParams({
+    symbol: sym,
+    interval: int,
+    limit: String(Math.min(limit, 1500)),
+  });
+  if (startTime != null) params.set('startTime', String(startTime));
+  if (endTime != null) params.set('endTime', String(endTime));
+  const url = `${base}/fapi/v1/klines?${params}`;
+  const res = await binanceFetch(url, { signal: AbortSignal.timeout(15000) });
   if (!res.ok) throw new Error(`Binance klines ${res.status}`);
   const raw = (await res.json()) as Array<[number, string, string, string, string, number, number, string, number, number, number, string]>;
   return raw.map(([time, o, h, l, c]) => ({
@@ -67,13 +76,23 @@ export async function getBybitFuturesKlines(
   symbol: string,
   interval: string,
   limit: number = 100,
-  env: ExchangeEnv = 'production'
+  env: ExchangeEnv = 'production',
+  startTime?: number,
+  endTime?: number
 ): Promise<Candle[]> {
   const base = env === 'testnet' ? BYBIT_TESTNET : BYBIT_PUBLIC;
   const sym = symbol.replace('/', '').toUpperCase();
   const int = bybitInterval(interval);
-  const url = `${base}/v5/market/kline?category=linear&symbol=${sym}&interval=${int}&limit=${Math.min(limit, 200)}`;
-  const res = await fetch(url, { signal: AbortSignal.timeout(10000) });
+  const params = new URLSearchParams({
+    category: 'linear',
+    symbol: sym,
+    interval: int,
+    limit: String(Math.min(limit, 200)),
+  });
+  if (startTime != null) params.set('start', String(startTime));
+  if (endTime != null) params.set('end', String(endTime));
+  const url = `${base}/v5/market/kline?${params}`;
+  const res = await fetch(url, { signal: AbortSignal.timeout(15000) });
   if (!res.ok) throw new Error(`Bybit klines ${res.status}`);
   const data = await res.json() as { retCode?: number; result?: { list?: Array<{ 0?: string; 1?: string; 2?: string; 3?: string; 4?: string }> } };
   if (data.retCode !== 0) throw new Error(`Bybit klines ${data.retCode}`);
@@ -92,12 +111,14 @@ export function getKlines(
   symbol: string,
   interval: string,
   limit: number = 100,
-  env: ExchangeEnv = 'production'
+  env: ExchangeEnv = 'production',
+  startTime?: number,
+  endTime?: number
 ): Promise<Candle[]> {
   if (exchange === 'bybit') {
-    return getBybitFuturesKlines(symbol, interval, limit, env);
+    return getBybitFuturesKlines(symbol, interval, limit, env, startTime, endTime);
   }
-  return getBinanceFuturesKlines(symbol, interval, limit, env);
+  return getBinanceFuturesKlines(symbol, interval, limit, env, startTime, endTime);
 }
 
 /**

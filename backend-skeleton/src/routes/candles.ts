@@ -12,7 +12,7 @@ import { validate } from '../middleware/validation.js';
 
 const VALID_EXCHANGES = ['binance', 'bybit'];
 const VALID_INTERVALS = ['1m', '3m', '5m', '15m', '30m', '1h', '2h', '4h', '1d'];
-const MAX_LIMIT = 500;
+const MAX_LIMIT = 1500;
 
 export const candlesRouter: Router = Router();
 
@@ -25,6 +25,8 @@ candlesRouter.get(
     query('interval').optional().isIn(VALID_INTERVALS).withMessage(`interval one of: ${VALID_INTERVALS.join(', ')}`),
     query('limit').optional().isInt({ min: 1, max: MAX_LIMIT }).withMessage(`limit 1-${MAX_LIMIT}`),
     query('env').optional().isIn(['production', 'testnet']).withMessage('env must be production or testnet'),
+    query('startTime').optional().isInt({ min: 0 }).withMessage('startTime must be unix ms'),
+    query('endTime').optional().isInt({ min: 0 }).withMessage('endTime must be unix ms'),
   ]),
   async (req: Request, res: Response) => {
     const requestId = (req as any).requestId || 'unknown';
@@ -33,9 +35,11 @@ candlesRouter.get(
     const interval = (req.query.interval as string) || '1h';
     const limit = Math.min(parseInt(String(req.query.limit || 500), 10) || 500, MAX_LIMIT);
     const env = ((req.query.env as string) || 'production') as ExchangeEnv;
+    const startTime = req.query.startTime ? parseInt(String(req.query.startTime), 10) : undefined;
+    const endTime = req.query.endTime ? parseInt(String(req.query.endTime), 10) : undefined;
 
     try {
-      const candles = await getKlines(exchange, symbol, interval, limit, env);
+      const candles = await getKlines(exchange, symbol, interval, limit, env, startTime, endTime);
       res.json({
         exchange,
         symbol,

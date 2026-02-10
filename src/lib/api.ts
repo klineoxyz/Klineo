@@ -333,15 +333,20 @@ export const candles = {
     interval?: string;
     limit?: number;
     env?: 'production' | 'testnet';
+    /** Optional: request klines in this range (backtest period). Exchange may limit range (e.g. Binance 200 days). */
+    startTime?: number;
+    endTime?: number;
   }): Promise<{ candles: KlineCandle[]; exchange: string; symbol: string; interval: string; env: string }> => {
-    const { exchange, symbol, interval = '1h', limit = 500, env = 'production' } = params;
+    const { exchange, symbol, interval = '1h', limit = 1500, env = 'production', startTime, endTime } = params;
     const q = new URLSearchParams({
       exchange,
       symbol: symbol.replace('/', '').toUpperCase(),
       interval,
-      limit: String(Math.min(limit, 500)),
+      limit: String(Math.min(limit, 1500)),
       env,
     });
+    if (startTime != null) q.set('startTime', String(startTime));
+    if (endTime != null) q.set('endTime', String(endTime));
     const data = await api.get<{ candles: KlineCandle[]; exchange: string; symbol: string; interval: string; env: string }>(
       `/api/candles/klines?${q}`
     );

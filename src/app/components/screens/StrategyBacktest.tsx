@@ -401,21 +401,48 @@ function runBacktestFromRealCandles(
   return { data, trades };
 }
 
-/** Generate OHLC-only candles (no signals). Used when no exchange data; backtest runner then applies selected strategy. */
-function generateSyntheticCandles(count: number): KlineCandle[] {
+/** Interval step in ms for a given timeframe (Freqtrade-style: 1m, 5m, 15m, 1h, 4h, 1d). */
+function timeframeIntervalMs(tf: string): number {
+  const map: Record<string, number> = {
+    "1m": 60 * 1000,
+    "5m": 5 * 60 * 1000,
+    "15m": 15 * 60 * 1000,
+    "1h": 60 * 60 * 1000,
+    "4h": 4 * 60 * 60 * 1000,
+    "1d": 24 * 60 * 60 * 1000,
+  };
+  return map[tf] ?? 60 * 60 * 1000;
+}
+
+/** Generate OHLC candles for the exact date range and timeframe (matches backtest period; no lookahead). Max 10k for 1y at 1h. */
+function generateSyntheticCandlesInRange(
+  dateFrom: string,
+  dateTo: string,
+  timeframe: string,
+  maxCandles: number = 10000
+): KlineCandle[] {
+  const start = new Date(dateFrom + "T00:00:00.000Z").getTime();
+  const end = new Date(dateTo + "T23:59:59.999Z").getTime();
+  const step = timeframeIntervalMs(timeframe);
   const candles: KlineCandle[] = [];
   let currentPrice = 45000;
-  for (let i = 0; i < count; i++) {
+  let t = start;
+  while (t <= end && candles.length < maxCandles) {
     const change = (Math.random() - 0.5) * 500;
     const open = currentPrice;
     const close = currentPrice + change;
     const high = Math.max(open, close) + Math.random() * 200;
     const low = Math.min(open, close) - Math.random() * 200;
-    const timestamp = new Date(Date.now() - (count - i) * 86400000).getTime();
-    candles.push({ time: timestamp, open, high, low, close });
+    candles.push({ time: t, open, high, low, close });
     currentPrice = close;
+    t += step;
   }
   return candles;
+}
+
+/** Legacy: generate N candles (used only for fallbacks). Prefer generateSyntheticCandlesInRange for date-aligned backtests. */
+function generateSyntheticCandles(count: number): KlineCandle[] {
+  return generateSyntheticCandlesInRange("2025-01-01", "2026-01-23", "1h", count);
 }
 
 const DEFAULT_BACKTEST_CONFIG: BacktestConfig = {
@@ -733,9 +760,12 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
   const [goLiveRiskAccepted, setGoLiveRiskAccepted] = useState(false);
   const [isGoLiveSubmitting, setIsGoLiveSubmitting] = useState(false);
 
-  // Backtest data: from exchange (live) when user has a connection, else synthetic
+  // Backtest data: from exchange (live) when user has a connection, else synthetic (date range + timeframe)
   const [backtestResult, setBacktestResult] = useState(() =>
-    runBacktestFromRealCandles(generateSyntheticCandles(50), DEFAULT_BACKTEST_CONFIG)
+    runBacktestFromRealCandles(
+      generateSyntheticCandlesInRange("2025-01-01", "2026-01-23", "1h", 500),
+      DEFAULT_BACKTEST_CONFIG
+    )
   );
   const [backtestDataSource, setBacktestDataSource] = useState<"live" | "synthetic">("synthetic");
   const [backtestExchangeLabel, setBacktestExchangeLabel] = useState<string | null>(null);
@@ -865,12 +895,16 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
 
     if (dataConnection) {
       try {
+        const startTime = new Date(dateFrom + "T00:00:00.000Z").getTime();
+        const endTime = new Date(dateTo + "T23:59:59.999Z").getTime();
         const { candles: rawCandles } = await candlesApi.getKlines({
           exchange,
           symbol: symbolClean,
           interval: timeframe,
-          limit: 500,
+          limit: 1500,
           env,
+          startTime,
+          endTime,
         });
         if (rawCandles.length > 0) {
           lastCandlesRef.current = rawCandles;
@@ -879,32 +913,35 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
           setBacktestDataSource("live");
           setBacktestExchangeLabel(`${dataConnection.exchange}${env === "testnet" ? " (testnet)" : ""}`);
           setHasResults(true);
-          toast.success("Backtest completed with live data from " + dataConnection.exchange);
+          toast.success("Backtest completed with live data for " + dateFrom + " – " + dateTo);
         } else {
-          const synthetic = generateSyntheticCandles(200);
+          const synthetic = generateSyntheticCandlesInRange(dateFrom, dateTo, timeframe, 2000);
           lastCandlesRef.current = synthetic;
           const result = runBacktestFromRealCandles(synthetic, backtestConfig);
           setBacktestResult(result);
+          setBacktestDataSource("synthetic");
           setHasResults(true);
-          toast.success("Backtest completed (no candles returned, using synthetic data with your strategy).");
+          toast.success("Backtest completed (no candles returned, using synthetic data for selected period).");
         }
       } catch (e) {
         const msg = e instanceof Error ? e.message : "Failed to load klines";
         setKlinesError(msg);
-        const synthetic = generateSyntheticCandles(200);
+        const synthetic = generateSyntheticCandlesInRange(dateFrom, dateTo, timeframe, 2000);
         lastCandlesRef.current = synthetic;
         const result = runBacktestFromRealCandles(synthetic, backtestConfig);
         setBacktestResult(result);
+        setBacktestDataSource("synthetic");
         setHasResults(true);
-        toast.warning("Using synthetic data with your strategy — " + msg);
+        toast.warning("Using synthetic data for selected period — " + msg);
       }
     } else {
-      const synthetic = generateSyntheticCandles(200);
+      const synthetic = generateSyntheticCandlesInRange(dateFrom, dateTo, timeframe, 2000);
       lastCandlesRef.current = synthetic;
       const result = runBacktestFromRealCandles(synthetic, backtestConfig);
       setBacktestResult(result);
+      setBacktestDataSource("synthetic");
       setHasResults(true);
-      toast.success("Backtest completed (synthetic data with your strategy). Connect an exchange for live prices.");
+      toast.success("Backtest completed for " + dateFrom + " – " + dateTo + " (synthetic). Connect an exchange for live data.");
     }
 
     setIsBacktesting(false);
@@ -933,12 +970,12 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
             limit: 500,
             env,
           });
-          candles = raw.length > 0 ? raw : generateSyntheticCandles(200);
+          candles = raw.length > 0 ? raw : generateSyntheticCandlesInRange(dateFrom, dateTo, timeframe, 2000);
         } catch {
-          candles = generateSyntheticCandles(200);
+          candles = generateSyntheticCandlesInRange(dateFrom, dateTo, timeframe, 2000);
         }
       } else {
-        candles = generateSyntheticCandles(200);
+        candles = generateSyntheticCandlesInRange(dateFrom, dateTo, timeframe, 2000);
       }
       lastCandlesRef.current = candles;
     }
@@ -1833,7 +1870,7 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
                     <>
                       <span className="inline-flex items-center gap-1.5 font-semibold text-green-600 dark:text-green-400">
                         <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-                        Live market data
+                        Backtest period
                       </span>
                       <span className="text-muted-foreground">·</span>
                       <span className="font-mono text-foreground">{symbol.replace("/", "")}</span>
@@ -1841,15 +1878,16 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
                       <span className="font-mono text-foreground">{timeframe}</span>
                       <span className="text-muted-foreground">·</span>
                       <span className="text-muted-foreground">{backtestExchangeLabel}</span>
+                      <span className="text-muted-foreground text-xs">· {new Date(dateFrom).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} – {new Date(dateTo).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span>
                     </>
                   ) : (
                     <>
                       <span className="inline-flex items-center gap-1.5 font-semibold text-amber-600 dark:text-amber-400">
                         <span className="w-2 h-2 rounded-full bg-amber-500" />
-                        Demo data
+                        Backtest period (synthetic)
                       </span>
                       <span className="text-muted-foreground text-xs sm:text-sm">
-                        Connect an exchange in Settings to run backtest on live charts
+                        {new Date(dateFrom).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} – {new Date(dateTo).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} · Connect an exchange for live data
                       </span>
                     </>
                   )}
