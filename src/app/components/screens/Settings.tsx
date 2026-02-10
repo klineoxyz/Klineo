@@ -53,7 +53,7 @@ export function Settings({ onNavigate }: SettingsProps) {
   const [saveLoading, setSaveLoading] = useState(false);
   const [connectionTestLoading, setConnectionTestLoading] = useState(false);
   const [connectionTestResult, setConnectionTestResult] = useState<string | null>(null);
-  const [backendStatus, setBackendStatus] = useState<{ connected: boolean; url?: string; latency?: number } | null>(null);
+  const [backendStatus, setBackendStatus] = useState<{ connected: boolean; configured: boolean; latency?: number } | null>(null);
   
   // Exchange Connections state
   const [exchangeConnectionsList, setExchangeConnectionsList] = useState<ExchangeConnection[]>([]);
@@ -229,21 +229,17 @@ export function Settings({ onNavigate }: SettingsProps) {
       const me = await api.get<{ id: string; email: string; role: string }>("/api/auth/me");
       const latency = Date.now() - startTime;
       
-      // Extract domain from baseURL (mask full URL)
-      const urlObj = baseURL ? new URL(baseURL) : null;
-      const maskedUrl = urlObj ? `${urlObj.protocol}//${urlObj.hostname}` : 'Not configured';
-      
       setBackendStatus({
         connected: true,
-        url: maskedUrl,
+        configured: true,
         latency,
       });
       setConnectionTestResult(JSON.stringify({ health: healthData, user: me }, null, 2));
-      toast.success("Connection OK", { description: `Backend: ${maskedUrl} (${latency}ms)` });
+      toast.success("Connection OK", { description: `${latency}ms` });
     } catch (e: any) {
       setBackendStatus({
         connected: false,
-        url: import.meta.env.VITE_API_BASE_URL ? new URL(import.meta.env.VITE_API_BASE_URL).hostname : 'Not configured',
+        configured: !!import.meta.env.VITE_API_BASE_URL,
       });
       setConnectionTestResult(`Error: ${e?.message ?? "Unknown"}`);
       toast.error("Connection test failed", { description: e?.message });
@@ -257,7 +253,7 @@ export function Settings({ onNavigate }: SettingsProps) {
     const checkBackend = async () => {
       const baseURL = import.meta.env.VITE_API_BASE_URL ?? '';
       if (!baseURL) {
-        setBackendStatus({ connected: false });
+        setBackendStatus({ connected: false, configured: false });
         return;
       }
       try {
@@ -268,17 +264,16 @@ export function Settings({ onNavigate }: SettingsProps) {
         });
         const latency = Date.now() - startTime;
         if (res.ok) {
-          const urlObj = new URL(baseURL);
           setBackendStatus({
             connected: true,
-            url: `${urlObj.protocol}//${urlObj.hostname}`,
+            configured: true,
             latency,
           });
         } else {
-          setBackendStatus({ connected: false, url: new URL(baseURL).hostname });
+          setBackendStatus({ connected: false, configured: true });
         }
       } catch {
-        setBackendStatus({ connected: false, url: baseURL ? new URL(baseURL).hostname : undefined });
+        setBackendStatus({ connected: false, configured: true });
       }
     };
     checkBackend();
@@ -528,10 +523,12 @@ export function Settings({ onNavigate }: SettingsProps) {
               <div className="font-semibold">Backend Connection</div>
               <div className="text-sm text-muted-foreground truncate">
                 {backendStatus?.connected
-                  ? `Connected to ${backendStatus.url}${backendStatus.latency ? ` (${backendStatus.latency}ms)` : ""}`
-                  : backendStatus?.url
-                    ? `Disconnected from ${backendStatus.url}`
-                    : "Not configured — VITE_API_BASE_URL missing"}
+                  ? `Connected${backendStatus.latency != null ? ` (${backendStatus.latency}ms)` : ""}`
+                  : backendStatus?.configured === false
+                    ? "Not configured"
+                    : backendStatus !== null
+                      ? "Disconnected"
+                      : "…"}
               </div>
             </div>
           </div>
