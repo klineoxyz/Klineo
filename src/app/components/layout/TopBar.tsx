@@ -67,7 +67,6 @@ export function TopBar({
   const toResume = liveData.copySetups.filter((s) => s.status === "paused");
   const hasActive = toPause.length > 0;
   const hasPaused = toResume.length > 0;
-  const showStartButton = hasPaused && !hasActive;
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -211,20 +210,8 @@ export function TopBar({
         </div>
 
         <div className="flex items-center gap-1 sm:gap-2 md:gap-3 shrink-0">
-          {/* Pause / Start copy trading — when paused, show Start; when active, show PAUSE ALL */}
-          {showStartButton ? (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleStartAll}
-              disabled={isResuming || isDemoMode}
-              className="border-green-500/30 text-green-600 dark:text-green-400 hover:bg-green-500 hover:text-white hover:border-green-500 transition-all gap-2 size-9 sm:size-auto sm:px-3"
-              title="Start all copy trading"
-            >
-              {isResuming ? <Loader2 className="size-3 shrink-0 animate-spin" /> : <Play className="size-3 shrink-0" />}
-              <span className="hidden sm:inline text-xs font-semibold">{isResuming ? "Starting…" : "Start"}</span>
-            </Button>
-          ) : (
+          {/* PAUSE ALL: when there are active copies. START ALL: when there are paused copies. Both can show. */}
+          {hasActive && (
             <Button
               variant="outline"
               size="sm"
@@ -235,6 +222,19 @@ export function TopBar({
             >
               <Pause className="size-3 shrink-0" />
               <span className="hidden sm:inline text-xs font-semibold">PAUSE ALL</span>
+            </Button>
+          )}
+          {hasPaused && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleStartAll}
+              disabled={isResuming || isDemoMode}
+              className="border-green-500/30 text-green-600 dark:text-green-400 hover:bg-green-500 hover:text-white hover:border-green-500 transition-all gap-2 size-9 sm:size-auto sm:px-3"
+              title="Start all copy trading"
+            >
+              {isResuming ? <Loader2 className="size-3 shrink-0 animate-spin" /> : <Play className="size-3 shrink-0" />}
+              <span className="hidden sm:inline text-xs font-semibold">{isResuming ? "Starting…" : "START ALL"}</span>
             </Button>
           )}
 

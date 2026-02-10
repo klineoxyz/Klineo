@@ -1,6 +1,11 @@
 /**
  * Fetches Live-mode data for TopBar: active copy count, exchange connection status,
  * entitlement (plan). Used only when !isDemoMode.
+ *
+ * Connection status:
+ * - "connected" = GET /api/exchange-connections/balance returned 200 with connected: true
+ * - "disconnected" = balance returned 200 with connected: false (no exchange linked or no keys)
+ * - "error" = balance request failed (network, 401/403/5xx, or backend unreachable)
  */
 import { useState, useEffect, useCallback } from "react";
 import { api, exchangeConnections } from "@/lib/api";
