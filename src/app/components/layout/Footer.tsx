@@ -3,6 +3,7 @@ import { Input } from "@/app/components/ui/input";
 import { Twitter, Github, MessageSquare, Mail } from "lucide-react";
 import { useState } from "react";
 import klineoLogoDark from "@/assets/klineo-logo-dark-bg.png";
+import { useMasterTraderStatus } from "@/app/hooks/useMasterTraderStatus";
 
 interface FooterProps {
   onNavigate?: (view: string) => void;
@@ -12,6 +13,7 @@ export function Footer({ onNavigate }: FooterProps) {
   const [email, setEmail] = useState("");
   const [subscribed, setSubscribed] = useState(false);
   const [subscribing, setSubscribing] = useState(false);
+  const { isApproved: isMasterTraderApproved } = useMasterTraderStatus();
 
   const handleSubscribe = (e: React.FormEvent) => {
     e.preventDefault();
@@ -152,14 +154,16 @@ export function Footer({ onNavigate }: FooterProps) {
                   Contact
                 </button>
               </li>
-              <li>
-                <button 
-                  onClick={() => onNavigate && onNavigate("master-trader-application")}
-                  className="text-sm text-muted-foreground hover:text-foreground transition"
-                >
-                  Become a Master Trader
-                </button>
-              </li>
+              {!isMasterTraderApproved && (
+                <li>
+                  <button 
+                    onClick={() => onNavigate && onNavigate("master-trader-application")}
+                    className="text-sm text-muted-foreground hover:text-foreground transition"
+                  >
+                    Become a Master Trader
+                  </button>
+                </li>
+              )}
             </ul>
           </div>
 

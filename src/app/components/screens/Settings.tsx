@@ -27,6 +27,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/app/compo
 import { ChevronDown, ChevronRight, CheckSquare } from "lucide-react";
 import { ConnectExchangeModal } from "@/app/components/screens/ConnectExchangeModal";
 import { ROUTES } from "@/app/config/routes";
+import { useMasterTraderStatus } from "@/app/hooks/useMasterTraderStatus";
 import { FuturesEnableModal } from "@/app/components/screens/FuturesEnableModal";
 import { Users, DollarSign, Ticket, Package } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/app/components/ui/table";
@@ -38,6 +39,7 @@ interface SettingsProps {
 export function Settings({ onNavigate }: SettingsProps) {
   const { user } = useAuth();
   const { isDemoMode } = useDemo();
+  const { isApproved: isMasterTraderApproved } = useMasterTraderStatus();
   const [connectModalOpen, setConnectModalOpen] = useState(false);
   const [fullName, setFullName] = useState("");
   const [username, setUsername] = useState("");
@@ -571,7 +573,12 @@ export function Settings({ onNavigate }: SettingsProps) {
           )}
 
           <Card className="p-4 sm:p-6 space-y-4 sm:space-y-6">
-            <h3 className="text-base sm:text-lg font-semibold">Profile Information</h3>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h3 className="text-base sm:text-lg font-semibold">Profile Information</h3>
+              {isMasterTraderApproved && (
+                <Badge variant="secondary" className="text-xs font-bold" title="Master Trader">MT</Badge>
+              )}
+            </div>
             <div className="flex flex-col sm:flex-row gap-6">
               <div className="flex flex-col items-start gap-2 shrink-0" role="group" aria-label="Profile photo upload">
                 <Label id="profile-photo-label">Profile photo</Label>

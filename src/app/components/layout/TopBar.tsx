@@ -13,6 +13,7 @@ import { ConnectionStatus } from "@/app/components/ui/error-state";
 import { useDemo } from "@/app/contexts/DemoContext";
 import { useUnreadNotificationsCount } from "@/app/hooks/useUnreadNotificationsCount";
 import { useTopBarLiveData } from "@/app/hooks/useTopBarLiveData";
+import { useMasterTraderStatus } from "@/app/hooks/useMasterTraderStatus";
 import { useState, useEffect, useCallback } from "react";
 import {
   Dialog,
@@ -56,6 +57,7 @@ export function TopBar({
   const connectionStatus = isDemoMode ? "connected" : liveData.connectionStatus;
   const exchangeLatency = liveData.exchangeLatency;
   const unreadNotifications = useUnreadNotificationsCount(activeView);
+  const { isApproved: isMasterTraderApproved } = useMasterTraderStatus();
   const [currentTime, setCurrentTime] = useState(new Date());
   const [showPauseModal, setShowPauseModal] = useState(false);
   const [isPausing, setIsPausing] = useState(false);
@@ -208,6 +210,10 @@ export function TopBar({
             )}
           </Button>
 
+          <div className="flex items-center gap-1.5">
+            {isMasterTraderApproved && (
+              <Badge variant="secondary" className="text-[10px] font-bold px-1.5 py-0 shrink-0" title="Master Trader">MT</Badge>
+            )}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon" className="size-9">
@@ -242,6 +248,7 @@ export function TopBar({
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+          </div>
         </div>
       </div>
 
