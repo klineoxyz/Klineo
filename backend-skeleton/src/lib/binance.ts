@@ -309,6 +309,154 @@ export async function getMyTrades(
   return signedRequest<BinanceTrade[]>('GET', '/api/v3/myTrades', credentials, params);
 }
 
+/** Public: no auth. Use binanceFetch so proxy applies. */
+async function publicGet<T>(path: string, params: Record<string, string> = {}): Promise<T> {
+  const baseUrl = process.env.BINANCE_SPOT_BASE_URL?.trim() || 'https://api.binance.com';
+  const qs = new URLSearchParams(params).toString();
+  const url = qs ? `${baseUrl}${path}?${qs}` : `${baseUrl}${path}`;
+  const res = await binanceFetch(url, { signal: AbortSignal.timeout(8000) });
+  const raw = await res.text();
+  if (!res.ok) throw new Error(`Binance public API: ${res.status} ${raw.slice(0, 150)}`);
+  return JSON.parse(raw) as T;
+}
+
+/**
+ * Get current price for a symbol (spot). Public, no credentials.
+ * https://binance-docs.github.io/apidocs/spot/en/#symbol-price-ticker
+ */
+export async function getTickerPrice(symbol: string): Promise<{ symbol: string; price: string }> {
+  const sym = (symbol || '').toUpperCase().replace(/\//g, '');
+  if (!sym) throw new Error('Symbol required for getTickerPrice');
+  return publicGet<{ symbol: string; price: string }>('/api/v3/ticker/price', { symbol: sym });
+}
+
+/** Symbol filter from exchangeInfo (LOT_SIZE, MIN_NOTIONAL) */
+export interface BinanceSymbolFilters {
+  minQty: number;
+  maxQty: number;
+  stepSize: number;
+  minNotional: number;
+}
+
+/** Get symbol filters for spot (min qty, step, min notional). Caches per process. */
+const exchangeInfoCache = new Map<string, { at: number; data: Map<string, BinanceSymbolFilters> }>();
+const CACHE_TTL_MS = 60_000;
+
+export async function getSpotSymbolFilters(symbol: string): Promise<BinanceSymbolFilters> {
+  const sym = (symbol || '').toUpperCase().replace(/\//g, '');
+  if (!sym) throw new Error('Symbol required for getSpotSymbolFilters');
+  const cached = exchangeInfoCache.get(sym);
+  if (cached && Date.now() - cached.at < CACHE_TTL_MS) {
+    const f = cached.data.get(sym);
+    if (f) return f;
+  }
+  const data = await publicGet<{ symbols?: Array<{
+    symbol: string;
+    filters?: Array<{ filterType: string; minQty?: string; maxQty?: string; stepSize?: string; minNotional?: string }>;
+  }> }>('/api/v3/exchangeInfo');
+  const map = new Map<string, BinanceSymbolFilters>();
+  for (const s of data.symbols || []) {
+    let minQty = 0, maxQty = 1e12, stepSize = 1e-8, minNotional = 0;
+    for (const f of s.filters || []) {
+      if (f.filterType === 'LOT_SIZE') {
+        minQty = parseFloat(f.minQty ?? '0');
+        maxQty = parseFloat(f.maxQty ?? '1e12');
+        stepSize = parseFloat(f.stepSize ?? '1e-8');
+      }
+      if (f.filterType === 'MIN_NOTIONAL' || f.filterType === 'NOTIONAL') {
+        minNotional = parseFloat(f.minNotional ?? '0');
+      }
+    }
+    map.set(s.symbol, { minQty, maxQty, stepSize, minNotional });
+  }
+  exchangeInfoCache.set(sym, { at: Date.now(), data: map });
+  const out = map.get(sym);
+  if (!out) throw new Error(`Symbol ${sym} not found in exchangeInfo`);
+  return out;
+}
+
+export interface BinancePlaceOrderParams {
+  symbol: string;
+  side: 'BUY' | 'SELL';
+  type: 'MARKET' | 'LIMIT';
+  quantity?: string;
+  quoteOrderQty?: string;
+  price?: string;
+  timeInForce?: 'GTC' | 'IOC' | 'FOK';
+  newClientOrderId?: string;
+}
+
+/** Response from POST /api/v3/order */
+export interface BinanceOrderResponse {
+  symbol: string;
+  orderId: number;
+  clientOrderId: string;
+  transactTime: number;
+  price?: string;
+  origQty?: string;
+  executedQty?: string;
+  status: string;
+  type: string;
+  side: string;
+}
+
+/**
+ * Place spot order. Use getSpotSymbolFilters to validate qty/notional before calling.
+ * https://binance-docs.github.io/apidocs/spot/en/#new-order-trade
+ */
+export async function placeSpotOrder(
+  credentials: BinanceCredentials,
+  params: BinancePlaceOrderParams
+): Promise<BinanceOrderResponse> {
+  const sym = (params.symbol || '').toUpperCase().replace(/\//g, '');
+  if (!sym) throw new Error('Symbol required for placeSpotOrder');
+  const body: Record<string, string | number> = {
+    symbol: sym,
+    side: params.side,
+    type: params.type,
+  };
+  if (params.quantity != null) body.quantity = params.quantity;
+  if (params.quoteOrderQty != null) body.quoteOrderQty = params.quoteOrderQty;
+  if (params.price != null) body.price = params.price;
+  if (params.timeInForce != null) body.timeInForce = params.timeInForce;
+  if (params.newClientOrderId != null) body.newClientOrderId = params.newClientOrderId;
+
+  const baseUrl = getBaseUrl(credentials.environment);
+  const timestamp = Date.now();
+  const recvWindow = 10000;
+  const queryParams = new URLSearchParams();
+  queryParams.append('timestamp', timestamp.toString());
+  queryParams.append('recvWindow', recvWindow.toString());
+  for (const [k, v] of Object.entries(body)) {
+    queryParams.append(k, String(v));
+  }
+  const queryString = queryParams.toString();
+  const signature = sign(queryString, credentials.apiSecret);
+  queryParams.append('signature', signature);
+
+  const url = `${baseUrl}/api/v3/order?${queryParams.toString()}`;
+  const response = await binanceFetch(url, {
+    method: 'POST',
+    headers: {
+      'X-MBX-APIKEY': credentials.apiKey,
+      'Content-Type': 'application/json',
+    },
+    signal: AbortSignal.timeout(15000),
+  });
+  const rawText = await response.text();
+  if (!response.ok) {
+    try {
+      const err = JSON.parse(rawText) as { code?: number; msg?: string };
+      const userMsg = getBinanceUserMessage(err.code ?? response.status, err.msg ?? rawText, classifyBinanceError(err.code ?? 0, err.msg ?? '', response.status));
+      throw new Error(`Binance place order: ${userMsg}`);
+    } catch (e) {
+      if (e instanceof Error && e.message.startsWith('Binance place order')) throw e;
+      throw new Error(`Binance place order: ${response.status} ${rawText.slice(0, 200)}`);
+    }
+  }
+  return JSON.parse(rawText) as BinanceOrderResponse;
+}
+
 /**
  * Test connection: capability-based (Spot only). NEVER touches Futures.
  * 1. Public connectivity: GET /api/v3/time

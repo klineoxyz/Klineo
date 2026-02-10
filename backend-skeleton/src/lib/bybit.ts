@@ -164,17 +164,72 @@ export async function getWalletBalance(credentials: BybitCredentials): Promise<{
   return { balances };
 }
 
+/** Public request (no auth). Used for ticker. */
+async function publicGet<T>(endpoint: string, params: Record<string, string> = {}): Promise<T> {
+  const baseUrl = getBaseUrl('production');
+  const qs = new URLSearchParams(params).toString();
+  const url = qs ? `${baseUrl}${endpoint}?${qs}` : `${baseUrl}${endpoint}`;
+  const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
+  const data = (await res.json()) as { retCode?: number; retMsg?: string; result?: T };
+  if (data.retCode !== 0 && data.retCode !== undefined) {
+    throw new Error(data.retMsg || `Bybit API ${data.retCode}`);
+  }
+  return data.result as T;
+}
+
 /**
- * Place order (stub for future use)
+ * Get last price for spot symbol. Public. Bybit V5: category=spot.
+ * https://bybit-exchange.github.io/docs/v5/market/tickers
  */
-export async function placeOrder(
-  _credentials: BybitCredentials,
-  _symbol: string,
-  _side: 'Buy' | 'Sell',
-  _qty: string,
-  _orderType: string = 'Market'
-): Promise<unknown> {
-  throw new Error('placeOrder not implemented');
+export async function getTickerPriceSpot(symbol: string): Promise<{ lastPrice: string }> {
+  const sym = (symbol || '').toUpperCase().replace(/\//g, '');
+  if (!sym) throw new Error('Symbol required for getTickerPriceSpot');
+  const result = await publicGet<{ list?: Array<{ lastPrice?: string }> }>('/v5/market/tickers', {
+    category: 'spot',
+    symbol: sym,
+  });
+  const list = result?.list ?? [];
+  const item = list[0];
+  if (!item?.lastPrice) throw new Error(`No ticker for ${sym}`);
+  return { lastPrice: item.lastPrice };
+}
+
+export interface BybitPlaceOrderParams {
+  symbol: string;
+  side: 'Buy' | 'Sell';
+  orderType: 'Market' | 'Limit';
+  qty: string;
+  price?: string;
+  orderLinkId?: string;
+}
+
+/** Response from POST /v5/order/create (spot) */
+export interface BybitOrderResponse {
+  orderId?: string;
+  orderLinkId?: string;
+}
+
+/**
+ * Place spot order (Bybit V5). Category = spot.
+ * https://bybit-exchange.github.io/docs/v5/order/create-order
+ */
+export async function placeSpotOrder(
+  credentials: BybitCredentials,
+  params: BybitPlaceOrderParams
+): Promise<BybitOrderResponse> {
+  const sym = (params.symbol || '').toUpperCase().replace(/\//g, '');
+  if (!sym) throw new Error('Symbol required for placeSpotOrder');
+  const body: Record<string, string> = {
+    category: 'spot',
+    symbol: sym,
+    side: params.side,
+    orderType: params.orderType,
+    qty: params.qty,
+  };
+  if (params.price != null) body.price = params.price;
+  if (params.orderLinkId != null) body.orderLinkId = params.orderLinkId;
+
+  return signedRequest<BybitOrderResponse>('POST', '/v5/order/create', credentials, {}, body);
 }
 
 /**

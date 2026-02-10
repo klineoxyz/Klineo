@@ -456,6 +456,12 @@ export interface DcaBot {
   config: DcaBotConfig;
   created_at: string;
   updated_at: string;
+  last_tick_at?: string | null;
+  next_tick_at?: string | null;
+  last_tick_status?: string | null;
+  last_tick_error?: string | null;
+  is_locked?: boolean;
+  lock_expires_at?: string | null;
 }
 
 export interface CreateDcaBotRequest {

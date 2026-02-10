@@ -255,6 +255,7 @@ export function DcaBotsPage({ onNavigate }: DcaBotsPageProps) {
                 <TableHead>Exchange</TableHead>
                 <TableHead>Pair</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead>Last tick</TableHead>
                 <TableHead>Allocated</TableHead>
                 <TableHead>DCA Progress</TableHead>
                 <TableHead>Avg Entry</TableHead>
@@ -295,6 +296,23 @@ export function DcaBotsPage({ onNavigate }: DcaBotsPageProps) {
                           <><StopCircle className="size-3" /> Stopped</>
                         )}
                       </Badge>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground max-w-[180px]">
+                      {bot.last_tick_at ? (
+                        <span title={bot.last_tick_error ?? undefined}>
+                          {new Date(bot.last_tick_at).toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" })}
+                          {bot.last_tick_status && (
+                            <span className="ml-1 text-xs">· {bot.last_tick_status}</span>
+                          )}
+                          {bot.last_tick_error && (
+                            <span className="block truncate text-xs text-destructive" title={bot.last_tick_error}>
+                              {bot.last_tick_error}
+                            </span>
+                          )}
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
                     </TableCell>
                     <TableCell className="font-mono">${allocated.toFixed(2)}</TableCell>
                     <TableCell className="font-mono">0 / {bot.config?.maxSafetyOrders ?? 0}</TableCell>

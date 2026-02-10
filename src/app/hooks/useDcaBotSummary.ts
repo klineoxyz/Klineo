@@ -10,6 +10,8 @@ export interface DcaBotSummary {
   pausedBotsCount: number;
   totalBots: number;
   totalAllocatedUSDT: number | null;
+  /** True if any running bot had last_tick_at within the last 60 seconds */
+  engineActive: boolean;
   loading: boolean;
   error: string | null;
   refetch: () => Promise<void>;
@@ -63,12 +65,19 @@ export function useDcaBotSummary(enabled: boolean): DcaBotSummary {
   const totalBots = bots.length;
   const totalAllocatedUSDT =
     bots.length > 0 ? bots.reduce((sum, b) => sum + estimateAllocationUsdt(b), 0) : null;
+  const engineActive = bots.some(
+    (b) =>
+      b.status === "running" &&
+      b.last_tick_at &&
+      Date.now() - new Date(b.last_tick_at).getTime() < 60_000
+  );
 
   return {
     activeBotsCount,
     pausedBotsCount,
     totalBots,
     totalAllocatedUSDT,
+    engineActive,
     loading,
     error,
     refetch: load,

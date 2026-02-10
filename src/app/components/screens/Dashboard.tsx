@@ -301,6 +301,12 @@ export function Dashboard({ onNavigate }: DashboardProps) {
                 <div className="text-[10px] text-muted-foreground">
                   Allocated: {dcaSummary.totalAllocatedUSDT != null ? `${dcaSummary.totalAllocatedUSDT.toFixed(0)} USDT` : "—"}
                 </div>
+                {dcaSummary.engineActive && (
+                  <div className="text-[10px] text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                    <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                    Engine active
+                  </div>
+                )}
                 <div className="flex gap-1.5 mt-1 flex-wrap">
                   <Button
                     size="sm"

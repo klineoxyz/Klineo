@@ -4,6 +4,7 @@ import dotenv from 'dotenv';
 import { randomUUID } from 'crypto';
 import { createClient } from '@supabase/supabase-js';
 import { runDueStrategies } from './lib/strategyRunner.js';
+import { processRunningDcaBots } from './lib/dcaEngine.js';
 import { RUNNER_CONFIG, logRunnerConfig } from './lib/runnerConfig.js';
 import { healthRouter } from './routes/health.js';
 import { authRouter } from './routes/auth-with-supabase.js';
@@ -12,6 +13,7 @@ import { tradersRouter } from './routes/traders.js';
 import { profileRouter } from './routes/profile.js';
 import { copySetupsRouter } from './routes/copy-setups.js';
 import { dcaBotsRouter } from './routes/dca-bots.js';
+import { dcaEngineRouter } from './routes/dca-engine.js';
 import { portfolioRouter } from './routes/portfolio.js';
 import { positionsRouter } from './routes/positions.js';
 import { ordersRouter } from './routes/orders.js';
@@ -147,6 +149,7 @@ app.use('/api/traders', tradersPublicLimiter, tradersRouter);
 app.use('/api/me', profileRouter);
 app.use('/api/copy-setups', copySetupsRouter);
 app.use('/api/dca-bots', dcaBotsRouter);
+app.use('/api/dca-bots/engine', dcaEngineRouter);
 app.use('/api/portfolio', portfolioRouter);
 app.use('/api/positions', positionsRouter);
 app.use('/api/orders', ordersRouter);
@@ -210,6 +213,10 @@ app.listen(Number(PORT), HOST, () => {
           const summary = await runDueStrategies(runnerClient, now, { requestId: 'scheduler' });
           if (summary.ran > 0 || summary.blocked > 0 || summary.errors > 0) {
             console.log(`[runner] due: ran=${summary.ran} skipped=${summary.skipped} blocked=${summary.blocked} errors=${summary.errors}`);
+          }
+          const dca = await processRunningDcaBots(runnerClient, { limit: 10 });
+          if (dca.processed > 0) {
+            console.log(`[dca-engine] processed=${dca.processed} ok=${dca.results.filter(r => r.status === 'ok').length} errors=${dca.results.filter(r => r.status === 'error').length}`);
           }
         } catch (err) {
           console.error('[runner] tick error:', err instanceof Error ? err.message : 'Unknown error');
