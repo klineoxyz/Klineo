@@ -14,7 +14,6 @@ import { api } from "@/lib/api";
 import { toast } from "@/app/lib/toast";
 import { EmptyTraders } from "@/app/components/ui/empty-state";
 import { ErrorState } from "@/app/components/ui/error-state";
-import { useMasterTraderStatus } from "@/app/hooks/useMasterTraderStatus";
 
 interface Trader {
   id: string;
@@ -39,7 +38,6 @@ export function Marketplace({ onNavigate }: MarketplaceProps) {
   const [error, setError] = useState<string | null>(null);
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [advancedFilters, setAdvancedFilters] = useState<FilterValues | null>(null);
-  const { isApproved: isMasterTraderApproved } = useMasterTraderStatus();
 
   const loadTraders = async () => {
     setIsLoading(true);
@@ -94,16 +92,12 @@ export function Marketplace({ onNavigate }: MarketplaceProps) {
             <h1 className="text-xl sm:text-2xl font-semibold mb-1">Marketplace</h1>
             <p className="text-sm text-muted-foreground">Browse and copy professional traders</p>
           </div>
-          {isMasterTraderApproved ? (
-            <Badge variant="secondary" className="text-xs font-semibold px-3 py-1.5">Master Trader</Badge>
-          ) : (
-            <Button
-              asChild
-              className="bg-primary text-primary-foreground w-full sm:w-auto"
-            >
-              <Link to={ROUTES.masterTraderApplication}>Become a Master Trader</Link>
-            </Button>
-          )}
+          <Button
+            asChild
+            className="bg-primary text-primary-foreground w-full sm:w-auto"
+          >
+            <Link to={ROUTES.masterTraderApplication}>Become a Master Trader</Link>
+          </Button>
         </div>
 
         {/* Filters */}

@@ -476,7 +476,9 @@ export function MasterTraderApplication({ onNavigate }: MasterTraderApplicationP
       )}
 
       {applicationStatus === "approved" && (
-        <Card className="p-12 text-center max-w-2xl mx-auto">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2 space-y-6">
+        <Card className="p-12 text-center">
           <div className="inline-flex items-center justify-center size-16 rounded-full bg-[#10B981]/20 mb-6">
             <CheckCircle2 className="size-8 text-[#10B981]" />
           </div>
@@ -521,6 +523,44 @@ export function MasterTraderApplication({ onNavigate }: MasterTraderApplicationP
             </Button>
           </div>
         </Card>
+          </div>
+
+          {/* Application Process — step 3 shows Approved in green for MT */}
+          <div className="space-y-6">
+            <Card className="p-6">
+              <h4 className="font-semibold mb-4">Application Process</h4>
+              <div className="space-y-4">
+                <div className="flex gap-3">
+                  <div className="flex items-center justify-center size-8 rounded-full bg-primary/20 text-primary font-semibold text-sm shrink-0">
+                    1
+                  </div>
+                  <div>
+                    <div className="font-semibold text-sm">Submit Application</div>
+                    <div className="text-xs text-muted-foreground">Complete this form with accurate info</div>
+                  </div>
+                </div>
+                <div className="flex gap-3">
+                  <div className="flex items-center justify-center size-8 rounded-full bg-secondary text-muted-foreground font-semibold text-sm shrink-0">
+                    2
+                  </div>
+                  <div>
+                    <div className="font-semibold text-sm">Review Period</div>
+                    <div className="text-xs text-muted-foreground">We verify your trading history (2-5 days)</div>
+                  </div>
+                </div>
+                <div className="flex gap-3">
+                  <div className="flex items-center justify-center size-8 rounded-full bg-[#10B981]/20 text-[#10B981] font-semibold text-sm shrink-0">
+                    3
+                  </div>
+                  <div>
+                    <div className="font-semibold text-sm text-[#10B981]">Approved</div>
+                    <div className="text-xs text-muted-foreground">Start earning from copiers immediately</div>
+                  </div>
+                </div>
+              </div>
+            </Card>
+          </div>
+        </div>
       )}
     </div>
   );

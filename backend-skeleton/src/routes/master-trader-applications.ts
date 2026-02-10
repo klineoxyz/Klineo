@@ -28,6 +28,7 @@ export const masterTraderApplicationsRouter: ExpressRouter = Router();
 /**
  * GET /api/master-trader-applications/me
  * Get the current user's latest Master Trader application (so they can see pending/approved/rejected).
+ * Admins are always treated as approved Master Traders (MT badge, no "Become a Master Trader" CTA).
  */
 masterTraderApplicationsRouter.get(
   '/me',
@@ -38,6 +39,19 @@ masterTraderApplicationsRouter.get(
 
     try {
       const userId = req.user!.id;
+      const isAdmin = req.user!.role === 'admin';
+      if (isAdmin) {
+        return res.json({
+          application: {
+            id: 'admin-mt',
+            status: 'approved',
+            message: null,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          },
+        });
+      }
+
       const { data: row, error } = await client
         .from('master_trader_applications')
         .select('id, status, message, created_at, updated_at')
