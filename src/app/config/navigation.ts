@@ -18,6 +18,7 @@ import {
   Sparkles,
   BarChart3,
   Zap,
+  LayoutGrid,
   type LucideIcon,
 } from "lucide-react";
 
@@ -45,6 +46,7 @@ export const navigationSections: NavSection[] = [
     title: "Trading",
     items: [
       { id: "trading-terminal", label: "Terminal", icon: BarChart3 },
+      { id: "dca-bots", label: "DCA Bots", icon: LayoutGrid },
       { id: "positions", label: "Positions", icon: TrendingUp },
       { id: "orders", label: "Orders", icon: ListOrdered },
       { id: "trade-history", label: "Trade History", icon: History },

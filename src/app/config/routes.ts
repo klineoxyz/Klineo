@@ -20,6 +20,7 @@ export const ROUTES = {
   // App (authenticated)
   dashboard: "/dashboard",
   terminal: "/terminal",
+  dcaBots: "/dca-bots",
   positions: "/positions",
   orders: "/orders",
   tradeHistory: "/trade-history",
@@ -59,6 +60,7 @@ export const VIEW_TO_PATH: Record<string, string> = {
   signup: ROUTES.signup,
   dashboard: ROUTES.dashboard,
   "trading-terminal": ROUTES.terminal,
+  "dca-bots": ROUTES.dcaBots,
   positions: ROUTES.positions,
   orders: ROUTES.orders,
   "trade-history": ROUTES.tradeHistory,

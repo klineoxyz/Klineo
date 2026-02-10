@@ -14,6 +14,7 @@ import { Portfolio } from "@/app/components/screens/Portfolio";
 import { Positions } from "@/app/components/screens/Positions";
 import { Orders } from "@/app/components/screens/Orders";
 import { TradeHistory } from "@/app/components/screens/TradeHistory";
+import { DcaBotsPage } from "@/app/components/screens/DcaBotsPage";
 import { Fees } from "@/app/components/screens/Fees";
 import { Referrals } from "@/app/components/screens/Referrals";
 import { Subscription } from "@/app/components/screens/Subscription";
@@ -217,6 +218,8 @@ export default function App() {
         return <Orders />;
       case "trade-history":
         return <TradeHistory />;
+      case "dca-bots":
+        return <DcaBotsPage onNavigate={handleNavigate} />;
       case "fees":
         return <Fees />;
       case "referrals":

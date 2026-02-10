@@ -425,3 +425,54 @@ export const strategies = {
     return api.post(`/api/strategies/${id}/execute-tick`);
   },
 };
+
+// DCA Bots (grid-style DCA ladders; no execution yet)
+export interface DcaBotConfig {
+  baseOrderSizeUsdt?: number;
+  gridStepPct?: number;
+  maxSafetyOrders?: number;
+  safetyOrderMultiplier?: number;
+  maxTotalPositionCapPct?: number;
+  tpPct?: number;
+  tpLadder?: boolean;
+  tpLadderLevels?: { pct: number; sharePct: number }[];
+  dailyLossLimitPct?: number;
+  maxDrawdownStopPct?: number;
+  cooldownMinutes?: number;
+  trendFilter?: boolean;
+  volatilityFilter?: boolean;
+}
+
+export interface DcaBot {
+  id: string;
+  user_id: string;
+  name: string;
+  exchange: 'binance' | 'bybit';
+  market: string;
+  pair: string;
+  timeframe: string;
+  status: 'running' | 'paused' | 'stopped';
+  config: DcaBotConfig;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateDcaBotRequest {
+  name: string;
+  exchange: 'binance' | 'bybit';
+  market?: 'spot' | 'futures';
+  pair: string;
+  timeframe?: string;
+  config?: DcaBotConfig;
+}
+
+export const dcaBots = {
+  list: async (): Promise<{ bots: DcaBot[] }> => api.get('/api/dca-bots'),
+  create: async (data: CreateDcaBotRequest): Promise<{ bot: DcaBot }> =>
+    api.post('/api/dca-bots', data),
+  updateStatus: async (id: string, status: 'running' | 'paused' | 'stopped'): Promise<{ bot: DcaBot }> =>
+    api.put(`/api/dca-bots/${id}/status`, { status }),
+  update: async (id: string, data: { name?: string; pair?: string; timeframe?: string; config?: DcaBotConfig }): Promise<{ bot: DcaBot }> =>
+    api.put(`/api/dca-bots/${id}`, data),
+  delete: async (id: string): Promise<void> => api.delete(`/api/dca-bots/${id}`),
+};
