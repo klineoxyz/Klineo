@@ -1137,6 +1137,40 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
 
   const selectedStrategy = strategyOptions.find((s) => s.id === strategy);
 
+  // Filter strategy templates by Strategy Type (top bar filter)
+  const filteredStrategyOptions = React.useMemo(
+    () =>
+      strategyTypeFilter === "all"
+        ? strategyOptions
+        : strategyOptions.filter((s) => s.strategy_type === strategyTypeFilter),
+    [strategyTypeFilter]
+  );
+
+  // When Strategy Type filter changes, if current strategy is not in the filtered list, select first available
+  React.useEffect(() => {
+    if (strategyTypeFilter === "all") return;
+    const filtered = strategyOptions.filter((s) => s.strategy_type === strategyTypeFilter);
+    if (filtered.length === 0) return;
+    const currentInList = filtered.some((s) => s.id === strategy);
+    if (!currentInList) setStrategy(filtered[0].id);
+  }, [strategyTypeFilter]);
+
+  const handleShare = React.useCallback(async () => {
+    const name = selectedStrategy?.name ?? "Strategy";
+    const pair = symbol.replace("/", "");
+    const period = `${new Date(dateFrom).toLocaleDateString("en-US")} – ${new Date(dateTo).toLocaleDateString("en-US")}`;
+    const summary = hasResults
+      ? `Klineo Backtest: ${name}\nPair: ${pair} | TF: ${timeframe}\nPeriod: ${period}\nTrades: ${kpis.totalTrades} | Win rate: ${kpis.winRate.toFixed(1)}%\nPnL: ${kpis.netPnl >= 0 ? "+" : ""}$${kpis.netPnl.toFixed(2)} (${kpis.roi >= 0 ? "+" : ""}${kpis.roi.toFixed(2)}%)\nMax DD: ${kpis.maxDrawdownPercent.toFixed(1)}% | Risk: ${kpis.riskTier}`
+      : `Klineo Backtest: ${name}\nPair: ${pair} | TF: ${timeframe}\nPeriod: ${period}\nRun a backtest to see results.`;
+    try {
+      await navigator.clipboard.writeText(summary);
+      toast.success("Backtest summary copied to clipboard.");
+    } catch {
+      toast.error("Could not copy to clipboard.");
+    }
+  }, [hasResults, selectedStrategy?.name, symbol, timeframe, dateFrom, dateTo, kpis]);
+
+
   return (
     <div className="min-h-screen lg:h-screen flex flex-col lg:flex-row bg-background overflow-y-auto lg:overflow-hidden">
       {/* LEFT PANEL - Strategy Configuration */}
@@ -1195,7 +1229,7 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
               </p>
             </div>
 
-            {/* Strategy Selector */}
+            {/* Strategy Selector — filtered by Strategy Type (top bar) when set */}
             <div className="space-y-2">
               <Label>Strategy Template</Label>
               <Select value={strategy} onValueChange={setStrategy}>
@@ -1203,7 +1237,7 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {strategyOptions.map((strat) => (
+                  {filteredStrategyOptions.map((strat) => (
                     <SelectItem key={strat.id} value={strat.id}>
                       {strat.name}
                     </SelectItem>
@@ -1547,7 +1581,7 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
                     Optimization changes parameters, not market conditions.
                   </TooltipContent>
                 </Tooltip>
-                <Button variant="outline" size="sm" className="gap-2" onClick={() => toast.info("Share", { description: "Share backtest results coming soon" })}>
+                <Button variant="outline" size="sm" className="gap-2" onClick={handleShare}>
                   <Share2 className="h-4 w-4" />
                   Share
                 </Button>
@@ -1597,20 +1631,25 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value="1m">1m</SelectItem>
                 <SelectItem value="5m">5m</SelectItem>
                 <SelectItem value="15m">15m</SelectItem>
                 <SelectItem value="1h">1h</SelectItem>
                 <SelectItem value="4h">4h</SelectItem>
+                <SelectItem value="1d">1d</SelectItem>
               </SelectContent>
             </Select>
-            <Select value={symbol} onValueChange={setSymbol}>
-              <SelectTrigger className="w-[100px] h-9 text-xs">
+            <Select
+              value={availablePairs.some((p) => p.symbol === symbol) ? symbol : availablePairs[0]?.symbol ?? "BTC/USDT"}
+              onValueChange={setSymbol}
+            >
+              <SelectTrigger className="w-[100px] h-9 text-xs min-w-0">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {CURATED_BACKTEST_PAIRS.map((p) => (
-                  <SelectItem key={p} value={p}>
-                    {p.replace("/USDT", "")}
+                {availablePairs.map((p) => (
+                  <SelectItem key={p.symbol} value={p.symbol}>
+                    {p.symbol.replace("/USDT", "")}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -1719,7 +1758,7 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
                     )}
                   </div>
                 </div>
-                <Button variant="outline" size="sm" className="shrink-0 w-full sm:w-auto" onClick={() => toast.info("Share", { description: "Share backtest results coming soon" })}>
+                <Button variant="outline" size="sm" className="shrink-0 w-full sm:w-auto" onClick={handleShare}>
                   <Share2 className="h-4 w-4 mr-2" />
                   Share
                 </Button>
@@ -1771,7 +1810,7 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
               </div>
 
               {/* Price Chart — Live market data when connected, else demo */}
-              <Card className="p-4 sm:p-6 bg-card/50 overflow-hidden flex flex-col gap-4">
+              <Card id="backtest-chart" className="p-4 sm:p-6 bg-card/50 overflow-hidden flex flex-col gap-4">
                 {/* Live / Demo data strip — like pro trading platforms */}
                 <div className={`flex flex-wrap items-center gap-2 py-2 px-3 rounded-lg text-sm ${backtestDataSource === "live" ? "bg-green-500/10 border border-green-500/30" : "bg-amber-500/10 border border-amber-500/30"}`}>
                   {backtestDataSource === "live" && backtestExchangeLabel ? (
@@ -1872,10 +1911,27 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
                   </div>
                   {/* Bottom: CTAs + disclaimer */}
                   <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-border/60">
-                    <Button size="sm" variant="outline" className="text-xs">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="text-xs"
+                      onClick={() => document.getElementById("backtest-chart")?.scrollIntoView({ behavior: "smooth" })}
+                    >
                       View backtest
                     </Button>
-                    <Button size="sm" className="text-xs bg-[#FFB000] hover:bg-[#FFB000]/90 text-black">
+                    <Button
+                      size="sm"
+                      className="text-xs bg-[#FFB000] hover:bg-[#FFB000]/90 text-black"
+                      onClick={async () => {
+                        const text = `${selectedStrategy?.name ?? "Strategy"} (${selectedStrategy?.strategy_type ?? "Trend"})`;
+                        try {
+                          await navigator.clipboard.writeText(text);
+                          toast.success("Strategy name copied. Use Strategy Config to run it.");
+                        } catch {
+                          toast.error("Could not copy.");
+                        }
+                      }}
+                    >
                       Copy strategy
                     </Button>
                     <Tooltip>
