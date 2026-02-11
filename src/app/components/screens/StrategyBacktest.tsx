@@ -724,7 +724,6 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
   const [configCollapsed, setConfigCollapsed] = useState(false);
   const [launchDialogOpen, setLaunchDialogOpen] = useState(false);
   const [isBacktesting, setIsBacktesting] = useState(false);
-  const [hasResults, setHasResults] = useState(false);
   const [expandedTrade, setExpandedTrade] = useState<number | null>(null);
   const [riskAccepted, setRiskAccepted] = useState(false);
   const [tradeBreakdownExpanded, setTradeBreakdownExpanded] = useState(true);
@@ -809,6 +808,8 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
 
   const backtestCandles = backtestResult.data;
   const generatedTrades = backtestResult.trades;
+  /** Show result UI (chart, table, Re-run, List on Marketplace, etc.) when we have any trades */
+  const hasResults = generatedTrades.length > 0;
 
   const tradeStats = React.useMemo(() => calculateTradeStatsFromTrades(generatedTrades), [generatedTrades]);
 
@@ -960,7 +961,6 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
           setBacktestResult(result);
           setBacktestDataSource("live");
           setBacktestExchangeLabel(`${dataConnection.exchange}${env === "testnet" ? " (testnet)" : ""}`);
-          setHasResults(true);
           toast.success("Backtest completed with live data for " + dateFrom + " – " + dateTo + " (" + rawCandles.length.toLocaleString() + " candles).");
         } else {
           const synthetic = generateSyntheticCandlesInRange(dateFrom, dateTo, timeframe);
@@ -968,7 +968,6 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
           const result = runBacktestFromRealCandles(synthetic, backtestConfig);
           setBacktestResult(result);
           setBacktestDataSource("synthetic");
-          setHasResults(true);
           toast.success("Backtest completed (no candles returned, using synthetic data for selected period).");
         }
       } catch (e) {
@@ -979,7 +978,6 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
         const result = runBacktestFromRealCandles(synthetic, backtestConfig);
         setBacktestResult(result);
         setBacktestDataSource("synthetic");
-        setHasResults(true);
         toast.warning("Using synthetic data for selected period — " + msg);
       }
     } else {
@@ -988,7 +986,6 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
       const result = runBacktestFromRealCandles(synthetic, backtestConfig);
       setBacktestResult(result);
       setBacktestDataSource("synthetic");
-      setHasResults(true);
       const capNote = synthetic.length >= BACKTEST_MAX_CANDLES ? " (capped at " + BACKTEST_MAX_CANDLES.toLocaleString() + " candles for performance)" : "";
       toast.success("Backtest completed for " + dateFrom + " – " + dateTo + " (" + synthetic.length.toLocaleString() + " candles, synthetic). Connect an exchange for live data." + capNote);
     }
@@ -1069,7 +1066,6 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
 
     if (bestResult) {
       setBacktestResult(bestResult);
-      setHasResults(true);
       setRsiPeriod(String(bestConfig.rsiPeriod));
       setRsiOversold(String(bestConfig.rsiOversold));
       setRsiOverbought(String(bestConfig.rsiOverbought));
