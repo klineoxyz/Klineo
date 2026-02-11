@@ -8,8 +8,8 @@ import type { TourFlowId, TourStepConfig } from "./tourSteps";
 import { getStepsForFlow, toJoyrideSteps } from "./tourSteps";
 import type { EntitlementResponse } from "@/lib/api";
 
-const WAIT_FOR_TARGET_MS = 5000;
-const POLL_INTERVAL_MS = 200;
+const WAIT_FOR_TARGET_MS = 8000;
+const POLL_INTERVAL_MS = 250;
 
 interface TourControllerProps {
   /** Which flow to run; null = not running */
@@ -40,6 +40,15 @@ export function TourController({ flowId, onFinish, onSkip, entitlement }: TourCo
     status: entitlement?.status ?? "inactive",
   };
 
+  /** Normalize path for comparison (no trailing slash) */
+  const currentPath = pathname.replace(/\/$/, "") || "/";
+
+  const isSameRoute = useCallback((route: string | undefined) => {
+    if (!route) return true;
+    const r = route.replace(/\/$/, "") || "/";
+    return currentPath === r;
+  }, [currentPath]);
+
   // When flowId is set, build steps and start
   useEffect(() => {
     if (!flowId) {
@@ -58,8 +67,9 @@ export function TourController({ flowId, onFinish, onSkip, entitlement }: TourCo
       return;
     }
     const first = configs[0];
-    if (first.route && pathname !== first.route) {
-      navigate(first.route);
+    const needRoute = first.route && currentPath !== (first.route.replace(/\/$/, "") || "/");
+    if (needRoute) {
+      navigate(first.route!);
       setPendingStep(0);
       setStepIndex(0);
       setRun(false);
@@ -68,9 +78,9 @@ export function TourController({ flowId, onFinish, onSkip, entitlement }: TourCo
       setRun(true);
       setPendingStep(null);
     }
-  }, [flowId, pathname]); // eslint-disable-line react-hooks/exhaustive-deps -- we only want to init when flowId changes
+  }, [flowId, currentPath]); // eslint-disable-line react-hooks/exhaustive-deps -- init once per flowId; use currentPath for first-step route
 
-  // Wait for target when pendingStep is set
+  // Wait for target when pendingStep is set (after navigation to show step on correct page)
   useEffect(() => {
     if (pendingStep === null || configsRef.current.length === 0) return;
     const config = configsRef.current[pendingStep];
@@ -80,6 +90,7 @@ export function TourController({ flowId, onFinish, onSkip, entitlement }: TourCo
       const el = document.querySelector(targetSelector);
       if (el) {
         clearInterval(id);
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
         setStepIndex(pendingStep);
         setPendingStep(null);
         setRun(true);
@@ -87,20 +98,19 @@ export function TourController({ flowId, onFinish, onSkip, entitlement }: TourCo
       }
       if (Date.now() - start >= WAIT_FOR_TARGET_MS) {
         clearInterval(id);
-        // Skip this step
         if (pendingStep + 1 >= configsRef.current.length) {
           onFinish();
           return;
         }
         setPendingStep(pendingStep + 1);
         const next = configsRef.current[pendingStep + 1];
-        if (next.route && pathname !== next.route) {
+        if (next.route && !isSameRoute(next.route)) {
           navigate(next.route);
         }
       }
     }, POLL_INTERVAL_MS);
     return () => clearInterval(id);
-  }, [pendingStep, pathname, navigate, onFinish]);
+  }, [pendingStep, isSameRoute, navigate, onFinish]);
 
   const handleCallback = useCallback(
     (data: CallBackProps) => {
@@ -123,7 +133,7 @@ export function TourController({ flowId, onFinish, onSkip, entitlement }: TourCo
           return;
         }
         const nextConfig = configsRef.current[nextIndex];
-        if (nextConfig.route && pathname !== nextConfig.route) {
+        if (nextConfig.route && !isSameRoute(nextConfig.route)) {
           navigate(nextConfig.route);
           setRun(false);
           setPendingStep(nextIndex);
@@ -134,7 +144,7 @@ export function TourController({ flowId, onFinish, onSkip, entitlement }: TourCo
         setStepIndex(index);
       }
     },
-    [pathname, navigate, onFinish, onSkip, markCompleted, markSkipped]
+    [isSameRoute, navigate, onFinish, onSkip, markCompleted, markSkipped]
   );
 
   if (!flowId || joyrideSteps.length === 0) return null;
@@ -148,42 +158,101 @@ export function TourController({ flowId, onFinish, onSkip, entitlement }: TourCo
       showProgress
       showSkipButton
       scrollToFirstStep
+      scrollDuration={300}
       spotlightClicks={false}
       disableOverlayClose={false}
       callback={handleCallback}
+      floaterProps={{
+        disableAnimation: false,
+        styles: {
+          floater: { filter: "none" },
+        },
+      }}
+      tooltipComponent={(props) => {
+        const { index, isLastStep, step, backProps, primaryProps, skipProps, tooltipProps } = props;
+        const total = joyrideSteps.length;
+        return (
+          <div
+            {...tooltipProps}
+            className="rounded-lg border border-border bg-card text-foreground shadow-xl max-w-[260px]"
+            style={{
+              padding: "10px 12px",
+              ...(tooltipProps.style || {}),
+            }}
+          >
+            {total > 1 && (
+              <div className="text-[10px] text-muted-foreground/80 mb-1.5">
+                {index + 1} of {total}
+              </div>
+            )}
+            {step.title && (
+              <div className="text-sm font-semibold mb-1 leading-tight">{step.title}</div>
+            )}
+            <div className="text-xs text-muted-foreground leading-snug mb-2.5">{step.content}</div>
+            <div className="flex items-center justify-between gap-2">
+              <button
+                type="button"
+                {...skipProps}
+                className="text-xs text-muted-foreground hover:text-foreground transition"
+              >
+                Skip
+              </button>
+              <div className="flex items-center gap-1.5">
+                {index > 0 && (
+                  <button
+                    type="button"
+                    {...backProps}
+                    className="px-2.5 py-1.5 text-xs font-medium rounded-md border border-border bg-background hover:bg-muted transition"
+                  >
+                    Back
+                  </button>
+                )}
+                <button
+                  type="button"
+                  {...primaryProps}
+                  className="px-3 py-1.5 text-xs font-medium rounded-md bg-primary text-primary-foreground hover:opacity-90 transition"
+                >
+                  {isLastStep ? "Finish" : "Next"}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      }}
       styles={{
         options: {
           primaryColor: "hsl(var(--primary))",
           textColor: "hsl(var(--foreground))",
           backgroundColor: "hsl(var(--card))",
-          overlayColor: "rgba(0,0,0,0.6)",
+          overlayColor: "rgba(0,0,0,0.5)",
           arrowColor: "hsl(var(--card))",
         },
         tooltip: {
-          borderRadius: 12,
-          padding: 16,
+          borderRadius: 8,
+          padding: 0,
         },
         tooltipContainer: {
           textAlign: "left",
         },
         tooltipTitle: {
-          fontSize: 16,
+          fontSize: 13,
           fontWeight: 600,
-          marginBottom: 8,
+          marginBottom: 4,
         },
         tooltipContent: {
-          fontSize: 14,
-          lineHeight: 1.5,
+          fontSize: 12,
+          lineHeight: 1.4,
         },
         buttonNext: {
-          backgroundColor: "hsl(var(--primary))",
-          color: "hsl(var(--primary-foreground))",
+          fontSize: 12,
+          padding: "6px 12px",
         },
         buttonBack: {
-          color: "hsl(var(--muted-foreground))",
+          fontSize: 12,
+          padding: "6px 12px",
         },
         buttonSkip: {
-          color: "hsl(var(--muted-foreground))",
+          fontSize: 12,
         },
       }}
       locale={{
