@@ -24,7 +24,8 @@ ordersRouter.use(verifySupabaseJWT);
 
 /**
  * GET /api/orders
- * List current user's orders with pagination
+ * List current user's orders with pagination.
+ * Query: source = 'all' | 'copy' | 'dca'
  */
 ordersRouter.get('/',
   validate([pageQuery, limitQuery]),
@@ -38,13 +39,18 @@ ordersRouter.get('/',
       const page = parseInt(req.query.page as string) || 1;
       const limit = Math.min(parseInt(req.query.limit as string) || 50, 100);
       const offset = (page - 1) * limit;
+      const source = (req.query.source as string) || 'all';
 
-      const { data: orders, error, count } = await client
+      let query = client
         .from('orders')
-        .select('*', { count: 'exact' })
+        .select('*, dca_bots(name)', { count: 'exact' })
         .eq('user_id', req.user!.id)
         .order('created_at', { ascending: false })
         .range(offset, offset + limit - 1);
+      if (source === 'copy') query = query.eq('source', 'copy');
+      else if (source === 'dca') query = query.eq('source', 'dca');
+
+      const { data: orders, error, count } = await query;
 
       if (error) {
         console.error('Error fetching orders:', error);
@@ -61,6 +67,9 @@ ordersRouter.get('/',
         price: order.price ? parseFloat(order.price.toString()) : null,
         status: order.status,
         exchangeOrderId: order.exchange_order_id,
+        source: order.source ?? 'copy',
+        dcaBotId: order.dca_bot_id ?? null,
+        dcaBotName: order.dca_bots?.name ?? null,
         createdAt: order.created_at,
         updatedAt: order.updated_at,
       })) || [];

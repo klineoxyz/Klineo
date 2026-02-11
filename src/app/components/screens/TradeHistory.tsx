@@ -5,14 +5,17 @@ import { Badge } from "@/app/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/app/components/ui/table";
 import { Input } from "@/app/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/app/components/ui/select";
-import { Download, Search, Loader2 } from "lucide-react";
+import { Download, Search, Loader2, LayoutGrid, Users } from "lucide-react";
 import { api } from "@/lib/api";
 import { toast } from "@/app/lib/toast";
 import { useDemo } from "@/app/contexts/DemoContext";
 import { LoadingWrapper } from "@/app/components/ui/loading-wrapper";
 import { EmptyState } from "@/app/components/ui/empty-state";
 import { ErrorState } from "@/app/components/ui/error-state";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/app/components/ui/tabs";
 import { formatDistanceToNow, format } from "date-fns";
+
+type SourceFilter = "all" | "copy" | "dca";
 
 interface Trade {
   id: string;
@@ -23,6 +26,9 @@ interface Trade {
   amount: number;
   price: number;
   fee: number;
+  source?: "copy" | "dca";
+  dcaBotId?: string | null;
+  dcaBotName?: string | null;
   executedAt: string;
   createdAt: string;
 }
@@ -44,14 +50,17 @@ export function TradeHistory() {
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   const [searchTerm, setSearchTerm] = useState("");
+  const [sourceFilter, setSourceFilter] = useState<SourceFilter>("all");
 
   const displayTrades = isDemoMode ? demoTrades : trades;
 
-  const loadTrades = async (pageNum: number = 1) => {
+  const loadTrades = async (pageNum: number = 1, source: SourceFilter = sourceFilter) => {
     setIsLoading(true);
     setError(null);
     try {
-      const data = await api.get<TradesResponse>(`/api/trades?page=${pageNum}&limit=50`);
+      const params = new URLSearchParams({ page: String(pageNum), limit: "50" });
+      if (source !== "all") params.set("source", source);
+      const data = await api.get<TradesResponse>(`/api/trades?${params.toString()}`);
       setTrades(data.trades || []);
       setPage(data.page);
       setTotal(data.total);
@@ -68,9 +77,9 @@ export function TradeHistory() {
   };
 
   useEffect(() => {
-    if (!isDemoMode) loadTrades(1);
+    if (!isDemoMode) loadTrades(1, sourceFilter);
     else setIsLoading(false);
-  }, [isDemoMode]);
+  }, [isDemoMode, sourceFilter]);
 
   // Filter trades by search term
   const filteredTrades = displayTrades.filter((trade) => {
@@ -166,24 +175,38 @@ export function TradeHistory() {
         </Card>
       </div>
 
-      {/* Filters & Export */}
+      {/* Source filter + Search & Export */}
       <Card className="p-4">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <div className="w-full sm:max-w-sm">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-              <Input 
-                placeholder="Search by symbol, trade ID..." 
-                className="pl-9 w-full"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
+        <div className="flex flex-col gap-3">
+          {!isDemoMode && (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-sm text-muted-foreground">Source:</span>
+              <Tabs value={sourceFilter} onValueChange={(v) => setSourceFilter(v as SourceFilter)} className="w-auto">
+                <TabsList className="h-9">
+                  <TabsTrigger value="all">All</TabsTrigger>
+                  <TabsTrigger value="copy" className="gap-1"><Users className="size-3.5" /> Copy Trading</TabsTrigger>
+                  <TabsTrigger value="dca" className="gap-1"><LayoutGrid className="size-3.5" /> DCA Bots</TabsTrigger>
+                </TabsList>
+              </Tabs>
             </div>
+          )}
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className="w-full sm:max-w-sm">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+                <Input 
+                  placeholder="Search by symbol, trade ID..." 
+                  className="pl-9 w-full"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+              </div>
+            </div>
+            <Button variant="outline" className="gap-2 w-full sm:w-auto shrink-0" disabled>
+              <Download className="size-4" />
+              Export CSV
+            </Button>
           </div>
-          <Button variant="outline" className="gap-2 w-full sm:w-auto shrink-0" disabled>
-            <Download className="size-4" />
-            Export CSV
-          </Button>
         </div>
       </Card>
 
@@ -207,6 +230,7 @@ export function TradeHistory() {
             <TableHeader>
               <TableRow>
                 <TableHead>Trade ID</TableHead>
+                <TableHead>Source</TableHead>
                 <TableHead>Time</TableHead>
                 <TableHead>Symbol</TableHead>
                 <TableHead>Side</TableHead>
@@ -222,6 +246,16 @@ export function TradeHistory() {
                 return (
                   <TableRow key={trade.id}>
                     <TableCell className="font-mono text-xs">{trade.id.substring(0, 8)}...</TableCell>
+                    <TableCell>
+                      {trade.source === "dca" ? (
+                        <a href="#/dca-bots" className="inline-flex items-center gap-1 text-primary hover:underline">
+                          <LayoutGrid className="size-3.5" />
+                          <Badge variant="secondary">{trade.dcaBotName ?? "DCA Bot"}</Badge>
+                        </a>
+                      ) : (
+                        <Badge variant="outline" className="gap-1"><Users className="size-3.5" /> Copy Trading</Badge>
+                      )}
+                    </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
                       {format(new Date(trade.executedAt), "MMM dd, yyyy HH:mm:ss")}
                     </TableCell>
@@ -252,7 +286,7 @@ export function TradeHistory() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => loadTrades(page - 1)}
+                  onClick={() => loadTrades(page - 1, sourceFilter)}
                   disabled={page === 1}
                 >
                   Previous
@@ -260,7 +294,7 @@ export function TradeHistory() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => loadTrades(page + 1)}
+                  onClick={() => loadTrades(page + 1, sourceFilter)}
                   disabled={page >= totalPages}
                 >
                   Next

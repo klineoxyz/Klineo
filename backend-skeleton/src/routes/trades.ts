@@ -24,7 +24,8 @@ tradesRouter.use(verifySupabaseJWT);
 
 /**
  * GET /api/trades
- * List current user's trades with pagination
+ * List current user's trades with pagination.
+ * Query: source = 'all' | 'copy' | 'dca'
  */
 tradesRouter.get('/',
   validate([pageQuery, limitQuery]),
@@ -38,13 +39,18 @@ tradesRouter.get('/',
       const page = parseInt(req.query.page as string) || 1;
       const limit = Math.min(parseInt(req.query.limit as string) || 50, 100);
       const offset = (page - 1) * limit;
+      const source = (req.query.source as string) || 'all';
 
-      const { data: trades, error, count } = await client
+      let query = client
         .from('trades')
-        .select('*', { count: 'exact' })
+        .select('*, dca_bots(name)', { count: 'exact' })
         .eq('user_id', req.user!.id)
         .order('executed_at', { ascending: false })
         .range(offset, offset + limit - 1);
+      if (source === 'copy') query = query.eq('source', 'copy');
+      else if (source === 'dca') query = query.eq('source', 'dca');
+
+      const { data: trades, error, count } = await query;
 
       if (error) {
         console.error('Error fetching trades:', error);
@@ -60,6 +66,9 @@ tradesRouter.get('/',
         amount: parseFloat(trade.amount?.toString() || '0'),
         price: parseFloat(trade.price?.toString() || '0'),
         fee: parseFloat(trade.fee?.toString() || '0'),
+        source: trade.source ?? 'copy',
+        dcaBotId: trade.dca_bot_id ?? null,
+        dcaBotName: trade.dca_bots?.name ?? null,
         executedAt: trade.executed_at,
         createdAt: trade.created_at,
       })) || [];

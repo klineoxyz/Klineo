@@ -274,7 +274,7 @@ export async function getAccountInfo(credentials: BinanceCredentials): Promise<B
 }
 
 /**
- * Get all open orders for a symbol (or all symbols)
+ * Get all open orders for a symbol (or all symbols). Spot only.
  * https://binance-docs.github.io/apidocs/spot/en/#current-open-orders-user_data
  */
 export async function getOpenOrders(
@@ -283,10 +283,13 @@ export async function getOpenOrders(
 ): Promise<BinanceOrder[]> {
   const params: Record<string, string | undefined> = {};
   if (symbol) {
-    params.symbol = symbol.toUpperCase();
+    params.symbol = symbol.toUpperCase().replace(/\//g, '');
   }
   return signedRequest<BinanceOrder[]>('GET', '/api/v3/openOrders', credentials, params);
 }
+
+/** Alias for DCA/spot usage. */
+export const getSpotOpenOrders = getOpenOrders;
 
 /**
  * Get trade history for a symbol
@@ -455,6 +458,71 @@ export async function placeSpotOrder(
     }
   }
   return JSON.parse(rawText) as BinanceOrderResponse;
+}
+
+/**
+ * Get a single spot order by orderId or origClientOrderId.
+ * https://binance-docs.github.io/apidocs/spot/en/#query-order-user_data
+ */
+export async function getSpotOrder(
+  credentials: BinanceCredentials,
+  params: { symbol: string; orderId?: number; origClientOrderId?: string }
+): Promise<BinanceOrder> {
+  const sym = (params.symbol || '').toUpperCase().replace(/\//g, '');
+  if (!sym) throw new Error('Symbol required for getSpotOrder');
+  const query: Record<string, string | number> = { symbol: sym };
+  if (params.orderId != null) query.orderId = params.orderId;
+  else if (params.origClientOrderId) query.origClientOrderId = params.origClientOrderId;
+  else throw new Error('orderId or origClientOrderId required');
+  return signedRequest<BinanceOrder>('GET', '/api/v3/order', credentials, query);
+}
+
+/**
+ * Cancel spot order by orderId or origClientOrderId.
+ * https://binance-docs.github.io/apidocs/spot/en/#cancel-order-trade
+ */
+export async function cancelSpotOrder(
+  credentials: BinanceCredentials,
+  params: { symbol: string; orderId?: number; origClientOrderId?: string }
+): Promise<BinanceOrder> {
+  const sym = (params.symbol || '').toUpperCase().replace(/\//g, '');
+  if (!sym) throw new Error('Symbol required for cancelSpotOrder');
+  const body: Record<string, string | number> = { symbol: sym };
+  if (params.orderId != null) body.orderId = params.orderId;
+  else if (params.origClientOrderId) body.origClientOrderId = params.origClientOrderId;
+  else throw new Error('orderId or origClientOrderId required');
+  const baseUrl = getBaseUrl(credentials.environment);
+  const timestamp = Date.now();
+  const recvWindow = 10000;
+  const queryParams = new URLSearchParams();
+  queryParams.append('timestamp', timestamp.toString());
+  queryParams.append('recvWindow', recvWindow.toString());
+  for (const [k, v] of Object.entries(body)) {
+    queryParams.append(k, String(v));
+  }
+  const queryString = queryParams.toString();
+  const signature = sign(queryString, credentials.apiSecret);
+  queryParams.append('signature', signature);
+  const url = `${baseUrl}/api/v3/order?${queryParams.toString()}`;
+  const response = await binanceFetch(url, {
+    method: 'DELETE',
+    headers: {
+      'X-MBX-APIKEY': credentials.apiKey,
+      'Content-Type': 'application/json',
+    },
+    signal: AbortSignal.timeout(10000),
+  });
+  const rawText = await response.text();
+  if (!response.ok) {
+    try {
+      const err = JSON.parse(rawText) as { code?: number; msg?: string };
+      throw new Error(getBinanceUserMessage(err.code ?? response.status, err.msg ?? rawText, classifyBinanceError(err.code ?? 0, err.msg ?? '', response.status)));
+    } catch (e) {
+      if (e instanceof Error && e.message.startsWith('Binance')) throw e;
+      throw new Error(`Binance cancel order: ${response.status} ${rawText.slice(0, 200)}`);
+    }
+  }
+  return JSON.parse(rawText) as BinanceOrder;
 }
 
 /**

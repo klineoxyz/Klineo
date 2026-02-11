@@ -165,8 +165,12 @@ export async function getWalletBalance(credentials: BybitCredentials): Promise<{
 }
 
 /** Public request (no auth). Used for ticker. */
-async function publicGet<T>(endpoint: string, params: Record<string, string> = {}): Promise<T> {
-  const baseUrl = getBaseUrl('production');
+async function publicGetBybit<T>(
+  endpoint: string,
+  params: Record<string, string> = {},
+  environment: BybitEnvironment = 'production'
+): Promise<T> {
+  const baseUrl = getBaseUrl(environment);
   const qs = new URLSearchParams(params).toString();
   const url = qs ? `${baseUrl}${endpoint}?${qs}` : `${baseUrl}${endpoint}`;
   const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
@@ -181,17 +185,67 @@ async function publicGet<T>(endpoint: string, params: Record<string, string> = {
  * Get last price for spot symbol. Public. Bybit V5: category=spot.
  * https://bybit-exchange.github.io/docs/v5/market/tickers
  */
-export async function getTickerPriceSpot(symbol: string): Promise<{ lastPrice: string }> {
+export async function getTickerPriceSpot(symbol: string, environment: BybitEnvironment = 'production'): Promise<{ lastPrice: string }> {
   const sym = (symbol || '').toUpperCase().replace(/\//g, '');
   if (!sym) throw new Error('Symbol required for getTickerPriceSpot');
-  const result = await publicGet<{ list?: Array<{ lastPrice?: string }> }>('/v5/market/tickers', {
+  const result = await publicGetBybit<{ list?: Array<{ lastPrice?: string }> }>('/v5/market/tickers', {
     category: 'spot',
     symbol: sym,
-  });
+  }, environment);
   const list = result?.list ?? [];
   const item = list[0];
   if (!item?.lastPrice) throw new Error(`No ticker for ${sym}`);
   return { lastPrice: item.lastPrice };
+}
+
+/** Alias: return { price } for consistency with Binance getTickerPrice. */
+export async function getTickerPrice(symbol: string, environment: BybitEnvironment = 'production'): Promise<{ price: string }> {
+  const r = await getTickerPriceSpot(symbol, environment);
+  return { price: r.lastPrice };
+}
+
+/** Bybit spot symbol filters (from instruments info). */
+export interface BybitSpotSymbolFilters {
+  minQty: number;
+  maxQty: number;
+  stepSize: number;
+  minNotional: number;
+}
+
+const bybitInstrumentCache = new Map<string, { at: number; data: Map<string, BybitSpotSymbolFilters> }>();
+const BYBIT_CACHE_TTL_MS = 60_000;
+
+/**
+ * Get spot symbol filters (min qty, step, min notional). Caches in-memory.
+ * Bybit V5: GET /v5/market/instruments-info?category=spot
+ */
+export async function getSpotSymbolFilters(symbol: string, environment: BybitEnvironment = 'production'): Promise<BybitSpotSymbolFilters> {
+  const sym = (symbol || '').toUpperCase().replace(/\//g, '');
+  if (!sym) throw new Error('Symbol required for getSpotSymbolFilters');
+  const cached = bybitInstrumentCache.get(sym);
+  if (cached && Date.now() - cached.at < BYBIT_CACHE_TTL_MS) {
+    const f = cached.data.get(sym);
+    if (f) return f;
+  }
+  const result = await publicGetBybit<{
+    list?: Array<{
+      symbol: string;
+      lotSizeFilter?: { minOrderQty?: string; maxOrderQty?: string; qtyStep?: string; minNotionalValue?: string };
+    }>;
+  }>('/v5/market/instruments-info', { category: 'spot', symbol: sym }, environment);
+  const map = new Map<string, BybitSpotSymbolFilters>();
+  for (const i of result?.list ?? []) {
+    const l = i.lotSizeFilter;
+    const stepSize = l?.qtyStep ? parseFloat(l.qtyStep) : 1e-8;
+    const minQty = l?.minOrderQty ? parseFloat(l.minOrderQty) : 0;
+    const maxQty = l?.maxOrderQty ? parseFloat(l.maxOrderQty) : 1e12;
+    const minNotional = l?.minNotionalValue ? parseFloat(l.minNotionalValue) : 1;
+    map.set(i.symbol, { minQty, maxQty, stepSize, minNotional });
+  }
+  bybitInstrumentCache.set(sym, { at: Date.now(), data: map });
+  const out = map.get(sym);
+  if (!out) throw new Error(`Symbol ${sym} not found in Bybit instruments`);
+  return out;
 }
 
 export interface BybitPlaceOrderParams {
@@ -230,6 +284,74 @@ export async function placeSpotOrder(
   if (params.orderLinkId != null) body.orderLinkId = params.orderLinkId;
 
   return signedRequest<BybitOrderResponse>('POST', '/v5/order/create', credentials, {}, body);
+}
+
+/** Bybit spot order (single order response). */
+export interface BybitSpotOrderRow {
+  orderId?: string;
+  orderLinkId?: string;
+  symbol?: string;
+  side?: string;
+  orderType?: string;
+  price?: string;
+  qty?: string;
+  leavesQty?: string;
+  cumExecQty?: string;
+  cumExecValue?: string;
+  orderStatus?: string;
+  createdTime?: string;
+  updatedTime?: string;
+}
+
+/**
+ * Get single spot order by orderId or orderLinkId.
+ * GET /v5/order/realtime
+ */
+export async function getSpotOrder(
+  credentials: BybitCredentials,
+  params: { symbol: string; orderId?: string; orderLinkId?: string }
+): Promise<BybitSpotOrderRow | null> {
+  const sym = (params.symbol || '').toUpperCase().replace(/\//g, '');
+  if (!sym) throw new Error('Symbol required for getSpotOrder');
+  const q: Record<string, string> = { category: 'spot', symbol: sym };
+  if (params.orderId) q.orderId = params.orderId;
+  else if (params.orderLinkId) q.orderLinkId = params.orderLinkId;
+  else throw new Error('orderId or orderLinkId required');
+  const result = await signedRequest<{ list?: BybitSpotOrderRow[] }>('GET', '/v5/order/realtime', credentials, q);
+  const list = result?.list ?? [];
+  return list[0] ?? null;
+}
+
+/**
+ * Get open spot orders. Symbol optional (all symbols if omitted).
+ * GET /v5/order/open-orders
+ */
+export async function getSpotOpenOrders(
+  credentials: BybitCredentials,
+  symbol?: string
+): Promise<BybitSpotOrderRow[]> {
+  const q: Record<string, string> = { category: 'spot' };
+  if (symbol) q.symbol = (symbol || '').toUpperCase().replace(/\//g, '');
+  const result = await signedRequest<{ list?: BybitSpotOrderRow[] }>('GET', '/v5/order/open-orders', credentials, q);
+  return result?.list ?? [];
+}
+
+/**
+ * Cancel spot order by orderId or orderLinkId.
+ * POST /v5/order/cancel
+ */
+export async function cancelSpotOrder(
+  credentials: BybitCredentials,
+  params: { symbol: string; orderId?: string; orderLinkId?: string }
+): Promise<BybitSpotOrderRow> {
+  const sym = (params.symbol || '').toUpperCase().replace(/\//g, '');
+  if (!sym) throw new Error('Symbol required for cancelSpotOrder');
+  const body: Record<string, string> = { category: 'spot', symbol: sym };
+  if (params.orderId) body.orderId = params.orderId;
+  else if (params.orderLinkId) body.orderLinkId = params.orderLinkId;
+  else throw new Error('orderId or orderLinkId required');
+  const result = await signedRequest<BybitSpotOrderRow>('POST', '/v5/order/cancel', credentials, {}, body);
+  return result;
 }
 
 /**

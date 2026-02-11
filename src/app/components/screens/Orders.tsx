@@ -4,7 +4,7 @@ import { Badge } from "@/app/components/ui/badge";
 import { Button } from "@/app/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/app/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/app/components/ui/tabs";
-import { X, Loader2 } from "lucide-react";
+import { X, Loader2, LayoutGrid, Users } from "lucide-react";
 import { api } from "@/lib/api";
 import { toast } from "@/app/lib/toast";
 import { useDemo } from "@/app/contexts/DemoContext";
@@ -12,6 +12,8 @@ import { LoadingWrapper } from "@/app/components/ui/loading-wrapper";
 import { EmptyState } from "@/app/components/ui/empty-state";
 import { ErrorState } from "@/app/components/ui/error-state";
 import { formatDistanceToNow } from "date-fns";
+
+type SourceFilter = "all" | "copy" | "dca";
 
 interface Order {
   id: string;
@@ -23,6 +25,9 @@ interface Order {
   price?: number | null;
   status: "pending" | "filled" | "cancelled" | "failed";
   exchangeOrderId?: string;
+  source?: "copy" | "dca";
+  dcaBotId?: string | null;
+  dcaBotName?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -43,14 +48,17 @@ export function Orders() {
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
+  const [sourceFilter, setSourceFilter] = useState<SourceFilter>("all");
 
   const displayOrders = isDemoMode ? demoOrders : orders;
 
-  const loadOrders = async (pageNum: number = 1) => {
+  const loadOrders = async (pageNum: number = 1, source: SourceFilter = sourceFilter) => {
     setIsLoading(true);
     setError(null);
     try {
-      const data = await api.get<OrdersResponse>(`/api/orders?page=${pageNum}&limit=50`);
+      const params = new URLSearchParams({ page: String(pageNum), limit: "50" });
+      if (source !== "all") params.set("source", source);
+      const data = await api.get<OrdersResponse>(`/api/orders?${params.toString()}`);
       setOrders(data.orders || []);
       setPage(data.page);
       setTotal(data.total);
@@ -67,9 +75,9 @@ export function Orders() {
   };
 
   useEffect(() => {
-    if (!isDemoMode) loadOrders(1);
+    if (!isDemoMode) loadOrders(1, sourceFilter);
     else setIsLoading(false);
-  }, [isDemoMode]);
+  }, [isDemoMode, sourceFilter]);
 
   // Categorize orders
   const openOrders = displayOrders.filter((o) => o.status === "pending");
@@ -148,6 +156,20 @@ export function Orders() {
         </Card>
       </div>
 
+      {/* Source filter: All | Copy Trading | DCA Bots */}
+      {!isDemoMode && (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-sm text-muted-foreground">Source:</span>
+          <Tabs value={sourceFilter} onValueChange={(v) => setSourceFilter(v as SourceFilter)} className="w-auto">
+            <TabsList className="h-9">
+              <TabsTrigger value="all">All</TabsTrigger>
+              <TabsTrigger value="copy" className="gap-1"><Users className="size-3.5" /> Copy Trading</TabsTrigger>
+              <TabsTrigger value="dca" className="gap-1"><LayoutGrid className="size-3.5" /> DCA Bots</TabsTrigger>
+            </TabsList>
+          </Tabs>
+        </div>
+      )}
+
       {/* Orders Tabs */}
       {displayOrders.length === 0 ? (
         <Card className="p-6 sm:p-12">
@@ -176,6 +198,7 @@ export function Orders() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Order ID</TableHead>
+                      <TableHead>Source</TableHead>
                       <TableHead>Symbol</TableHead>
                       <TableHead>Side</TableHead>
                       <TableHead>Type</TableHead>
@@ -189,6 +212,16 @@ export function Orders() {
                     {openOrders.map((order) => (
                       <TableRow key={order.id}>
                         <TableCell className="font-mono text-xs">{order.id.substring(0, 8)}...</TableCell>
+                        <TableCell>
+                          {order.source === "dca" ? (
+                            <a href="#/dca-bots" className="inline-flex items-center gap-1 text-primary hover:underline">
+                              <LayoutGrid className="size-3.5" />
+                              <Badge variant="secondary">{order.dcaBotName ?? "DCA Bot"}</Badge>
+                            </a>
+                          ) : (
+                            <Badge variant="outline" className="gap-1"><Users className="size-3.5" /> Copy Trading</Badge>
+                          )}
+                        </TableCell>
                         <TableCell className="font-mono font-semibold">{order.symbol}</TableCell>
                         <TableCell>
                           <Badge 
@@ -224,6 +257,7 @@ export function Orders() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Order ID</TableHead>
+                      <TableHead>Source</TableHead>
                       <TableHead>Symbol</TableHead>
                       <TableHead>Side</TableHead>
                       <TableHead>Type</TableHead>
@@ -236,6 +270,15 @@ export function Orders() {
                     {filledOrders.map((order) => (
                       <TableRow key={order.id}>
                         <TableCell className="font-mono text-xs">{order.id.substring(0, 8)}...</TableCell>
+                        <TableCell>
+                          {order.source === "dca" ? (
+                            <a href="#/dca-bots" className="inline-flex items-center gap-1 text-primary hover:underline">
+                              <LayoutGrid className="size-3.5" /><Badge variant="secondary">{order.dcaBotName ?? "DCA Bot"}</Badge>
+                            </a>
+                          ) : (
+                            <Badge variant="outline" className="gap-1"><Users className="size-3.5" /> Copy Trading</Badge>
+                          )}
+                        </TableCell>
                         <TableCell className="font-mono font-semibold">{order.symbol}</TableCell>
                         <TableCell>
                           <Badge 
@@ -268,6 +311,7 @@ export function Orders() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Order ID</TableHead>
+                      <TableHead>Source</TableHead>
                       <TableHead>Symbol</TableHead>
                       <TableHead>Side</TableHead>
                       <TableHead>Type</TableHead>
@@ -280,6 +324,15 @@ export function Orders() {
                     {cancelledOrders.map((order) => (
                       <TableRow key={order.id}>
                         <TableCell className="font-mono text-xs">{order.id.substring(0, 8)}...</TableCell>
+                        <TableCell>
+                          {order.source === "dca" ? (
+                            <a href="#/dca-bots" className="inline-flex items-center gap-1 text-primary hover:underline">
+                              <LayoutGrid className="size-3.5" /><Badge variant="secondary">{order.dcaBotName ?? "DCA Bot"}</Badge>
+                            </a>
+                          ) : (
+                            <Badge variant="outline" className="gap-1"><Users className="size-3.5" /> Copy Trading</Badge>
+                          )}
+                        </TableCell>
                         <TableCell className="font-mono font-semibold">{order.symbol}</TableCell>
                         <TableCell>
                           <Badge 
@@ -313,7 +366,7 @@ export function Orders() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => loadOrders(page - 1)}
+                  onClick={() => loadOrders(page - 1, sourceFilter)}
                   disabled={page === 1}
                 >
                   Previous
@@ -321,7 +374,7 @@ export function Orders() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => loadOrders(page + 1)}
+                  onClick={() => loadOrders(page + 1, sourceFilter)}
                   disabled={page >= totalPages}
                 >
                   Next

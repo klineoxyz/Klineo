@@ -24,7 +24,7 @@ import {
   Search,
 } from "lucide-react";
 import { toast } from "@/app/lib/toast";
-import { dcaBots, type DcaBot } from "@/lib/api";
+import { api, dcaBots, type DcaBot, type EntitlementResponse } from "@/lib/api";
 import { getPresetsByRisk, filterPresetsBySearch, type DcaPreset, type DcaPresetRisk } from "@/app/data/dcaPresets";
 import { CreateBotModal } from "@/app/components/screens/dca/CreateBotModal";
 
@@ -40,6 +40,7 @@ export function DcaBotsPage({ onNavigate }: DcaBotsPageProps) {
   const [presetTab, setPresetTab] = useState<DcaPresetRisk | "all">("all");
   const [presetSearch, setPresetSearch] = useState("");
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [maxDcaBots, setMaxDcaBots] = useState<number>(1);
 
   const loadBots = async () => {
     setLoading(true);
@@ -57,6 +58,10 @@ export function DcaBotsPage({ onNavigate }: DcaBotsPageProps) {
 
   useEffect(() => {
     loadBots();
+  }, []);
+
+  useEffect(() => {
+    api.get<EntitlementResponse>("/api/me/entitlement").then((r) => setMaxDcaBots(r.maxDcaBots ?? 1)).catch(() => {});
   }, []);
 
   const activeBots = bots.filter((b) => b.status === "running");
@@ -92,6 +97,8 @@ export function DcaBotsPage({ onNavigate }: DcaBotsPageProps) {
     loadBots();
   };
 
+  const atBotLimit = activeBots.length >= maxDcaBots;
+
   const handleStatusChange = async (id: string, status: "running" | "paused" | "stopped") => {
     setUpdatingId(id);
     try {
@@ -99,7 +106,13 @@ export function DcaBotsPage({ onNavigate }: DcaBotsPageProps) {
       toast.success(status === "running" ? "Bot resumed" : status === "paused" ? "Bot paused" : "Bot stopped");
       loadBots();
     } catch (err: unknown) {
-      toast.error("Update failed", { description: err instanceof Error ? err.message : "Unknown error" });
+      const res = err as { response?: { data?: { message?: string; error?: string } } };
+      const msg = res?.response?.data?.message ?? (err instanceof Error ? err.message : "Unknown error");
+      if (String(res?.response?.data?.error) === "DCA_BOT_LIMIT") {
+        toast.error("Bot limit reached", { description: msg });
+      } else {
+        toast.error("Update failed", { description: msg });
+      }
     } finally {
       setUpdatingId(null);
     }
@@ -236,8 +249,11 @@ export function DcaBotsPage({ onNavigate }: DcaBotsPageProps) {
 
       {/* My Bots table */}
       <Card>
-        <div className="p-4 sm:p-6 border-b border-border">
+        <div className="p-4 sm:p-6 border-b border-border flex flex-col gap-2">
           <h3 className="text-base sm:text-lg font-semibold">My Bots</h3>
+          {atBotLimit && activeBots.length > 0 && (
+            <p className="text-sm text-amber-600 dark:text-amber-500">You&apos;re at your plan limit ({maxDcaBots} running bot{maxDcaBots !== 1 ? "s" : ""}). Upgrade to run more.</p>
+          )}
         </div>
         {bots.length === 0 ? (
           <div className="p-8 sm:p-12 text-center space-y-4">
@@ -336,7 +352,8 @@ export function DcaBotsPage({ onNavigate }: DcaBotsPageProps) {
                             variant="outline"
                             size="sm"
                             onClick={() => handleStatusChange(bot.id, "running")}
-                            disabled={updatingId === bot.id}
+                            disabled={updatingId === bot.id || atBotLimit}
+                            title={atBotLimit ? `Upgrade to run more bots (limit: ${maxDcaBots})` : undefined}
                           >
                             {updatingId === bot.id ? <Loader2 className="size-3 animate-spin" /> : <Play className="size-3" />}
                             Resume

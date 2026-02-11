@@ -50,6 +50,7 @@ const defaultConfig: DcaBotConfig = {
   cooldownMinutes: 60,
   trendFilter: true,
   volatilityFilter: false,
+  flattenOnStop: false,
 };
 
 function applyPresetToConfig(preset: DcaPreset): DcaBotConfig {
@@ -428,6 +429,14 @@ export function CreateBotModal({ open, onOpenChange, onSuccess, preset }: Create
                   onCheckedChange={(v) => setConfig((c) => ({ ...c, volatilityFilter: v }))}
                 />
               </div>
+              <div className="flex items-center justify-between">
+                <Label>Flatten position on Stop</Label>
+                <Switch
+                  checked={config.flattenOnStop ?? false}
+                  onCheckedChange={(v) => setConfig((c) => ({ ...c, flattenOnStop: v }))}
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">When enabled, the bot will market-sell the full position when stopped (e.g. by max drawdown).</p>
             </>
           )}
 

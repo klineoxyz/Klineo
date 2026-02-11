@@ -196,6 +196,8 @@ export interface EntitlementResponse {
   profitUsedUsd: number;
   remainingUsd: number;
   hasReferral?: boolean;
+  /** Max running DCA bots allowed by package (Starter 1, Pro 3, Elite 10). */
+  maxDcaBots?: number;
 }
 
 // Billing / Packages (credit-based model)
@@ -442,6 +444,8 @@ export interface DcaBotConfig {
   cooldownMinutes?: number;
   trendFilter?: boolean;
   volatilityFilter?: boolean;
+  /** When true, on stop (or maxDrawdownStop) market-sell remaining position to flatten. */
+  flattenOnStop?: boolean;
 }
 
 export interface DcaBot {

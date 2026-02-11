@@ -5,6 +5,16 @@ import { body } from 'express-validator';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { getPackageProfitAllowanceUsd } from './payment-intents.js';
 
+/** Max running DCA bots per package (Starter 1, Pro 3, Elite 10). */
+export function getMaxDcaBots(activePackageId: string | null): number {
+  if (!activePackageId) return 0;
+  const id = String(activePackageId).toLowerCase().trim();
+  if (/entry_100|starter/.test(id)) return 1;
+  if (/pro_200|level_200/.test(id)) return 3;
+  if (/elite_500|level_500|unlimited/.test(id)) return 10;
+  return 1;
+}
+
 let supabase: SupabaseClient | null = null;
 
 function getSupabase(): SupabaseClient | null {
@@ -73,6 +83,7 @@ profileRouter.get('/entitlement', async (req: AuthenticatedRequest, res) => {
     const remainingUsd = Math.max(0, profitAllowanceUsd - profitUsedUsd);
 
     const hasReferral = !!(profile as { referred_by_user_id?: string } | null)?.referred_by_user_id;
+    const maxDcaBots = getMaxDcaBots(activePackageId);
 
     res.json({
       joiningFeePaid,
@@ -82,6 +93,7 @@ profileRouter.get('/entitlement', async (req: AuthenticatedRequest, res) => {
       profitUsedUsd,
       remainingUsd,
       hasReferral,
+      maxDcaBots,
     });
   } catch (err) {
     console.error('Entitlement get error:', err);

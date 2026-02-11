@@ -7,6 +7,8 @@ import { verifySupabaseJWT, AuthenticatedRequest } from '../middleware/auth.js';
 import { validate, uuidParam } from '../middleware/validation.js';
 import { body } from 'express-validator';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { fetchEntitlement } from '../middleware/requireEntitlement.js';
+import { getMaxDcaBots } from './profile.js';
 
 let supabase: SupabaseClient | null = null;
 
@@ -108,11 +110,30 @@ dcaBotsRouter.put(
     try {
       const { id } = req.params;
       const { status } = req.body;
+      const userId = req.user!.id;
+
+      if (status === 'running') {
+        const [ent, currentBot, { count: runningCount }] = await Promise.all([
+          fetchEntitlement(client, userId),
+          client.from('dca_bots').select('status').eq('id', id).eq('user_id', userId).maybeSingle(),
+          client.from('dca_bots').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('status', 'running'),
+        ]);
+        const maxDca = getMaxDcaBots(ent?.active_package_id ?? null);
+        const botWasRunning = (currentBot?.data as { status?: string } | null)?.status === 'running';
+        const runningAfter = (runningCount ?? 0) + (botWasRunning ? 0 : 1);
+        if (maxDca > 0 && runningAfter > maxDca) {
+          return res.status(402).json({
+            error: 'DCA_BOT_LIMIT',
+            message: 'Upgrade to run more DCA bots. Your plan allows ' + maxDca + ' running bot(s).',
+          });
+        }
+      }
+
       const { data, error } = await client
         .from('dca_bots')
         .update({ status, updated_at: new Date().toISOString() })
         .eq('id', id)
-        .eq('user_id', req.user!.id)
+        .eq('user_id', userId)
         .select()
         .single();
       if (error || !data) {
