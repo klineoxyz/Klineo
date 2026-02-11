@@ -22,6 +22,7 @@ import {
   Loader2,
   LayoutGrid,
   Search,
+  Pencil,
 } from "lucide-react";
 import { toast } from "@/app/lib/toast";
 import { api, dcaBots, type DcaBot, type EntitlementResponse } from "@/lib/api";
@@ -36,6 +37,7 @@ export function DcaBotsPage({ onNavigate }: DcaBotsPageProps) {
   const [bots, setBots] = useState<DcaBot[]>([]);
   const [loading, setLoading] = useState(true);
   const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [editingBot, setEditingBot] = useState<DcaBot | null>(null);
   const [presetForCreate, setPresetForCreate] = useState<DcaPreset | null>(null);
   const [presetTab, setPresetTab] = useState<DcaPresetRisk | "all">("all");
   const [presetSearch, setPresetSearch] = useState("");
@@ -93,7 +95,19 @@ export function DcaBotsPage({ onNavigate }: DcaBotsPageProps) {
 
   const handleCreateBot = () => {
     setPresetForCreate(null);
+    setEditingBot(null);
     setCreateModalOpen(true);
+  };
+
+  const handleEditBot = (bot: DcaBot) => {
+    setEditingBot(bot);
+    setPresetForCreate(null);
+    setCreateModalOpen(true);
+  };
+
+  const handleCreateModalOpenChange = (open: boolean) => {
+    setCreateModalOpen(open);
+    if (!open) setEditingBot(null);
   };
 
   const handleCreateSuccess = () => {
@@ -380,7 +394,12 @@ export function DcaBotsPage({ onNavigate }: DcaBotsPageProps) {
                         >
                           Stop
                         </Button>
-                        <Button variant="outline" size="sm" disabled>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleEditBot(bot)}
+                        >
+                          <Pencil className="size-3 mr-1" />
                           Edit
                         </Button>
                       </div>
@@ -395,9 +414,10 @@ export function DcaBotsPage({ onNavigate }: DcaBotsPageProps) {
 
       <CreateBotModal
         open={createModalOpen}
-        onOpenChange={setCreateModalOpen}
+        onOpenChange={handleCreateModalOpenChange}
         onSuccess={handleCreateSuccess}
         preset={presetForCreate}
+        editBot={editingBot}
         atBotLimit={atBotLimit}
         limitLabel={limitLabel}
       />

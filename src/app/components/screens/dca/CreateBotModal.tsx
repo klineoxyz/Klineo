@@ -34,6 +34,8 @@ export interface CreateBotModalProps {
   onOpenChange: (open: boolean) => void;
   onSuccess?: (bot: DcaBot) => void;
   preset?: DcaPreset | null;
+  /** When set, modal is in edit mode: prefills from this bot and submit calls update. */
+  editBot?: DcaBot | null;
   /** When true, show notice that user is at plan limit and cannot start more bots until upgrade. */
   atBotLimit?: boolean;
   /** e.g. "5" or "Unlimited" for display. */
@@ -75,7 +77,7 @@ function applyPresetToConfig(preset: DcaPreset): DcaBotConfig {
   };
 }
 
-export function CreateBotModal({ open, onOpenChange, onSuccess, preset, atBotLimit, limitLabel }: CreateBotModalProps) {
+export function CreateBotModal({ open, onOpenChange, onSuccess, preset, editBot, atBotLimit, limitLabel }: CreateBotModalProps) {
   const [step, setStep] = useState(1);
   const [name, setName] = useState("");
   const [exchange, setExchange] = useState<"binance" | "bybit">("binance");
@@ -86,12 +88,19 @@ export function CreateBotModal({ open, onOpenChange, onSuccess, preset, atBotLim
   const [createLoading, setCreateLoading] = useState(false);
 
   useEffect(() => {
-    if (open && preset) {
+    if (open && editBot) {
+      setName(editBot.name ?? "");
+      setExchange((editBot.exchange as "binance" | "bybit") ?? "binance");
+      setMarket((editBot.market === "futures" ? "futures" : "spot") ?? "spot");
+      setPair(editBot.pair ?? "BTC/USDT");
+      setTimeframe(editBot.timeframe ?? "1h");
+      setConfig({ ...defaultConfig, ...editBot.config });
+    } else if (open && preset) {
       setName(preset.name);
       setPair(preset.suggestedPairs[0] ?? "BTC/USDT");
       setTimeframe(preset.timeframe);
       setConfig(applyPresetToConfig(preset));
-    } else if (open && !preset) {
+    } else if (open && !preset && !editBot) {
       setName("");
       setExchange("binance");
       setMarket("spot");
@@ -99,7 +108,7 @@ export function CreateBotModal({ open, onOpenChange, onSuccess, preset, atBotLim
       setTimeframe("1h");
       setConfig({ ...defaultConfig });
     }
-  }, [open, preset]);
+  }, [open, preset, editBot]);
 
   useEffect(() => {
     if (!open) setStep(1);
@@ -137,6 +146,27 @@ export function CreateBotModal({ open, onOpenChange, onSuccess, preset, atBotLim
     }
   };
 
+  const handleUpdate = async () => {
+    if (!editBot || !name.trim() || !pair.trim()) return;
+    setCreateLoading(true);
+    try {
+      const { bot } = await dcaBots.update(editBot.id, {
+        name: name.trim(),
+        pair: pair.trim(),
+        timeframe: timeframe || "1h",
+        config,
+      });
+      toast.success("DCA Bot updated", { description: bot.name });
+      onOpenChange(false);
+      onSuccess?.(bot);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to update bot";
+      toast.error("Update failed", { description: msg });
+    } finally {
+      setCreateLoading(false);
+    }
+  };
+
   const estimatedMaxExposure =
     config.baseOrderSizeUsdt != null && config.maxSafetyOrders != null && config.safetyOrderMultiplier != null
       ? (() => {
@@ -155,7 +185,7 @@ export function CreateBotModal({ open, onOpenChange, onSuccess, preset, atBotLim
       <DialogContent className="sm:max-w-[540px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
-            {preset ? `Use preset: ${preset.name}` : "Create DCA Bot"}
+            {editBot ? "Edit DCA Bot" : preset ? `Use preset: ${preset.name}` : "Create DCA Bot"}
           </DialogTitle>
         </DialogHeader>
 
@@ -488,9 +518,12 @@ export function CreateBotModal({ open, onOpenChange, onSuccess, preset, atBotLim
                 Next <ChevronRight className="size-4 ml-1" />
               </Button>
             ) : (
-              <Button onClick={handleCreate} disabled={createLoading}>
+              <Button
+                onClick={editBot ? handleUpdate : handleCreate}
+                disabled={createLoading}
+              >
                 {createLoading ? <Loader2 className="size-4 animate-spin mr-1" /> : null}
-                Create Bot
+                {editBot ? "Save changes" : "Create Bot"}
               </Button>
             )}
           </div>
