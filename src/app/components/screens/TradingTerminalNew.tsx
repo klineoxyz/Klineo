@@ -54,7 +54,7 @@ import {
   TradingViewMarketOverview,
   TradingViewAdvancedChart 
 } from "@/app/components/TradingViewWidgets";
-import { fetchKlines, fetchOrderBook, fetchUsdtPairs, fetchTicker24h } from "@/lib/binance";
+import { fetchKlines, fetchKlinesExtended, fetchOrderBook, fetchUsdtPairs, fetchTicker24h } from "@/lib/binance";
 import type { OrderBookLevel, UsdtPairInfo, Ticker24h } from "@/lib/binance";
 import type { OhlcvItem } from "@/app/components/charts/LightweightChartsWidget";
 import { Card } from "@/app/components/ui/card";
@@ -235,11 +235,14 @@ export function TradingTerminalNew({ onNavigate }: TradingTerminalProps) {
   }, []);
 
   // Indicator toggles
+  const [showSMA9, setShowSMA9] = useState(false);
   const [showSMA20, setShowSMA20] = useState(false);
   const [showSMA50, setShowSMA50] = useState(false);
   const [showEMA9, setShowEMA9] = useState(false);
   const [showEMA21, setShowEMA21] = useState(false);
+  const [showEMA50, setShowEMA50] = useState(false);
   const [showBB, setShowBB] = useState(false);
+  const [showATR, setShowATR] = useState(false);
   const [showRSI, setShowRSI] = useState(false);
   const [showMACD, setShowMACD] = useState(false);
   const [showVolume, setShowVolume] = useState(true);
@@ -296,7 +299,7 @@ export function TradingTerminalNew({ onNavigate }: TradingTerminalProps) {
     setChartError(null);
     setChartData([]);
     try {
-      const data = await fetchKlines(selectedPair, selectedTimeframe, 1000);
+      const data = await fetchKlinesExtended(selectedPair, selectedTimeframe, 2000);
       setChartData(data);
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Failed to load Binance data";
@@ -993,7 +996,9 @@ export function TradingTerminalNew({ onNavigate }: TradingTerminalProps) {
 
               {chartMode === "lightweight" && (
                 <div className="flex flex-wrap items-center gap-1">
+                  <button type="button" onClick={() => setShowSMA9(!showSMA9)} className={`h-6 px-2 text-[10px] sm:text-[11px] font-medium rounded transition-colors ${showSMA9 ? "bg-[#a78bfa]/20 text-[#a78bfa]" : "text-muted-foreground hover:text-foreground"}`}>MA(9)</button>
                   <button
+                    type="button"
                     onClick={() => setShowSMA20(!showSMA20)}
                     className={`h-6 px-2 text-[10px] sm:text-[11px] font-medium rounded transition-colors ${
                       showSMA20 ? "bg-[#FFB000]/20 text-[#FFB000]" : "text-muted-foreground hover:text-foreground"
@@ -1002,6 +1007,7 @@ export function TradingTerminalNew({ onNavigate }: TradingTerminalProps) {
                     MA(20)
                   </button>
                   <button
+                    type="button"
                     onClick={() => setShowSMA50(!showSMA50)}
                     className={`h-6 px-2 text-[10px] sm:text-[11px] font-medium rounded transition-colors ${
                       showSMA50 ? "bg-[#3B82F6]/20 text-[#3B82F6]" : "text-muted-foreground hover:text-foreground"
@@ -1017,15 +1023,10 @@ export function TradingTerminalNew({ onNavigate }: TradingTerminalProps) {
                   >
                     EMA(9)
                   </button>
+                  <button type="button" onClick={() => setShowEMA21(!showEMA21)} className={`h-6 px-2 text-[10px] sm:text-[11px] font-medium rounded transition-colors ${showEMA21 ? "bg-[#F59E0B]/20 text-[#F59E0B]" : "text-muted-foreground hover:text-foreground"}`}>EMA(21)</button>
+                  <button type="button" onClick={() => setShowEMA50(!showEMA50)} className={`h-6 px-2 text-[10px] sm:text-[11px] font-medium rounded transition-colors ${showEMA50 ? "bg-[#14b8a6]/20 text-[#14b8a6]" : "text-muted-foreground hover:text-foreground"}`}>EMA(50)</button>
                   <button
-                    onClick={() => setShowEMA21(!showEMA21)}
-                    className={`h-6 px-2 text-[10px] sm:text-[11px] font-medium rounded transition-colors ${
-                      showEMA21 ? "bg-[#F59E0B]/20 text-[#F59E0B]" : "text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    EMA(21)
-                  </button>
-                  <button
+                    type="button"
                     onClick={() => setShowBB(!showBB)}
                     className={`h-6 px-2 text-[10px] sm:text-[11px] font-medium rounded transition-colors ${
                       showBB ? "bg-[#8b5cf6]/20 text-[#8b5cf6]" : "text-muted-foreground hover:text-foreground"
@@ -1033,7 +1034,9 @@ export function TradingTerminalNew({ onNavigate }: TradingTerminalProps) {
                   >
                     BB
                   </button>
+                  <button type="button" onClick={() => setShowATR(!showATR)} className={`h-6 px-2 text-[10px] sm:text-[11px] font-medium rounded transition-colors ${showATR ? "bg-[#f97316]/20 text-[#f97316]" : "text-muted-foreground hover:text-foreground"}`}>ATR</button>
                   <button
+                    type="button"
                     onClick={() => setShowRSI(!showRSI)}
                     className={`h-6 px-2 text-[10px] sm:text-[11px] font-medium rounded transition-colors ${
                       showRSI ? "bg-[#ec4899]/20 text-[#ec4899]" : "text-muted-foreground hover:text-foreground"
@@ -1077,18 +1080,24 @@ export function TradingTerminalNew({ onNavigate }: TradingTerminalProps) {
                     showRSI={showRSI}
                     showMACD={showMACD}
                     showBB={showBB}
+                    showSMA9={showSMA9}
                     showSMA20={showSMA20}
                     showSMA50={showSMA50}
                     showEMA9={showEMA9}
                     showEMA21={showEMA21}
+                    showEMA50={showEMA50}
+                    showATR={showATR}
                     selectedTimeframe={selectedTimeframe}
                     onTimeframeChange={handleTimeframeChange}
                     onToggleVolume={() => setShowVolume((v) => !v)}
+                    onToggleSMA9={() => setShowSMA9((v) => !v)}
                     onToggleSMA20={() => setShowSMA20((v) => !v)}
                     onToggleSMA50={() => setShowSMA50((v) => !v)}
                     onToggleEMA9={() => setShowEMA9((v) => !v)}
                     onToggleEMA21={() => setShowEMA21((v) => !v)}
+                    onToggleEMA50={() => setShowEMA50((v) => !v)}
                     onToggleBB={() => setShowBB((v) => !v)}
+                    onToggleATR={() => setShowATR((v) => !v)}
                     onToggleRSI={() => setShowRSI((v) => !v)}
                     onToggleMACD={() => setShowMACD((v) => !v)}
                   />
@@ -1098,7 +1107,7 @@ export function TradingTerminalNew({ onNavigate }: TradingTerminalProps) {
                   <div className="flex-1 min-h-[320px] w-full rounded border border-border/30 overflow-hidden bg-[#0a0e13]">
                     <TradingViewAdvancedChart symbol={`BINANCE:${selectedPair.replace("/", "")}`} />
                   </div>
-                  <p className="text-[10px] sm:text-xs text-muted-foreground mt-1.5 px-1">TradingView Pro — full chart in iframe. Use Lightweight for overlays (MA, EMA, BB) and faster load.</p>
+                  <p className="text-[10px] sm:text-xs text-muted-foreground mt-1.5 px-1">TradingView blocks embedding — use the button above to open the full chart in a new tab.</p>
                 </div>
               )}
             </div>

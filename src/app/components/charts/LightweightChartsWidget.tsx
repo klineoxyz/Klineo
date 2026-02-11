@@ -88,11 +88,14 @@ export interface OhlcvItem {
 interface LightweightChartsWidgetProps {
   data: OhlcvItem[];
   showVolume?: boolean;
+  showSMA9?: boolean;
   showSMA20?: boolean;
   showSMA50?: boolean;
   showEMA9?: boolean;
   showEMA21?: boolean;
+  showEMA50?: boolean;
   showBB?: boolean;
+  showATR?: boolean;
   /** Fixed height in px. Ignored when autoSize is true. */
   height?: number;
   /** When true, chart fills container (use with a sized parent). Ensures time scale is not clipped. */
@@ -146,28 +149,58 @@ function bb(closes: number[], period: number, mult: number): { upper: (number | 
   return { upper, middle, lower };
 }
 
+/** ATR(period) — Wilder smoothing of True Range. */
+function atr(high: number[], low: number[], close: number[], period: number): (number | null)[] {
+  const tr: number[] = [];
+  for (let i = 0; i < high.length; i++) {
+    if (i === 0) tr.push(high[i]! - low[i]!);
+    else tr.push(Math.max(high[i]! - low[i]!, Math.abs(high[i]! - close[i - 1]!), Math.abs(low[i]! - close[i - 1]!)));
+  }
+  const out: (number | null)[] = [];
+  let sum = 0;
+  for (let i = 0; i < tr.length; i++) {
+    if (i < period - 1) {
+      sum += tr[i]!;
+      out.push(null);
+    } else if (i === period - 1) {
+      sum += tr[i]!;
+      out.push(sum / period);
+    } else {
+      sum = (sum * (period - 1) + tr[i]!) / period;
+      out.push(sum);
+    }
+  }
+  return out;
+}
+
 function toUtcTimestamp(iso: string): number {
   return Math.floor(new Date(iso).getTime() / 1000) as unknown as import("lightweight-charts").UTCTimestamp;
 }
 
 const INDICATOR_COLORS = {
+  SMA9: "#a78bfa",
   SMA20: "#FFB000",
   SMA50: "#3B82F6",
   EMA9: "#10B981",
   EMA21: "#F59E0B",
+  EMA50: "#14b8a6",
   BB_UP: "rgba(139, 92, 246, 0.8)",
   BB_MID: "#8b5cf6",
   BB_LO: "rgba(139, 92, 246, 0.6)",
+  ATR: "#f97316",
 };
 
 export function LightweightChartsWidget({
   data,
   showVolume = true,
+  showSMA9 = false,
   showSMA20 = false,
   showSMA50 = false,
   showEMA9 = false,
   showEMA21 = false,
+  showEMA50 = false,
   showBB = false,
+  showATR = false,
   height = 500,
   autoSize = false,
   className = "",
@@ -195,20 +228,25 @@ export function LightweightChartsWidget({
     const times = data.map((d) => toUtcTimestamp(d.time));
     const toLineData = (vals: (number | null)[]): { time: number; value: number }[] =>
       times.map((t, i) => ({ time: t, value: vals[i] })).filter((x): x is { time: number; value: number } => x.value != null);
+    const highs = data.map((d) => d.high);
+    const lows = data.map((d) => d.low);
+    const sma9 = showSMA9 ? toLineData(sma(closes, 9)) : [];
     const sma20 = showSMA20 ? toLineData(sma(closes, 20)) : [];
     const sma50 = showSMA50 ? toLineData(sma(closes, 50)) : [];
     const ema9 = showEMA9 ? toLineData(ema(closes, 9)) : [];
     const ema21 = showEMA21 ? toLineData(ema(closes, 21)) : [];
+    const ema50 = showEMA50 ? toLineData(ema(closes, 50)) : [];
     const bbData = showBB ? bb(closes, 20, 2) : null;
     const bbUpper = bbData ? toLineData(bbData.upper) : [];
     const bbMid = bbData ? toLineData(bbData.middle) : [];
     const bbLower = bbData ? toLineData(bbData.lower) : [];
+    const atr14 = showATR ? toLineData(atr(highs, lows, closes, 14)) : [];
     return {
       candleData: candles,
       volumeData: vols,
-      indicatorSeries: { sma20, sma50, ema9, ema21, bbUpper, bbMid, bbLower },
+      indicatorSeries: { sma9, sma20, sma50, ema9, ema21, ema50, bbUpper, bbMid, bbLower, atr14 },
     };
-  }, [data, showSMA20, showSMA50, showEMA9, showEMA21, showBB]);
+  }, [data, showSMA9, showSMA20, showSMA50, showEMA9, showEMA21, showEMA50, showBB, showATR]);
 
   useEffect(() => {
     const el = containerRef.current;
@@ -252,6 +290,11 @@ export function LightweightChartsWidget({
     }
 
     const lineMap = new Map<string, ISeriesApi<"Line">>();
+    if (indicatorSeries.sma9.length) {
+      const s = chart.addSeries(LineSeries, { color: INDICATOR_COLORS.SMA9, lineWidth: 2, title: "SMA(9)" });
+      s.setData(indicatorSeries.sma9);
+      lineMap.set("sma9", s);
+    }
     if (indicatorSeries.sma20.length) {
       const s = chart.addSeries(LineSeries, { color: INDICATOR_COLORS.SMA20, lineWidth: 2, title: "SMA(20)" });
       s.setData(indicatorSeries.sma20);
@@ -272,6 +315,11 @@ export function LightweightChartsWidget({
       s.setData(indicatorSeries.ema21);
       lineMap.set("ema21", s);
     }
+    if (indicatorSeries.ema50.length) {
+      const s = chart.addSeries(LineSeries, { color: INDICATOR_COLORS.EMA50, lineWidth: 2, title: "EMA(50)" });
+      s.setData(indicatorSeries.ema50);
+      lineMap.set("ema50", s);
+    }
     if (indicatorSeries.bbMid.length) {
       const su = chart.addSeries(LineSeries, { color: INDICATOR_COLORS.BB_UP, lineWidth: 1, title: "BB Upper" });
       su.setData(indicatorSeries.bbUpper);
@@ -282,6 +330,11 @@ export function LightweightChartsWidget({
       const sl = chart.addSeries(LineSeries, { color: INDICATOR_COLORS.BB_LO, lineWidth: 1, title: "BB Lower" });
       sl.setData(indicatorSeries.bbLower);
       lineMap.set("bbLower", sl);
+    }
+    if (indicatorSeries.atr14.length) {
+      const s = chart.addSeries(LineSeries, { color: INDICATOR_COLORS.ATR, lineWidth: 1, title: "ATR(14)" });
+      s.setData(indicatorSeries.atr14);
+      lineMap.set("atr14", s);
     }
     lineSeriesRef.current = lineMap;
 
@@ -321,7 +374,7 @@ export function LightweightChartsWidget({
       volumeRef.current = null;
       lineSeriesRef.current.clear();
     };
-  }, [height, showVolume, autoSize, showSMA20, showSMA50, showEMA9, showEMA21, showBB, candleData.length]);
+  }, [height, showVolume, autoSize, showSMA9, showSMA20, showSMA50, showEMA9, showEMA21, showEMA50, showBB, showATR, candleData.length]);
 
   useEffect(() => {
     const candlestick = candlestickRef.current;
@@ -330,10 +383,13 @@ export function LightweightChartsWidget({
     if (!candlestick || !candleData.length) return;
     candlestick.setData(candleData);
     if (showVolume && volume && volumeData.length) volume.setData(volumeData);
+    if (indicatorSeries.sma9.length && lineMap.has("sma9")) lineMap.get("sma9")!.setData(indicatorSeries.sma9);
     if (indicatorSeries.sma20.length && lineMap.has("sma20")) lineMap.get("sma20")!.setData(indicatorSeries.sma20);
     if (indicatorSeries.sma50.length && lineMap.has("sma50")) lineMap.get("sma50")!.setData(indicatorSeries.sma50);
     if (indicatorSeries.ema9.length && lineMap.has("ema9")) lineMap.get("ema9")!.setData(indicatorSeries.ema9);
     if (indicatorSeries.ema21.length && lineMap.has("ema21")) lineMap.get("ema21")!.setData(indicatorSeries.ema21);
+    if (indicatorSeries.ema50.length && lineMap.has("ema50")) lineMap.get("ema50")!.setData(indicatorSeries.ema50);
+    if (indicatorSeries.atr14.length && lineMap.has("atr14")) lineMap.get("atr14")!.setData(indicatorSeries.atr14);
     if (indicatorSeries.bbMid.length && lineMap.has("bbUpper")) {
       lineMap.get("bbUpper")!.setData(indicatorSeries.bbUpper);
       lineMap.get("bbMid")!.setData(indicatorSeries.bbMid);

@@ -206,10 +206,25 @@ export function TradingViewChartIframe({ symbol = 'BINANCE:BTCUSDT' }: { symbol?
 }
 
 /**
- * Advanced Chart Widget (Full TradingView Chart) — loads tv.js in-page.
- * Can trigger CSP "script-src blocked" / eval in strict environments.
- * Prefer TradingViewChartIframe when CSP or copy-trading flows are used.
+ * TradingView Pro — TradingView.com blocks embedding (X-Frame-Options: deny).
+ * Show a card with "Open in TradingView" so users can use the full chart in a new tab.
  */
 export function TradingViewAdvancedChart({ symbol = 'BINANCE:BTCUSDT' }: { symbol?: string }) {
-  return <TradingViewChartIframe symbol={symbol} />;
+  const url = `https://www.tradingview.com/chart/?symbol=${encodeURIComponent(symbol)}`;
+  return (
+    <div className="w-full h-full min-h-[320px] flex flex-col items-center justify-center gap-4 p-6 bg-[#0a0e13] border border-border/30 rounded-lg">
+      <p className="text-sm text-muted-foreground text-center max-w-md">
+        TradingView does not allow embedding their chart in other sites. Open the full chart with drawings and all tools in a new tab.
+      </p>
+      <a
+        href={url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="inline-flex items-center justify-center h-10 px-6 rounded-md bg-[#FFB000] text-[#0a0e13] font-semibold text-sm hover:bg-[#FFB000]/90 transition-colors"
+      >
+        Open in TradingView (new tab)
+      </a>
+      <span className="text-xs text-muted-foreground">{symbol}</span>
+    </div>
+  );
 }

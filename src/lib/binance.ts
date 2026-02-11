@@ -65,6 +65,38 @@ export async function fetchKlines(
   }));
 }
 
+/**
+ * Fetch more history: two batches of up to 1000 candles (oldest first batch, then merge).
+ * Returns newest-first so same shape as fetchKlines for chart display.
+ */
+export async function fetchKlinesExtended(
+  pair: string,
+  timeframe: string,
+  totalLimit = 2000
+): Promise<OhlcvItem[]> {
+  const firstBatch = Math.min(1000, totalLimit);
+  const newest = await fetchKlines(pair, timeframe, firstBatch);
+  if (newest.length < firstBatch || totalLimit <= 1000) return newest;
+  const oldestTime = new Date(newest[newest.length - 1].time).getTime();
+  const symbol = pairToSymbol(pair);
+  const interval = timeframeToInterval(timeframe);
+  const url = `${BINANCE_API}/klines?symbol=${encodeURIComponent(symbol)}&interval=${interval}&limit=${Math.min(1000, totalLimit - firstBatch)}&endTime=${oldestTime - 1}`;
+  const res = await fetch(url);
+  if (!res.ok) return newest;
+  const raw = (await res.json()) as BinanceKline[];
+  const older = raw.map(([openTime, o, h, l, c, v]) => ({
+    time: new Date(openTime).toISOString(),
+    open: parseFloat(o),
+    high: parseFloat(h),
+    low: parseFloat(l),
+    close: parseFloat(c),
+    volume: parseFloat(v),
+  }));
+  const combined = [...older, ...newest];
+  combined.sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
+  return combined;
+}
+
 /** Order book level: price, amount, total (price × amount) */
 export interface OrderBookLevel {
   price: string;

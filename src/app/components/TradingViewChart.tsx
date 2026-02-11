@@ -8,6 +8,7 @@ import {
   DialogTitle,
 } from '@/app/components/ui/dialog';
 import { LightweightChartsWidget } from '@/app/components/charts/LightweightChartsWidget';
+import { RsiChart, MacdChart } from '@/app/components/charts/RsiMacdCharts';
 
 type Timeframe = '1m' | '5m' | '15m' | '30m' | '1h' | '2h' | '4h' | '12h' | '1D' | '5D' | '1W' | '1M';
 
@@ -24,20 +25,26 @@ interface TradingViewChartProps {
   showRSI?: boolean;
   showMACD?: boolean;
   showBB?: boolean;
+  showSMA9?: boolean;
   showSMA20?: boolean;
   showSMA50?: boolean;
   showEMA9?: boolean;
   showEMA21?: boolean;
+  showEMA50?: boolean;
+  showATR?: boolean;
   /** When set, timeframe selector is controlled by parent (sync selection + full history). */
   selectedTimeframe?: Timeframe;
   onTimeframeChange?: (timeframe: Timeframe) => void;
   /** When provided, show TA tools sidebar on the left for toggling indicators. */
   onToggleVolume?: () => void;
+  onToggleSMA9?: () => void;
   onToggleSMA20?: () => void;
   onToggleSMA50?: () => void;
   onToggleEMA9?: () => void;
   onToggleEMA21?: () => void;
+  onToggleEMA50?: () => void;
   onToggleBB?: () => void;
+  onToggleATR?: () => void;
   onToggleRSI?: () => void;
   onToggleMACD?: () => void;
 }
@@ -48,18 +55,24 @@ export function TradingViewChart({
   showRSI = false,
   showMACD = false,
   showBB = false,
+  showSMA9 = false,
   showSMA20 = false,
   showSMA50 = false,
   showEMA9 = false,
   showEMA21 = false,
+  showEMA50 = false,
+  showATR = false,
   selectedTimeframe,
   onTimeframeChange,
   onToggleVolume,
+  onToggleSMA9,
   onToggleSMA20,
   onToggleSMA50,
   onToggleEMA9,
   onToggleEMA21,
+  onToggleEMA50,
   onToggleBB,
+  onToggleATR,
   onToggleRSI,
   onToggleMACD,
 }: TradingViewChartProps) {
@@ -80,7 +93,7 @@ export function TradingViewChart({
     onTimeframeChange?.(tf);
   };
 
-  const hasTATools = [onToggleVolume, onToggleSMA20, onToggleSMA50, onToggleEMA9, onToggleEMA21, onToggleBB, onToggleRSI, onToggleMACD].some(Boolean);
+  const hasTATools = [onToggleVolume, onToggleSMA9, onToggleSMA20, onToggleSMA50, onToggleEMA9, onToggleEMA21, onToggleEMA50, onToggleBB, onToggleATR, onToggleRSI, onToggleMACD].some(Boolean);
 
   return (
     <div className="relative flex flex-col h-full min-h-[320px] flex-1 min-h-0">
@@ -97,6 +110,9 @@ export function TradingViewChart({
               <BarChart3 className="size-4" />
             </button>
           )}
+          {onToggleSMA9 && (
+            <button type="button" onClick={onToggleSMA9} title="MA(9)" className={`w-7 h-7 flex items-center justify-center rounded text-[10px] font-medium transition-colors ${showSMA9 ? 'bg-[#a78bfa]/20 text-[#a78bfa]' : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50'}`}>MA9</button>
+          )}
           {onToggleSMA20 && (
             <button type="button" onClick={onToggleSMA20} title="MA(20)" className={`w-7 h-7 flex items-center justify-center rounded text-[10px] font-medium transition-colors ${showSMA20 ? 'bg-[#FFB000]/20 text-[#FFB000]' : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50'}`}>MA20</button>
           )}
@@ -109,8 +125,14 @@ export function TradingViewChart({
           {onToggleEMA21 && (
             <button type="button" onClick={onToggleEMA21} title="EMA(21)" className={`w-7 h-7 flex items-center justify-center rounded text-[10px] font-medium transition-colors ${showEMA21 ? 'bg-[#F59E0B]/20 text-[#F59E0B]' : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50'}`}>E21</button>
           )}
+          {onToggleEMA50 && (
+            <button type="button" onClick={onToggleEMA50} title="EMA(50)" className={`w-7 h-7 flex items-center justify-center rounded text-[10px] font-medium transition-colors ${showEMA50 ? 'bg-[#14b8a6]/20 text-[#14b8a6]' : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50'}`}>E50</button>
+          )}
           {onToggleBB && (
             <button type="button" onClick={onToggleBB} title="Bollinger Bands" className={`w-7 h-7 flex items-center justify-center rounded text-[10px] font-medium transition-colors ${showBB ? 'bg-[#8b5cf6]/20 text-[#8b5cf6]' : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50'}`}>BB</button>
+          )}
+          {onToggleATR && (
+            <button type="button" onClick={onToggleATR} title="ATR(14)" className={`w-7 h-7 flex items-center justify-center rounded text-[10px] font-medium transition-colors ${showATR ? 'bg-[#f97316]/20 text-[#f97316]' : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50'}`}>ATR</button>
           )}
           {onToggleRSI && (
             <button type="button" onClick={onToggleRSI} title="RSI" className={`w-7 h-7 flex items-center justify-center rounded text-[10px] font-medium transition-colors ${showRSI ? 'bg-[#ec4899]/20 text-[#ec4899]' : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50'}`}>RSI</button>
@@ -189,11 +211,14 @@ export function TradingViewChart({
         <LightweightChartsWidget
           data={data}
           showVolume={showVolume}
+          showSMA9={showSMA9}
           showSMA20={showSMA20}
           showSMA50={showSMA50}
           showEMA9={showEMA9}
           showEMA21={showEMA21}
+          showEMA50={showEMA50}
           showBB={showBB}
+          showATR={showATR}
           autoSize
           className="w-full flex-1 min-h-0"
         />
@@ -230,23 +255,19 @@ export function TradingViewChart({
         )}
       </div>
 
-      {/* RSI Panel */}
-      {showRSI && (
-        <div className="mt-2 h-32 bg-[#0a0e13] border border-border/30 rounded p-2">
-          <div className="text-xs text-muted-foreground mb-1">RSI(14)</div>
-          <div className="h-full bg-[#0B0D10] rounded flex items-center justify-center text-muted-foreground text-sm">
-            RSI Indicator
-          </div>
+      {/* RSI sub-chart */}
+      {showRSI && data.length > 0 && (
+        <div className="mt-2 flex flex-col shrink-0">
+          <div className="text-xs text-muted-foreground mb-1 px-1">RSI(14)</div>
+          <RsiChart data={data} height={100} />
         </div>
       )}
 
-      {/* MACD Panel */}
-      {showMACD && (
-        <div className="mt-2 h-32 bg-[#0a0e13] border border-border/30 rounded p-2">
-          <div className="text-xs text-muted-foreground mb-1">MACD(12,26,9)</div>
-          <div className="h-full bg-[#0B0D10] rounded flex items-center justify-center text-muted-foreground text-sm">
-            MACD Indicator
-          </div>
+      {/* MACD sub-chart */}
+      {showMACD && data.length > 0 && (
+        <div className="mt-2 flex flex-col shrink-0">
+          <div className="text-xs text-muted-foreground mb-1 px-1">MACD(12,26,9)</div>
+          <MacdChart data={data} height={120} />
         </div>
       )}
 
@@ -328,11 +349,14 @@ export function TradingViewChart({
                 <LightweightChartsWidget
                   data={data}
                   showVolume={showVolume}
+                  showSMA9={showSMA9}
                   showSMA20={showSMA20}
                   showSMA50={showSMA50}
                   showEMA9={showEMA9}
                   showEMA21={showEMA21}
+                  showEMA50={showEMA50}
                   showBB={showBB}
+                  showATR={showATR}
                   height={560}
                   className="w-full min-h-[400px]"
                 />
