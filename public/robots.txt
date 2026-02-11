@@ -1,0 +1,26 @@
+User-agent: *
+Allow: /
+
+Disallow: /dashboard
+Disallow: /terminal
+Disallow: /dca-bots
+Disallow: /positions
+Disallow: /orders
+Disallow: /trade-history
+Disallow: /portfolio
+Disallow: /strategy-backtest
+Disallow: /packages
+Disallow: /referrals
+Disallow: /fees
+Disallow: /settings
+Disallow: /support
+Disallow: /admin
+Disallow: /payments
+Disallow: /checkout
+Disallow: /marketplace
+Disallow: /copy-trading
+Disallow: /master-trader-application
+Disallow: /notifications-center
+Disallow: /onboarding-wizard
+
+Sitemap: https://www.klineo.xyz/sitemap.xml
