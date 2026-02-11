@@ -50,10 +50,7 @@ import { useAuth } from "@/app/contexts/AuthContext";
 import { useExchangeBalances } from "@/app/hooks/useExchangeBalances";
 import { api, exchangeConnections, strategies, futures, sanitizeExchangeError, type EntitlementResponse, type StrategyRun, type StrategyEvent, type ExchangeConnection } from "@/lib/api";
 import { TradingViewChart } from "@/app/components/TradingViewChart";
-import { 
-  TradingViewMarketOverview,
-  TradingViewAdvancedChart 
-} from "@/app/components/TradingViewWidgets";
+import { TradingViewMarketOverview } from "@/app/components/TradingViewWidgets";
 import { fetchKlines, fetchKlinesExtended, fetchOrderBook, fetchUsdtPairs, fetchTicker24h } from "@/lib/binance";
 import type { OrderBookLevel, UsdtPairInfo, Ticker24h } from "@/lib/binance";
 import type { OhlcvItem } from "@/app/components/charts/LightweightChartsWidget";
@@ -213,7 +210,6 @@ export function TradingTerminalNew({ onNavigate }: TradingTerminalProps) {
   const [buyPrice, setBuyPrice] = useState("");
   const [sellAmount, setSellAmount] = useState("");
   const [sellPrice, setSellPrice] = useState("");
-  const [chartMode, setChartMode] = useState<"lightweight" | "advanced">("lightweight");
   const [selectedTimeframe, setSelectedTimeframe] = useState<Timeframe>('1h');
     const [orderBookOpen, setOrderBookOpen] = useState(false);
   const ORDER_BOOK_PANEL_KEY = "klineo-order-book-panel";
@@ -949,35 +945,7 @@ export function TradingTerminalNew({ onNavigate }: TradingTerminalProps) {
                     </div>
                   </SheetContent>
                 </Sheet>
-                {/* Chart Mode */}
-                <div className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    onClick={() => setChartMode("lightweight")}
-                    className={`h-6 px-2.5 text-[11px] font-medium rounded transition-colors ${
-                      chartMode === "lightweight"
-                        ? "bg-[#FFB000] text-[#0a0e13] font-semibold shadow-sm ring-1 ring-[#FFB000]/50"
-                        : "text-muted-foreground hover:text-foreground hover:bg-secondary/50"
-                    }`}
-                  >
-                    Lightweight
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setChartMode("advanced")}
-                    className={`h-6 px-2.5 text-[11px] font-medium rounded transition-colors ${
-                      chartMode === "advanced"
-                        ? "bg-[#FFB000] text-[#0a0e13] font-semibold shadow-sm ring-1 ring-[#FFB000]/50"
-                        : "text-muted-foreground hover:text-foreground hover:bg-secondary/50"
-                    }`}
-                  >
-                    TradingView Pro
-                  </button>
-                </div>
-                
-                {chartMode === "lightweight" && (
-                  <>
-                    <div className="flex items-center gap-1 border-l border-border/30 pl-3">
+                <div className="flex items-center gap-1 border-l border-border/30 pl-3">
                       <button
                         onClick={() => setShowVolume(!showVolume)}
                         className={`h-6 px-2.5 text-[11px] font-medium rounded transition-colors flex items-center gap-1 ${
@@ -990,12 +958,9 @@ export function TradingTerminalNew({ onNavigate }: TradingTerminalProps) {
                         Volume
                       </button>
                     </div>
-                  </>
-                )}
               </div>
 
-              {chartMode === "lightweight" && (
-                <div className="flex flex-wrap items-center gap-1">
+              <div className="flex flex-wrap items-center gap-1">
                   <button type="button" onClick={() => setShowSMA9(!showSMA9)} className={`h-6 px-2 text-[10px] sm:text-[11px] font-medium rounded transition-colors ${showSMA9 ? "bg-[#a78bfa]/20 text-[#a78bfa]" : "text-muted-foreground hover:text-foreground"}`}>MA(9)</button>
                   <button
                     type="button"
@@ -1053,7 +1018,6 @@ export function TradingTerminalNew({ onNavigate }: TradingTerminalProps) {
                     MACD
                   </button>
                 </div>
-              )}
             </div>
 
             {/* Chart Area */}
@@ -1065,16 +1029,15 @@ export function TradingTerminalNew({ onNavigate }: TradingTerminalProps) {
                   </span>
                 </div>
               )}
-              {chartMode === "lightweight" ? (
-                chartLoading && !chartData.length ? (
-                  <div className="h-full flex items-center justify-center bg-[#0a0e13]">
-                    <div className="flex flex-col items-center gap-3 text-muted-foreground">
-                      <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                      <div className="text-sm">Loading Binance data...</div>
-                    </div>
+              {chartLoading && !chartData.length ? (
+                <div className="h-full flex items-center justify-center bg-[#0a0e13]">
+                  <div className="flex flex-col items-center gap-3 text-muted-foreground">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                    <div className="text-sm">Loading Binance data...</div>
                   </div>
-                ) : (
-                  <TradingViewChart
+                </div>
+              ) : (
+                <TradingViewChart
                     data={chartData}
                     showVolume={showVolume}
                     showRSI={showRSI}
@@ -1101,14 +1064,6 @@ export function TradingTerminalNew({ onNavigate }: TradingTerminalProps) {
                     onToggleRSI={() => setShowRSI((v) => !v)}
                     onToggleMACD={() => setShowMACD((v) => !v)}
                   />
-                )
-              ) : (
-                <div className="h-full min-h-[380px] w-full flex flex-col">
-                  <div className="flex-1 min-h-[320px] w-full rounded border border-border/30 overflow-hidden bg-[#0a0e13]">
-                    <TradingViewAdvancedChart symbol={`BINANCE:${selectedPair.replace("/", "")}`} />
-                  </div>
-                  <p className="text-[10px] sm:text-xs text-muted-foreground mt-1.5 px-1">TradingView blocks embedding — use the button above to open the full chart in a new tab.</p>
-                </div>
               )}
             </div>
           </div>
