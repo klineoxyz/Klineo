@@ -389,7 +389,16 @@ function SubscriptionContent({
                         <div className="text-2xl font-bold text-primary">${pkg.priceUsd}</div>
                       )}
                       <p className="text-sm text-muted-foreground mt-2 font-medium">
-                        Buy ${pkg.priceUsd}. Trade until you make <span className="text-foreground font-semibold">${pkg.profitAllowanceUsd.toLocaleString()}</span> profit ({pkg.multiplier}x).
+                        Buy ${pkg.priceUsd}. Trade until you make <span className="text-foreground font-semibold">${pkg.profitAllowanceUsd.toLocaleString()}</span> profit (
+                        {pkg.basePriceUsd != null && pkg.discountPct != null ? (
+                          <>
+                            <span className="line-through">{pkg.multiplier}x</span>{" "}
+                            <span className="text-foreground font-semibold">{Math.round(pkg.profitAllowanceUsd / pkg.priceUsd)}x</span>
+                          </>
+                        ) : (
+                          `${pkg.multiplier}x`
+                        )}
+                        ).
                       </p>
                       <p className="text-xs text-muted-foreground mt-1">
                         {packageSubtext}
