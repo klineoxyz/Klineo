@@ -690,7 +690,7 @@ export function Admin() {
     }
   };
 
-  const copyCouponURL = async (code: string, appliesTo?: string) => {
+  const copyCouponURL = async (code: string, appliesTo?: string, triggerEl?: HTMLElement | null) => {
     if (!code?.trim()) {
       toast.error("No coupon code");
       return;
@@ -699,12 +699,14 @@ export function Admin() {
     const isOnboarding = appliesTo === "onboarding" || (code || "").toUpperCase().startsWith("OB");
     const path = isOnboarding ? "/payments" : "/packages";
     const url = `${base}${path}?coupon=${encodeURIComponent(code.trim())}`;
-    const ok = await copyToClipboard(url);
+    const ok = await copyToClipboard(url, { restoreFocusTarget: triggerEl ?? undefined });
     if (ok) {
       toast.success("Coupon URL copied", { description: `${code} → ${path}` });
     } else {
       toast.error("Copy failed", { description: url.length > 80 ? `${url.slice(0, 77)}… — paste this manually` : url });
     }
+    // Keep focus on the trigger so the page does not fade when toast appears in a portal
+    triggerEl?.focus();
   };
 
   return (
@@ -2075,9 +2077,7 @@ export function Admin() {
                         <TableCell className="text-sm text-muted-foreground max-w-[180px] truncate">{coupon.description}</TableCell>
                         <TableCell className="text-right">
                           <div className="flex gap-2 justify-end">
-                            <Button variant="outline" size="sm" onClick={() => copyCouponURL(coupon.code, coupon.appliesTo)} title="Copy coupon URL">
-                              <Link2 className="size-4" />
-                            </Button>
+                            <Button type="button" variant="outline" size="sm" title="Copy coupon URL" onClick={(e) => { e.preventDefault(); e.stopPropagation(); copyCouponURL(coupon.code, coupon.appliesTo, e.currentTarget); }}><Link2 className="size-4" /></Button>
                             {coupon.statusRaw === "active" ? (
                               <Button variant="outline" size="sm" className="text-amber-600 hover:text-amber-600" onClick={() => handleCouponStatus(coupon.id, "disabled")} title="Disable coupon">
                                 <Trash2 className="size-4" />
@@ -2120,10 +2120,10 @@ export function Admin() {
                     </span>
                     <span className="font-mono text-xs truncate">{url}</span>
                   </div>
-                  <Button variant="outline" size="sm" onClick={() => copyCouponURL(coupon.code, coupon.appliesTo)}>
-                    <Copy className="size-4 mr-2" />
-                    Copy
-                  </Button>
+<Button type="button" variant="outline" size="sm" onClick={(e) => { e.preventDefault(); e.stopPropagation(); copyCouponURL(coupon.code, coupon.appliesTo, e.currentTarget); }}>
+                                    <Copy className="size-4 mr-2" />
+                                    Copy
+                                  </Button>
                 </div>
               ); })}
             </div>
