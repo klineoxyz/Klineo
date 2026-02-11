@@ -285,7 +285,7 @@ export function TradingTerminalNew({ onNavigate }: TradingTerminalProps) {
       ? (balances?.[baseAsset] ? parseFloat(balances[baseAsset].free) : 0)
       : null;
 
-  // Chart: real Binance klines (fallback to mock on error)
+  // Chart: fast initial load (single request), then optional extended history in background
   const [chartData, setChartData] = useState<OhlcvItem[]>([]);
   const [chartLoading, setChartLoading] = useState(true);
   const [chartError, setChartError] = useState<string | null>(null);
@@ -295,15 +295,22 @@ export function TradingTerminalNew({ onNavigate }: TradingTerminalProps) {
     setChartError(null);
     setChartData([]);
     try {
-      const data = await fetchKlinesExtended(selectedPair, selectedTimeframe, 5000);
-      setChartData(data);
+      // Fast first paint: single request (500 candles) so chart appears quickly
+      const initial = await fetchKlines(selectedPair, selectedTimeframe, 500);
+      setChartData(initial);
+      setChartLoading(false);
+      // Load more history in background (cap 10 batches = ~10k candles) and replace when done
+      fetchKlinesExtended(selectedPair, selectedTimeframe, undefined, 10)
+        .then((extended) => {
+          if (extended.length > initial.length) setChartData(extended);
+        })
+        .catch(() => { /* keep initial data */ });
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Failed to load Binance data";
       setChartError(msg);
       const mock = generateMockData(basePrice, selectedTimeframe);
       setChartData(mock);
       toast.error("Chart using sample data — Binance fetch failed");
-    } finally {
       setChartLoading(false);
     }
   }, [selectedPair, selectedTimeframe, basePrice]);

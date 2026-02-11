@@ -73,13 +73,14 @@ const MAX_KLINES_BATCHES = 100;
 
 /**
  * Fetch full historical klines: paginate backward until Binance returns fewer than 1000
- * (start of history) or we hit MAX_KLINES_BATCHES. Returns chronological (oldest first).
- * Use for charts so all timeframes show full available history.
+ * (start of history) or we hit maxBatches. Returns chronological (oldest first).
+ * Use for charts; cap maxBatches for faster initial load (e.g. 10 = ~10k candles).
  */
 export async function fetchKlinesExtended(
   pair: string,
   timeframe: string,
-  _totalLimit?: number
+  _totalLimit?: number,
+  maxBatches: number = MAX_KLINES_BATCHES
 ): Promise<OhlcvItem[]> {
   const symbol = pairToSymbol(pair);
   const interval = timeframeToInterval(timeframe);
@@ -95,8 +96,9 @@ export async function fetchKlinesExtended(
   let endTime: number | undefined;
   const all: OhlcvItem[] = [];
   let batches = 0;
+  const limit = Math.min(maxBatches, MAX_KLINES_BATCHES);
 
-  while (batches < MAX_KLINES_BATCHES) {
+  while (batches < limit) {
     const url = endTime == null
       ? `${BINANCE_API}/klines?symbol=${encodeURIComponent(symbol)}&interval=${interval}&limit=${KLINES_PAGE}`
       : `${BINANCE_API}/klines?symbol=${encodeURIComponent(symbol)}&interval=${interval}&limit=${KLINES_PAGE}&endTime=${endTime}`;
