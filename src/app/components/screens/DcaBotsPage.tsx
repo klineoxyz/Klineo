@@ -23,9 +23,11 @@ import {
   LayoutGrid,
   Search,
   Pencil,
+  Trophy,
+  TrendingUp,
 } from "lucide-react";
 import { toast } from "@/app/lib/toast";
-import { api, dcaBots, type DcaBot, type EntitlementResponse } from "@/lib/api";
+import { api, dcaBots, type DcaBot, type DcaBotFeatured, type EntitlementResponse } from "@/lib/api";
 import { getPresetsByRisk, filterPresetsBySearch, type DcaPreset, type DcaPresetRisk } from "@/app/data/dcaPresets";
 import { CreateBotModal } from "@/app/components/screens/dca/CreateBotModal";
 
@@ -43,12 +45,17 @@ export function DcaBotsPage({ onNavigate }: DcaBotsPageProps) {
   const [presetSearch, setPresetSearch] = useState("");
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [maxDcaBots, setMaxDcaBots] = useState<number>(1);
+  const [featuredBots, setFeaturedBots] = useState<DcaBotFeatured[]>([]);
 
   const loadBots = async () => {
     setLoading(true);
     try {
-      const { bots: list } = await dcaBots.list();
+      const [{ bots: list }, { featured: featuredList }] = await Promise.all([
+        dcaBots.list(),
+        dcaBots.featured().catch(() => ({ featured: [] as DcaBotFeatured[] })),
+      ]);
       setBots(list ?? []);
+      setFeaturedBots(featuredList ?? []);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Failed to load bots";
       toast.error("Failed to load DCA bots", { description: msg });
@@ -211,6 +218,45 @@ export function DcaBotsPage({ onNavigate }: DcaBotsPageProps) {
           </div>
         </Card>
       </div>
+
+      {/* Featured Top 3 Bots (best returns) */}
+      <Card className="p-4 sm:p-6">
+        <h3 className="text-base sm:text-lg font-semibold mb-3 flex items-center gap-2">
+          <Trophy className="size-5 text-amber-500" />
+          Featured Top 3 Bots
+        </h3>
+        <p className="text-sm text-muted-foreground mb-4">Your bots with the highest realized returns</p>
+        {featuredBots.length === 0 ? (
+          <div className="py-6 text-center text-muted-foreground text-sm">
+            No bots yet, or no returns recorded. Create a bot and run it to see top performers here.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {featuredBots.map((bot, i) => (
+              <Card key={bot.id} className="p-3 sm:p-4 flex flex-col gap-2 border-2 border-transparent bg-muted/30">
+                <div className="flex items-center gap-2">
+                  <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary/15 text-primary font-semibold text-sm">
+                    {i + 1}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="font-medium truncate">{bot.name}</p>
+                    <p className="text-xs text-muted-foreground font-mono">{bot.pair}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1.5 mt-1">
+                  <TrendingUp className="size-4 text-[#10B981]" />
+                  <span className={`font-mono font-semibold ${bot.realizedPnl >= 0 ? "text-[#10B981]" : "text-[#EF4444]"}`}>
+                    {bot.realizedPnl >= 0 ? "+" : ""}${bot.realizedPnl.toFixed(2)} USDT
+                  </span>
+                </div>
+                <Badge variant="outline" className="w-fit text-xs capitalize">
+                  {bot.status}
+                </Badge>
+              </Card>
+            ))}
+          </div>
+        )}
+      </Card>
 
       {/* Preset Library */}
       <Card className="p-4 sm:p-6">

@@ -480,8 +480,17 @@ export interface CreateDcaBotRequest {
   config?: DcaBotConfig;
 }
 
+export interface DcaBotFeatured {
+  id: string;
+  name: string;
+  pair: string;
+  status: string;
+  realizedPnl: number;
+}
+
 export const dcaBots = {
   list: async (): Promise<{ bots: DcaBot[] }> => api.get('/api/dca-bots'),
+  featured: async (): Promise<{ featured: DcaBotFeatured[] }> => api.get('/api/dca-bots/featured'),
   create: async (data: CreateDcaBotRequest): Promise<{ bot: DcaBot }> =>
     api.post('/api/dca-bots', data),
   updateStatus: async (id: string, status: 'running' | 'paused' | 'stopped'): Promise<{ bot: DcaBot }> =>

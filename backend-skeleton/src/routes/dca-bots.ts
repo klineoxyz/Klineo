@@ -49,6 +49,48 @@ dcaBotsRouter.get('/', async (req: AuthenticatedRequest, res) => {
 });
 
 /**
+ * GET /api/dca-bots/featured
+ * Top 3 bots by realized PnL (user's own bots; joins dca_bot_state).
+ */
+dcaBotsRouter.get('/featured', async (req: AuthenticatedRequest, res) => {
+  const client = getSupabase();
+  if (!client) return res.status(503).json({ error: 'Database unavailable' });
+  try {
+    const userId = req.user!.id;
+    const { data: botsWithState, error } = await client
+      .from('dca_bots')
+      .select('id, name, pair, status, config, dca_bot_state(realized_pnl)')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false });
+    if (error) {
+      console.error('DCA bots featured error:', error);
+      return res.status(500).json({ error: 'Failed to fetch featured bots' });
+    }
+    const list = (botsWithState ?? []) as Array<{
+      id: string;
+      name: string;
+      pair: string;
+      status: string;
+      config?: Record<string, unknown>;
+      dca_bot_state?: Array<{ realized_pnl?: number | string }> | { realized_pnl?: number | string } | null;
+    }>;
+    const withPnl = list.map((b) => {
+      const state = Array.isArray(b.dca_bot_state) ? b.dca_bot_state[0] : b.dca_bot_state;
+      const realizedPnl = state?.realized_pnl != null ? Number(state.realized_pnl) : 0;
+      return { ...b, realizedPnl };
+    });
+    const top3 = withPnl
+      .sort((a, b) => b.realizedPnl - a.realizedPnl)
+      .slice(0, 3)
+      .map(({ id, name, pair, status, realizedPnl }) => ({ id, name, pair, status, realizedPnl }));
+    res.json({ featured: top3 });
+  } catch (err) {
+    console.error('DCA bots featured error:', err);
+    res.status(500).json({ error: 'Failed to fetch featured bots' });
+  }
+});
+
+/**
  * POST /api/dca-bots
  * Create a new DCA bot (draft)
  */
