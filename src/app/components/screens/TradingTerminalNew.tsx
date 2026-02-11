@@ -31,6 +31,8 @@ import {
   BarChart3,
   Loader2,
   BookOpen,
+  PanelLeftClose,
+  PanelLeftOpen,
   Zap,
   Pause,
   Play,
@@ -213,7 +215,24 @@ export function TradingTerminalNew({ onNavigate }: TradingTerminalProps) {
   const [sellPrice, setSellPrice] = useState("");
   const [chartMode, setChartMode] = useState<"lightweight" | "advanced">("lightweight");
   const [selectedTimeframe, setSelectedTimeframe] = useState<Timeframe>('1h');
-  const [orderBookOpen, setOrderBookOpen] = useState(false);
+    const [orderBookOpen, setOrderBookOpen] = useState(false);
+  const ORDER_BOOK_PANEL_KEY = "klineo-order-book-panel";
+  const [orderBookPanelVisible, setOrderBookPanelVisible] = useState(() => {
+    try {
+      const v = localStorage.getItem(ORDER_BOOK_PANEL_KEY);
+      return v !== "false";
+    } catch {
+      return true;
+    }
+  });
+  const setOrderBookPanelVisiblePersisted = useCallback((visible: boolean) => {
+    setOrderBookPanelVisible(visible);
+    try {
+      localStorage.setItem(ORDER_BOOK_PANEL_KEY, String(visible));
+    } catch {
+      /* ignore */
+    }
+  }, []);
 
   // Indicator toggles
   const [showSMA20, setShowSMA20] = useState(false);
@@ -277,7 +296,7 @@ export function TradingTerminalNew({ onNavigate }: TradingTerminalProps) {
     setChartError(null);
     setChartData([]);
     try {
-      const data = await fetchKlines(selectedPair, selectedTimeframe, 500);
+      const data = await fetchKlines(selectedPair, selectedTimeframe, 1000);
       setChartData(data);
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Failed to load Binance data";
@@ -728,11 +747,24 @@ export function TradingTerminalNew({ onNavigate }: TradingTerminalProps) {
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col lg:flex-row overflow-hidden min-h-0">
-        {/* Left - Order Book (hidden < lg; use Sheet on mobile/tablet) */}
-        <div className="hidden lg:flex lg:w-[260px] xl:w-[280px] border-r border-border bg-card overflow-hidden flex-col shrink-0 min-h-0">
+        {/* Left - Order Book (hidden < lg; use Sheet on mobile/tablet; toggleable on desktop) */}
+        <div
+          className={`shrink-0 min-h-0 overflow-hidden flex-col border-r border-border bg-card ${
+            orderBookPanelVisible ? "hidden lg:flex lg:w-[260px] xl:w-[280px]" : "hidden"
+          }`}
+        >
           <div className="p-2.5 sm:p-3 border-b border-border flex items-center justify-between gap-2 shrink-0">
             <div className="text-sm font-semibold">Order Book</div>
             <div className="flex items-center gap-1.5 shrink-0">
+              <button
+                type="button"
+                onClick={() => setOrderBookPanelVisiblePersisted(false)}
+                className="lg:flex hidden h-7 w-7 items-center justify-center rounded text-muted-foreground hover:text-foreground hover:bg-secondary/50"
+                title="Hide order book for more chart space"
+                aria-label="Hide order book"
+              >
+                <PanelLeftClose className="size-4" />
+              </button>
               {orderBookLoading && (
                 <Loader2 className="size-3.5 text-muted-foreground animate-spin" aria-hidden />
               )}
@@ -838,7 +870,19 @@ export function TradingTerminalNew({ onNavigate }: TradingTerminalProps) {
             {/* Toolbar */}
             <div className="flex flex-wrap items-center justify-between gap-2 px-2 py-1.5 sm:px-3 border-b border-border/30 bg-[#0a0e13] flex-shrink-0">
               <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-                {/* Order book trigger (visible when sidebar hidden) */}
+                {/* Show order book panel (desktop: when panel is hidden) */}
+                {!orderBookPanelVisible && (
+                  <button
+                    type="button"
+                    onClick={() => setOrderBookPanelVisiblePersisted(true)}
+                    className="hidden lg:flex h-7 px-2.5 text-xs font-medium rounded transition-colors items-center gap-1.5 text-muted-foreground hover:text-foreground hover:bg-secondary/50 border border-border/50"
+                    title="Show order book"
+                  >
+                    <PanelLeftOpen className="size-3.5 w-3.5" />
+                    Order book
+                  </button>
+                )}
+                {/* Order book trigger (mobile/tablet: opens Sheet) */}
                 <Sheet open={orderBookOpen} onOpenChange={setOrderBookOpen}>
                   <SheetTrigger asChild>
                     <button
@@ -905,20 +949,22 @@ export function TradingTerminalNew({ onNavigate }: TradingTerminalProps) {
                 {/* Chart Mode */}
                 <div className="flex items-center gap-1">
                   <button
+                    type="button"
                     onClick={() => setChartMode("lightweight")}
                     className={`h-6 px-2.5 text-[11px] font-medium rounded transition-colors ${
-                      chartMode === "lightweight" 
-                        ? "bg-accent text-accent-foreground" 
+                      chartMode === "lightweight"
+                        ? "bg-[#FFB000] text-[#0a0e13] font-semibold shadow-sm ring-1 ring-[#FFB000]/50"
                         : "text-muted-foreground hover:text-foreground hover:bg-secondary/50"
                     }`}
                   >
                     Lightweight
                   </button>
                   <button
+                    type="button"
                     onClick={() => setChartMode("advanced")}
                     className={`h-6 px-2.5 text-[11px] font-medium rounded transition-colors ${
-                      chartMode === "advanced" 
-                        ? "bg-accent text-accent-foreground" 
+                      chartMode === "advanced"
+                        ? "bg-[#FFB000] text-[#0a0e13] font-semibold shadow-sm ring-1 ring-[#FFB000]/50"
                         : "text-muted-foreground hover:text-foreground hover:bg-secondary/50"
                     }`}
                   >
@@ -1035,12 +1081,24 @@ export function TradingTerminalNew({ onNavigate }: TradingTerminalProps) {
                     showSMA50={showSMA50}
                     showEMA9={showEMA9}
                     showEMA21={showEMA21}
+                    selectedTimeframe={selectedTimeframe}
                     onTimeframeChange={handleTimeframeChange}
+                    onToggleVolume={() => setShowVolume((v) => !v)}
+                    onToggleSMA20={() => setShowSMA20((v) => !v)}
+                    onToggleSMA50={() => setShowSMA50((v) => !v)}
+                    onToggleEMA9={() => setShowEMA9((v) => !v)}
+                    onToggleEMA21={() => setShowEMA21((v) => !v)}
+                    onToggleBB={() => setShowBB((v) => !v)}
+                    onToggleRSI={() => setShowRSI((v) => !v)}
+                    onToggleMACD={() => setShowMACD((v) => !v)}
                   />
                 )
               ) : (
-                <div className="h-full">
-                  <TradingViewAdvancedChart symbol={`BINANCE:${selectedPair.replace("/", "")}`} />
+                <div className="h-full min-h-[380px] w-full flex flex-col">
+                  <div className="flex-1 min-h-[320px] w-full rounded border border-border/30 overflow-hidden bg-[#0a0e13]">
+                    <TradingViewAdvancedChart symbol={`BINANCE:${selectedPair.replace("/", "")}`} />
+                  </div>
+                  <p className="text-[10px] sm:text-xs text-muted-foreground mt-1.5 px-1">TradingView Pro — full chart in iframe. Use Lightweight for overlays (MA, EMA, BB) and faster load.</p>
                 </div>
               )}
             </div>

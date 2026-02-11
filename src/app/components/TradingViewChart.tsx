@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/app/components/ui/button';
-import { TrendingUp, Minus, X, Maximize2, Clock } from 'lucide-react';
+import { TrendingUp, Minus, X, Maximize2, Clock, BarChart3 } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -28,7 +28,18 @@ interface TradingViewChartProps {
   showSMA50?: boolean;
   showEMA9?: boolean;
   showEMA21?: boolean;
+  /** When set, timeframe selector is controlled by parent (sync selection + full history). */
+  selectedTimeframe?: Timeframe;
   onTimeframeChange?: (timeframe: Timeframe) => void;
+  /** When provided, show TA tools sidebar on the left for toggling indicators. */
+  onToggleVolume?: () => void;
+  onToggleSMA20?: () => void;
+  onToggleSMA50?: () => void;
+  onToggleEMA9?: () => void;
+  onToggleEMA21?: () => void;
+  onToggleBB?: () => void;
+  onToggleRSI?: () => void;
+  onToggleMACD?: () => void;
 }
 
 export function TradingViewChart({
@@ -41,27 +52,76 @@ export function TradingViewChart({
   showSMA50 = false,
   showEMA9 = false,
   showEMA21 = false,
+  selectedTimeframe,
   onTimeframeChange,
+  onToggleVolume,
+  onToggleSMA20,
+  onToggleSMA50,
+  onToggleEMA9,
+  onToggleEMA21,
+  onToggleBB,
+  onToggleRSI,
+  onToggleMACD,
 }: TradingViewChartProps) {
-  const [timeframe, setTimeframe] = useState<Timeframe>('1h');
+  const [timeframe, setTimeframe] = useState<Timeframe>(selectedTimeframe ?? '1h');
   const [drawingMode, setDrawingMode] = useState<'none' | 'trendline' | 'horizontal'>('none');
   const [drawings, setDrawings] = useState<Array<{ type: string; price: number; time: number }>>([]);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
-  // Timeframe options
+  const effectiveTimeframe = selectedTimeframe ?? timeframe;
+  useEffect(() => {
+    if (selectedTimeframe != null) setTimeframe(selectedTimeframe);
+  }, [selectedTimeframe]);
+
   const timeframes: Timeframe[] = ['1m', '5m', '15m', '30m', '1h', '2h', '4h', '12h', '1D', '5D', '1W', '1M'];
 
   const handleTimeframeChange = (tf: Timeframe) => {
     setTimeframe(tf);
-    if (onTimeframeChange) {
-      onTimeframeChange(tf);
-    }
+    onTimeframeChange?.(tf);
   };
 
+  const hasTATools = [onToggleVolume, onToggleSMA20, onToggleSMA50, onToggleEMA9, onToggleEMA21, onToggleBB, onToggleRSI, onToggleMACD].some(Boolean);
+
   return (
-    <div className="relative flex flex-col h-full min-h-[320px]">
-      {/* Drawing Tools */}
-      <div className="absolute top-2 left-2 z-10 flex gap-2">
+    <div className="relative flex flex-col h-full min-h-[320px] flex-1 min-h-0">
+      {/* Left TA Tools sidebar */}
+      {hasTATools && (
+        <div className="absolute left-0 top-0 bottom-0 z-10 w-9 sm:w-10 flex flex-col items-center py-2 gap-1 border-r border-border/50 bg-[#0a0e13]/95 rounded-l overflow-hidden">
+          {onToggleVolume && (
+            <button
+              type="button"
+              onClick={onToggleVolume}
+              title="Volume"
+              className={`w-7 h-7 flex items-center justify-center rounded text-[10px] font-medium transition-colors ${showVolume ? 'bg-primary/20 text-primary' : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50'}`}
+            >
+              <BarChart3 className="size-4" />
+            </button>
+          )}
+          {onToggleSMA20 && (
+            <button type="button" onClick={onToggleSMA20} title="MA(20)" className={`w-7 h-7 flex items-center justify-center rounded text-[10px] font-medium transition-colors ${showSMA20 ? 'bg-[#FFB000]/20 text-[#FFB000]' : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50'}`}>MA20</button>
+          )}
+          {onToggleSMA50 && (
+            <button type="button" onClick={onToggleSMA50} title="MA(50)" className={`w-7 h-7 flex items-center justify-center rounded text-[10px] font-medium transition-colors ${showSMA50 ? 'bg-[#3B82F6]/20 text-[#3B82F6]' : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50'}`}>MA50</button>
+          )}
+          {onToggleEMA9 && (
+            <button type="button" onClick={onToggleEMA9} title="EMA(9)" className={`w-7 h-7 flex items-center justify-center rounded text-[10px] font-medium transition-colors ${showEMA9 ? 'bg-[#10B981]/20 text-[#10B981]' : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50'}`}>E9</button>
+          )}
+          {onToggleEMA21 && (
+            <button type="button" onClick={onToggleEMA21} title="EMA(21)" className={`w-7 h-7 flex items-center justify-center rounded text-[10px] font-medium transition-colors ${showEMA21 ? 'bg-[#F59E0B]/20 text-[#F59E0B]' : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50'}`}>E21</button>
+          )}
+          {onToggleBB && (
+            <button type="button" onClick={onToggleBB} title="Bollinger Bands" className={`w-7 h-7 flex items-center justify-center rounded text-[10px] font-medium transition-colors ${showBB ? 'bg-[#8b5cf6]/20 text-[#8b5cf6]' : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50'}`}>BB</button>
+          )}
+          {onToggleRSI && (
+            <button type="button" onClick={onToggleRSI} title="RSI" className={`w-7 h-7 flex items-center justify-center rounded text-[10px] font-medium transition-colors ${showRSI ? 'bg-[#ec4899]/20 text-[#ec4899]' : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50'}`}>RSI</button>
+          )}
+          {onToggleMACD && (
+            <button type="button" onClick={onToggleMACD} title="MACD" className={`w-7 h-7 flex items-center justify-center rounded text-[10px] font-medium transition-colors ${showMACD ? 'bg-[#06b6d4]/20 text-[#06b6d4]' : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50'}`}>MACD</button>
+          )}
+        </div>
+      )}
+      {/* Drawing Tools (top-left, above chart) */}
+      <div className="absolute top-2 z-10 flex gap-2" style={{ left: hasTATools ? 52 : 8 }}>
         <Button
           size="sm"
           variant={drawingMode === 'trendline' ? 'default' : 'outline'}
@@ -102,20 +162,20 @@ export function TradingViewChart({
         </Button>
       </div>
 
-      {/* Timeframe Selector */}
+      {/* Timeframe Selector — selected TF highlighted (yellow/primary) */}
       <div className="flex gap-0.5 p-0.5 shrink-0">
         <div className="flex items-center gap-1 px-2 py-1.5 border-r border-border">
           <Clock className="h-3.5 w-3.5 text-primary" />
           <span className="text-xs font-semibold text-muted-foreground">TF</span>
         </div>
-        <div className="flex gap-0.5 p-0.5">
+        <div className="flex gap-0.5 p-0.5 flex-wrap">
           {timeframes.map((tf) => (
             <button
               key={tf}
               onClick={() => handleTimeframeChange(tf)}
               className={`px-2.5 py-1 text-[11px] font-mono rounded transition-all min-w-[36px] ${
-                timeframe === tf
-                  ? 'bg-primary text-background font-bold shadow-sm'
+                effectiveTimeframe === tf
+                  ? 'bg-[#FFB000] text-[#0a0e13] font-bold shadow-sm ring-1 ring-[#FFB000]/50'
                   : 'text-muted-foreground hover:text-foreground hover:bg-secondary'
               }`}
             >
@@ -125,10 +185,15 @@ export function TradingViewChart({
         </div>
       </div>
 
-      <div className="flex-1 min-h-[300px] w-full relative flex flex-col overflow-hidden">
+      <div className="flex-1 min-h-[300px] w-full relative flex flex-col overflow-hidden" style={{ marginLeft: hasTATools ? 40 : 0 }}>
         <LightweightChartsWidget
           data={data}
           showVolume={showVolume}
+          showSMA20={showSMA20}
+          showSMA50={showSMA50}
+          showEMA9={showEMA9}
+          showEMA21={showEMA21}
+          showBB={showBB}
           autoSize
           className="w-full flex-1 min-h-0"
         />
@@ -243,14 +308,14 @@ export function TradingViewChart({
                     <Clock className="h-3.5 w-3.5 text-primary" />
                     <span className="text-xs font-semibold text-muted-foreground">TF</span>
                   </div>
-                  <div className="flex gap-0.5 p-0.5">
+                  <div className="flex gap-0.5 p-0.5 flex-wrap">
                     {timeframes.map((tf) => (
                       <button
                         key={tf}
                         onClick={() => handleTimeframeChange(tf)}
                         className={`px-2.5 py-1 text-[11px] font-mono rounded transition-all min-w-[36px] ${
-                          timeframe === tf
-                            ? 'bg-primary text-background font-bold shadow-sm'
+                          effectiveTimeframe === tf
+                            ? 'bg-[#FFB000] text-[#0a0e13] font-bold shadow-sm ring-1 ring-[#FFB000]/50'
                             : 'text-muted-foreground hover:text-foreground hover:bg-secondary'
                         }`}
                       >
@@ -263,6 +328,11 @@ export function TradingViewChart({
                 <LightweightChartsWidget
                   data={data}
                   showVolume={showVolume}
+                  showSMA20={showSMA20}
+                  showSMA50={showSMA50}
+                  showEMA9={showEMA9}
+                  showEMA21={showEMA21}
+                  showBB={showBB}
                   height={560}
                   className="w-full min-h-[400px]"
                 />

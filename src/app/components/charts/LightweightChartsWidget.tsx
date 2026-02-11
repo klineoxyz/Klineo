@@ -10,6 +10,7 @@ import {
   createChart,
   CandlestickSeries,
   HistogramSeries,
+  LineSeries,
   TickMarkType,
   type IChartApi,
   type ISeriesApi,
@@ -87,6 +88,11 @@ export interface OhlcvItem {
 interface LightweightChartsWidgetProps {
   data: OhlcvItem[];
   showVolume?: boolean;
+  showSMA20?: boolean;
+  showSMA50?: boolean;
+  showEMA9?: boolean;
+  showEMA21?: boolean;
+  showBB?: boolean;
   /** Fixed height in px. Ignored when autoSize is true. */
   height?: number;
   /** When true, chart fills container (use with a sized parent). Ensures time scale is not clipped. */
@@ -94,13 +100,74 @@ interface LightweightChartsWidgetProps {
   className?: string;
 }
 
+function sma(closes: number[], period: number): (number | null)[] {
+  const out: (number | null)[] = [];
+  for (let i = 0; i < closes.length; i++) {
+    if (i < period - 1) {
+      out.push(null);
+    } else {
+      let sum = 0;
+      for (let j = i - period + 1; j <= i; j++) sum += closes[j];
+      out.push(sum / period);
+    }
+  }
+  return out;
+}
+
+function ema(closes: number[], period: number): (number | null)[] {
+  const mult = 2 / (period + 1);
+  const out: (number | null)[] = [];
+  if (closes.length === 0) return out;
+  out.push(closes[0]);
+  for (let i = 1; i < closes.length; i++) {
+    const prev = out[i - 1] ?? closes[i];
+    out.push((closes[i] - prev) * mult + prev);
+  }
+  return out;
+}
+
+function bb(closes: number[], period: number, mult: number): { upper: (number | null)[]; middle: (number | null)[]; lower: (number | null)[] } {
+  const middle = sma(closes, period);
+  const upper: (number | null)[] = [];
+  const lower: (number | null)[] = [];
+  for (let i = 0; i < closes.length; i++) {
+    if (i < period - 1) {
+      upper.push(null);
+      lower.push(null);
+    } else {
+      const m = middle[i]!;
+      let sumSq = 0;
+      for (let j = i - period + 1; j <= i; j++) sumSq += (closes[j] - m) ** 2;
+      const std = Math.sqrt(sumSq / period);
+      upper.push(m + mult * std);
+      lower.push(m - mult * std);
+    }
+  }
+  return { upper, middle, lower };
+}
+
 function toUtcTimestamp(iso: string): number {
   return Math.floor(new Date(iso).getTime() / 1000) as unknown as import("lightweight-charts").UTCTimestamp;
 }
 
+const INDICATOR_COLORS = {
+  SMA20: "#FFB000",
+  SMA50: "#3B82F6",
+  EMA9: "#10B981",
+  EMA21: "#F59E0B",
+  BB_UP: "rgba(139, 92, 246, 0.8)",
+  BB_MID: "#8b5cf6",
+  BB_LO: "rgba(139, 92, 246, 0.6)",
+};
+
 export function LightweightChartsWidget({
   data,
   showVolume = true,
+  showSMA20 = false,
+  showSMA50 = false,
+  showEMA9 = false,
+  showEMA21 = false,
+  showBB = false,
   height = 500,
   autoSize = false,
   className = "",
@@ -109,8 +176,9 @@ export function LightweightChartsWidget({
   const chartRef = useRef<IChartApi | null>(null);
   const candlestickRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
   const volumeRef = useRef<ISeriesApi<"Histogram"> | null>(null);
+  const lineSeriesRef = useRef<Map<string, ISeriesApi<"Line">>>(new Map());
 
-  const { candleData, volumeData } = useMemo(() => {
+  const { candleData, volumeData, indicatorSeries } = useMemo(() => {
     const candles = data.map((d) => ({
       time: toUtcTimestamp(d.time),
       open: d.open,
@@ -123,8 +191,24 @@ export function LightweightChartsWidget({
       value: d.volume,
       color: d.close >= d.open ? THEME.green : THEME.red,
     }));
-    return { candleData: candles, volumeData: vols };
-  }, [data]);
+    const closes = data.map((d) => d.close);
+    const times = data.map((d) => toUtcTimestamp(d.time));
+    const toLineData = (vals: (number | null)[]): { time: number; value: number }[] =>
+      times.map((t, i) => ({ time: t, value: vals[i] })).filter((x): x is { time: number; value: number } => x.value != null);
+    const sma20 = showSMA20 ? toLineData(sma(closes, 20)) : [];
+    const sma50 = showSMA50 ? toLineData(sma(closes, 50)) : [];
+    const ema9 = showEMA9 ? toLineData(ema(closes, 9)) : [];
+    const ema21 = showEMA21 ? toLineData(ema(closes, 21)) : [];
+    const bbData = showBB ? bb(closes, 20, 2) : null;
+    const bbUpper = bbData ? toLineData(bbData.upper) : [];
+    const bbMid = bbData ? toLineData(bbData.middle) : [];
+    const bbLower = bbData ? toLineData(bbData.lower) : [];
+    return {
+      candleData: candles,
+      volumeData: vols,
+      indicatorSeries: { sma20, sma50, ema9, ema21, bbUpper, bbMid, bbLower },
+    };
+  }, [data, showSMA20, showSMA50, showEMA9, showEMA21, showBB]);
 
   useEffect(() => {
     const el = containerRef.current;
@@ -167,6 +251,40 @@ export function LightweightChartsWidget({
       volumeRef.current = volume;
     }
 
+    const lineMap = new Map<string, ISeriesApi<"Line">>();
+    if (indicatorSeries.sma20.length) {
+      const s = chart.addSeries(LineSeries, { color: INDICATOR_COLORS.SMA20, lineWidth: 2, title: "SMA(20)" });
+      s.setData(indicatorSeries.sma20);
+      lineMap.set("sma20", s);
+    }
+    if (indicatorSeries.sma50.length) {
+      const s = chart.addSeries(LineSeries, { color: INDICATOR_COLORS.SMA50, lineWidth: 2, title: "SMA(50)" });
+      s.setData(indicatorSeries.sma50);
+      lineMap.set("sma50", s);
+    }
+    if (indicatorSeries.ema9.length) {
+      const s = chart.addSeries(LineSeries, { color: INDICATOR_COLORS.EMA9, lineWidth: 2, title: "EMA(9)" });
+      s.setData(indicatorSeries.ema9);
+      lineMap.set("ema9", s);
+    }
+    if (indicatorSeries.ema21.length) {
+      const s = chart.addSeries(LineSeries, { color: INDICATOR_COLORS.EMA21, lineWidth: 2, title: "EMA(21)" });
+      s.setData(indicatorSeries.ema21);
+      lineMap.set("ema21", s);
+    }
+    if (indicatorSeries.bbMid.length) {
+      const su = chart.addSeries(LineSeries, { color: INDICATOR_COLORS.BB_UP, lineWidth: 1, title: "BB Upper" });
+      su.setData(indicatorSeries.bbUpper);
+      lineMap.set("bbUpper", su);
+      const sm = chart.addSeries(LineSeries, { color: INDICATOR_COLORS.BB_MID, lineWidth: 2, title: "BB Mid" });
+      sm.setData(indicatorSeries.bbMid);
+      lineMap.set("bbMid", sm);
+      const sl = chart.addSeries(LineSeries, { color: INDICATOR_COLORS.BB_LO, lineWidth: 1, title: "BB Lower" });
+      sl.setData(indicatorSeries.bbLower);
+      lineMap.set("bbLower", sl);
+    }
+    lineSeriesRef.current = lineMap;
+
     chart.timeScale().fitContent();
     chart.timeScale().applyOptions({
       visible: true,
@@ -193,6 +311,7 @@ export function LightweightChartsWidget({
         chartRef.current = null;
         candlestickRef.current = null;
         volumeRef.current = null;
+        lineSeriesRef.current.clear();
       };
     }
     return () => {
@@ -200,17 +319,28 @@ export function LightweightChartsWidget({
       chartRef.current = null;
       candlestickRef.current = null;
       volumeRef.current = null;
+      lineSeriesRef.current.clear();
     };
-  }, [height, showVolume, autoSize]);
+  }, [height, showVolume, autoSize, showSMA20, showSMA50, showEMA9, showEMA21, showBB, candleData.length]);
 
   useEffect(() => {
     const candlestick = candlestickRef.current;
     const volume = volumeRef.current;
+    const lineMap = lineSeriesRef.current;
     if (!candlestick || !candleData.length) return;
     candlestick.setData(candleData);
     if (showVolume && volume && volumeData.length) volume.setData(volumeData);
+    if (indicatorSeries.sma20.length && lineMap.has("sma20")) lineMap.get("sma20")!.setData(indicatorSeries.sma20);
+    if (indicatorSeries.sma50.length && lineMap.has("sma50")) lineMap.get("sma50")!.setData(indicatorSeries.sma50);
+    if (indicatorSeries.ema9.length && lineMap.has("ema9")) lineMap.get("ema9")!.setData(indicatorSeries.ema9);
+    if (indicatorSeries.ema21.length && lineMap.has("ema21")) lineMap.get("ema21")!.setData(indicatorSeries.ema21);
+    if (indicatorSeries.bbMid.length && lineMap.has("bbUpper")) {
+      lineMap.get("bbUpper")!.setData(indicatorSeries.bbUpper);
+      lineMap.get("bbMid")!.setData(indicatorSeries.bbMid);
+      lineMap.get("bbLower")!.setData(indicatorSeries.bbLower);
+    }
     chartRef.current?.timeScale().fitContent();
-  }, [candleData, volumeData, showVolume]);
+  }, [candleData, volumeData, showVolume, indicatorSeries]);
 
   if (!data.length) {
     return (
