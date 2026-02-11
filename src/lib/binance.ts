@@ -65,36 +65,55 @@ export async function fetchKlines(
   }));
 }
 
+/** Binance max klines per request */
+const KLINES_PAGE = 1000;
+
 /**
- * Fetch more history: two batches of up to 1000 candles (oldest first batch, then merge).
- * Returns newest-first so same shape as fetchKlines for chart display.
+ * Fetch extended history: multiple batches of 1000 candles (paginating backward with endTime).
+ * Use totalLimit 5000 for shorter timeframes (1m, 5m, 1h) so the chart shows more history.
+ * Returns chronological (oldest first) for chart display.
  */
 export async function fetchKlinesExtended(
   pair: string,
   timeframe: string,
-  totalLimit = 2000
+  totalLimit = 5000
 ): Promise<OhlcvItem[]> {
-  const firstBatch = Math.min(1000, totalLimit);
-  const newest = await fetchKlines(pair, timeframe, firstBatch);
-  if (newest.length < firstBatch || totalLimit <= 1000) return newest;
-  const oldestTime = new Date(newest[newest.length - 1].time).getTime();
   const symbol = pairToSymbol(pair);
   const interval = timeframeToInterval(timeframe);
-  const url = `${BINANCE_API}/klines?symbol=${encodeURIComponent(symbol)}&interval=${interval}&limit=${Math.min(1000, totalLimit - firstBatch)}&endTime=${oldestTime - 1}`;
-  const res = await fetch(url);
-  if (!res.ok) return newest;
-  const raw = (await res.json()) as BinanceKline[];
-  const older = raw.map(([openTime, o, h, l, c, v]) => ({
-    time: new Date(openTime).toISOString(),
-    open: parseFloat(o),
-    high: parseFloat(h),
-    low: parseFloat(l),
-    close: parseFloat(c),
-    volume: parseFloat(v),
-  }));
-  const combined = [...older, ...newest];
-  combined.sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
-  return combined;
+  const toCandle = (k: BinanceKline) => ({
+    time: new Date(k[0]).toISOString(),
+    open: parseFloat(k[1]),
+    high: parseFloat(k[2]),
+    low: parseFloat(k[3]),
+    close: parseFloat(k[4]),
+    volume: parseFloat(k[5]),
+  });
+
+  let endTime: number | undefined;
+  const all: OhlcvItem[] = [];
+  let requested = 0;
+
+  while (requested < totalLimit) {
+    const limit = Math.min(KLINES_PAGE, totalLimit - requested);
+    const url = endTime == null
+      ? `${BINANCE_API}/klines?symbol=${encodeURIComponent(symbol)}&interval=${interval}&limit=${limit}`
+      : `${BINANCE_API}/klines?symbol=${encodeURIComponent(symbol)}&interval=${interval}&limit=${limit}&endTime=${endTime}`;
+    const res = await fetch(url);
+    if (!res.ok) break;
+    const raw = (await res.json()) as BinanceKline[];
+    if (raw.length === 0) break;
+    const batch = raw.map(toCandle);
+    // Binance returns newest-first when no startTime; with endTime also newest-first in that range
+    const oldestInBatch = batch[batch.length - 1];
+    const newestInBatch = batch[0];
+    all.push(...batch);
+    endTime = new Date(oldestInBatch.time).getTime() - 1;
+    requested += batch.length;
+    if (batch.length < limit) break;
+  }
+
+  all.sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
+  return all;
 }
 
 /** Order book level: price, amount, total (price × amount) */

@@ -295,7 +295,7 @@ export function TradingTerminalNew({ onNavigate }: TradingTerminalProps) {
     setChartError(null);
     setChartData([]);
     try {
-      const data = await fetchKlinesExtended(selectedPair, selectedTimeframe, 2000);
+      const data = await fetchKlinesExtended(selectedPair, selectedTimeframe, 5000);
       setChartData(data);
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Failed to load Binance data";

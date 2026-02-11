@@ -21,48 +21,76 @@ function toUtc(iso: string): number {
 export function RsiChart({ data, height = 100 }: { data: OhlcvRow[]; height?: number }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
-  const rsiData = computeRSI(data);
-  const seriesData = rsiData.map((d) => ({ time: toUtc(d.time), value: d.value }));
+  const [error, setError] = useState<string | null>(null);
+
+  const seriesData = useMemo(() => {
+    if (!data?.length || data.length < 15) return [];
+    try {
+      const rsiData = computeRSI(data);
+      return rsiData.map((d) => ({ time: toUtc(d.time), value: d.value }));
+    } catch {
+      return [];
+    }
+  }, [data]);
 
   useEffect(() => {
     const el = containerRef.current;
     if (!el || seriesData.length === 0) return;
     if (chartRef.current) return;
-    const chart = createChart(el, {
-      width: el.clientWidth || 400,
-      height,
-      layout: THEME.layout,
-      grid: THEME.grid,
-      rightPriceScale: { ...THEME.rightPriceScale, scaleMargins: { top: 0.1, bottom: 0.1 } },
-      timeScale: THEME.timeScale,
-      attributionLogo: false,
-    });
-    const series = chart.addSeries(LineSeries, { color: "#ec4899", lineWidth: 2 });
-    series.setData(seriesData);
-    series.priceScale().applyOptions({ scaleMargins: { top: 0.1, bottom: 0.1 } });
-    chart.timeScale().fitContent();
-    chartRef.current = chart;
-    const ro = new ResizeObserver(() => chart.applyOptions({ width: el.clientWidth || 400 }));
-    ro.observe(el);
-    return () => {
-      ro.disconnect();
-      chart.remove();
-      chartRef.current = null;
-    };
+    try {
+      setError(null);
+      const chart = createChart(el, {
+        width: Math.max(el.clientWidth || 400, 100),
+        height,
+        layout: THEME.layout,
+        grid: THEME.grid,
+        rightPriceScale: { ...THEME.rightPriceScale, scaleMargins: { top: 0.1, bottom: 0.1 } },
+        timeScale: THEME.timeScale,
+        attributionLogo: false,
+      });
+      const series = chart.addSeries(LineSeries, { color: "#ec4899", lineWidth: 2 });
+      series.setData(seriesData);
+      series.priceScale().applyOptions({ scaleMargins: { top: 0.1, bottom: 0.1 } });
+      chart.timeScale().fitContent();
+      chartRef.current = chart;
+      const ro = new ResizeObserver(() => {
+        if (chartRef.current) chartRef.current.applyOptions({ width: Math.max(el.clientWidth || 400, 100) });
+      });
+      ro.observe(el);
+      return () => {
+        ro.disconnect();
+        chart.remove();
+        chartRef.current = null;
+      };
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Chart error");
+      return undefined;
+    }
   }, [height, seriesData.length]);
 
   useEffect(() => {
     const chart = chartRef.current;
     if (!chart || seriesData.length === 0) return;
-    const series = chart.series()[0];
-    if (series) series.setData(seriesData);
-    chart.timeScale().fitContent();
+    try {
+      const series = chart.series()[0];
+      if (series) series.setData(seriesData);
+      chart.timeScale().fitContent();
+    } catch {
+      // ignore
+    }
   }, [seriesData]);
 
+  if (error) {
+    return (
+      <div className="flex items-center justify-center bg-[#0a0e13] text-muted-foreground text-xs" style={{ height }}>
+        RSI — {error}
+      </div>
+    );
+  }
   if (seriesData.length === 0) {
     return (
       <div className="flex items-center justify-center bg-[#0a0e13] text-muted-foreground text-xs" style={{ height }}>
-        RSI — need more data
+        RSI — need more data (min 15 bars)
       </div>
     );
   }
