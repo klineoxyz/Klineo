@@ -2625,7 +2625,7 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
           <DialogHeader>
             <DialogTitle>List on Marketplace</DialogTitle>
             <DialogDescription>
-              Publish this backtest strategy to the Marketplace so others can discover it and copy you as a Master Trader.
+              Publish this backtest strategy to the Marketplace so others can discover it and copy you. When they copy you, they follow your live execution—including futures if you run this strategy via Go Live (Futures). DCA Bots are not listed here; they appear in the DCA Bots section only.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">

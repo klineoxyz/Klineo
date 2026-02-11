@@ -285,7 +285,7 @@ export function Marketplace({ onNavigate }: MarketplaceProps) {
               <Card className="p-8 text-center">
                 <BarChart3 className="size-10 mx-auto text-muted-foreground mb-3" />
                 <p className="text-sm text-muted-foreground">No strategies listed yet.</p>
-                <p className="text-xs text-muted-foreground mt-1">Master Traders can list backtest strategies from Strategy Backtest.</p>
+                <p className="text-xs text-muted-foreground mt-1">Master Traders list backtest strategies from Strategy Backtest so others can copy them (including futures execution). DCA Bots are in the DCA Bots section, not here.</p>
               </Card>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
