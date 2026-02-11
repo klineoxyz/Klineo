@@ -142,37 +142,39 @@ export function TradingViewChart({
           )}
         </div>
       )}
-      {/* Drawing Tools (top-left, above chart) */}
-      <div className="absolute top-2 z-10 flex gap-2" style={{ left: hasTATools ? 52 : 8 }}>
-        <Button
-          size="sm"
-          variant={drawingMode === 'trendline' ? 'default' : 'outline'}
-          onClick={() => setDrawingMode(drawingMode === 'trendline' ? 'none' : 'trendline')}
-          className="h-8"
-        >
-          <TrendingUp className="h-4 w-4" />
-        </Button>
-        <Button
-          size="sm"
-          variant={drawingMode === 'horizontal' ? 'default' : 'outline'}
-          onClick={() => setDrawingMode(drawingMode === 'horizontal' ? 'none' : 'horizontal')}
-          className="h-8"
-        >
-          <Minus className="h-4 w-4" />
-        </Button>
-        {drawings.length > 0 && (
+      {/* Toolbar row: drawing tools (left) + fullscreen (right) — above timeframe to avoid overlap */}
+      <div className="flex items-center justify-between gap-2 shrink-0 py-1" style={{ marginLeft: hasTATools ? 40 : 0 }}>
+        <div className="flex gap-2">
           <Button
             size="sm"
-            variant="outline"
-            onClick={() => setDrawings([])}
+            variant={drawingMode === 'trendline' ? 'default' : 'outline'}
+            onClick={() => setDrawingMode(drawingMode === 'trendline' ? 'none' : 'trendline')}
             className="h-8"
+            title="Trend line"
           >
-            <X className="h-4 w-4" />
+            <TrendingUp className="h-4 w-4" />
           </Button>
-        )}
-      </div>
-
-      <div className="absolute top-2 right-2 z-10 flex gap-2">
+          <Button
+            size="sm"
+            variant={drawingMode === 'horizontal' ? 'default' : 'outline'}
+            onClick={() => setDrawingMode(drawingMode === 'horizontal' ? 'none' : 'horizontal')}
+            className="h-8"
+            title="Horizontal line"
+          >
+            <Minus className="h-4 w-4" />
+          </Button>
+          {drawings.length > 0 && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setDrawings([])}
+              className="h-8"
+              title="Clear drawings"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
         <Button
           size="sm"
           variant="outline"

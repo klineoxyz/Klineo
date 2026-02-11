@@ -68,15 +68,18 @@ export async function fetchKlines(
 /** Binance max klines per request */
 const KLINES_PAGE = 1000;
 
+/** Max batches to avoid runaway requests (100k candles). */
+const MAX_KLINES_BATCHES = 100;
+
 /**
- * Fetch extended history: multiple batches of 1000 candles (paginating backward with endTime).
- * Use totalLimit 5000 for shorter timeframes (1m, 5m, 1h) so the chart shows more history.
- * Returns chronological (oldest first) for chart display.
+ * Fetch full historical klines: paginate backward until Binance returns fewer than 1000
+ * (start of history) or we hit MAX_KLINES_BATCHES. Returns chronological (oldest first).
+ * Use for charts so all timeframes show full available history.
  */
 export async function fetchKlinesExtended(
   pair: string,
   timeframe: string,
-  totalLimit = 5000
+  _totalLimit?: number
 ): Promise<OhlcvItem[]> {
   const symbol = pairToSymbol(pair);
   const interval = timeframeToInterval(timeframe);
@@ -91,25 +94,22 @@ export async function fetchKlinesExtended(
 
   let endTime: number | undefined;
   const all: OhlcvItem[] = [];
-  let requested = 0;
+  let batches = 0;
 
-  while (requested < totalLimit) {
-    const limit = Math.min(KLINES_PAGE, totalLimit - requested);
+  while (batches < MAX_KLINES_BATCHES) {
     const url = endTime == null
-      ? `${BINANCE_API}/klines?symbol=${encodeURIComponent(symbol)}&interval=${interval}&limit=${limit}`
-      : `${BINANCE_API}/klines?symbol=${encodeURIComponent(symbol)}&interval=${interval}&limit=${limit}&endTime=${endTime}`;
+      ? `${BINANCE_API}/klines?symbol=${encodeURIComponent(symbol)}&interval=${interval}&limit=${KLINES_PAGE}`
+      : `${BINANCE_API}/klines?symbol=${encodeURIComponent(symbol)}&interval=${interval}&limit=${KLINES_PAGE}&endTime=${endTime}`;
     const res = await fetch(url);
     if (!res.ok) break;
     const raw = (await res.json()) as BinanceKline[];
     if (raw.length === 0) break;
     const batch = raw.map(toCandle);
-    // Binance returns newest-first when no startTime; with endTime also newest-first in that range
     const oldestInBatch = batch[batch.length - 1];
-    const newestInBatch = batch[0];
     all.push(...batch);
     endTime = new Date(oldestInBatch.time).getTime() - 1;
-    requested += batch.length;
-    if (batch.length < limit) break;
+    batches++;
+    if (batch.length < KLINES_PAGE) break;
   }
 
   all.sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
