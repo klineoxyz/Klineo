@@ -1855,7 +1855,7 @@ export function Admin() {
           </Dialog>
         </TabsContent>
 
-        <TabsContent value="discounts" className="space-y-6" onFocus={() => { loadCoupons(); loadUserDiscounts(); loadUsers(1, ""); }}>
+        <TabsContent value="discounts" className="space-y-6">
           {/* Create New Coupon — OB (onboarding) or 100/200/500 (packages) */}
           <Card className="p-6 border-primary/20">
             <div className="flex items-center gap-3 mb-6">
