@@ -35,6 +35,7 @@ import { paymentIntentsRouter, validateCouponHandler } from './routes/payment-in
 import { launchRouter } from './routes/launch.js';
 import { masterTraderApplicationsRouter } from './routes/master-trader-applications.js';
 import { candlesRouter } from './routes/candles.js';
+import { publicTopBotsRouter } from './routes/public-top-bots.js';
 import { verifySupabaseJWT } from './middleware/auth.js';
 import { apiLimiter, authLimiter, adminLimiter, tradersPublicLimiter } from './middleware/rateLimit.js';
 
@@ -173,6 +174,7 @@ app.use('/api/entitlement', entitlementsRouter);
 app.use('/api/entitlements', entitlementsMeRouter);
 app.use('/api/master-trader-applications', masterTraderApplicationsRouter);
 app.use('/api/candles', candlesRouter);
+app.use('/api/public', publicTopBotsRouter);
 
 // 404 handler
 app.use((req, res) => {

@@ -488,9 +488,23 @@ export interface DcaBotFeatured {
   realizedPnl: number;
 }
 
+/** Site-wide top bot (public leaderboard); includes config for copy. */
+export interface TopBot {
+  id: string;
+  name: string;
+  pair: string;
+  timeframe: string;
+  exchange: 'binance' | 'bybit';
+  market: 'spot' | 'futures';
+  config: DcaBotConfig;
+  realizedPnl: number;
+  roiPct: number;
+}
+
 export const dcaBots = {
   list: async (): Promise<{ bots: DcaBot[] }> => api.get('/api/dca-bots'),
   featured: async (): Promise<{ featured: DcaBotFeatured[] }> => api.get('/api/dca-bots/featured'),
+  getTopBots: async (): Promise<{ topBots: TopBot[] }> => api.get('/api/public/top-bots'),
   create: async (data: CreateDcaBotRequest): Promise<{ bot: DcaBot }> =>
     api.post('/api/dca-bots', data),
   updateStatus: async (id: string, status: 'running' | 'paused' | 'stopped'): Promise<{ bot: DcaBot }> =>

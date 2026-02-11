@@ -25,9 +25,10 @@ import {
   Pencil,
   Trophy,
   TrendingUp,
+  CopyPlus,
 } from "lucide-react";
 import { toast } from "@/app/lib/toast";
-import { api, dcaBots, type DcaBot, type DcaBotFeatured, type EntitlementResponse } from "@/lib/api";
+import { api, dcaBots, type DcaBot, type DcaBotFeatured, type TopBot, type EntitlementResponse } from "@/lib/api";
 import { getPresetsByRisk, filterPresetsBySearch, type DcaPreset, type DcaPresetRisk } from "@/app/data/dcaPresets";
 import { CreateBotModal } from "@/app/components/screens/dca/CreateBotModal";
 
@@ -46,16 +47,20 @@ export function DcaBotsPage({ onNavigate }: DcaBotsPageProps) {
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [maxDcaBots, setMaxDcaBots] = useState<number>(1);
   const [featuredBots, setFeaturedBots] = useState<DcaBotFeatured[]>([]);
+  const [topBots, setTopBots] = useState<TopBot[]>([]);
+  const [templateBot, setTemplateBot] = useState<TopBot | null>(null);
 
   const loadBots = async () => {
     setLoading(true);
     try {
-      const [{ bots: list }, { featured: featuredList }] = await Promise.all([
+      const [{ bots: list }, { featured: featuredList }, { topBots: topList }] = await Promise.all([
         dcaBots.list(),
         dcaBots.featured().catch(() => ({ featured: [] as DcaBotFeatured[] })),
+        dcaBots.getTopBots().catch(() => ({ topBots: [] as TopBot[] })),
       ]);
       setBots(list ?? []);
       setFeaturedBots(featuredList ?? []);
+      setTopBots(topList ?? []);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Failed to load bots";
       toast.error("Failed to load DCA bots", { description: msg });
@@ -95,26 +100,40 @@ export function DcaBotsPage({ onNavigate }: DcaBotsPageProps) {
   const presetsByTab = getPresetsByRisk(presetTab);
   const filteredPresets = filterPresetsBySearch(presetsByTab, presetSearch);
 
-  const handleUsePreset = (preset: DcaPreset) => {
-    setPresetForCreate(preset);
-    setCreateModalOpen(true);
-  };
-
   const handleCreateBot = () => {
     setPresetForCreate(null);
     setEditingBot(null);
+    setTemplateBot(null);
     setCreateModalOpen(true);
   };
 
   const handleEditBot = (bot: DcaBot) => {
     setEditingBot(bot);
     setPresetForCreate(null);
+    setTemplateBot(null);
+    setCreateModalOpen(true);
+  };
+
+  const handleUsePreset = (preset: DcaPreset) => {
+    setPresetForCreate(preset);
+    setEditingBot(null);
+    setTemplateBot(null);
     setCreateModalOpen(true);
   };
 
   const handleCreateModalOpenChange = (open: boolean) => {
     setCreateModalOpen(open);
-    if (!open) setEditingBot(null);
+    if (!open) {
+      setEditingBot(null);
+      setTemplateBot(null);
+    }
+  };
+
+  const handleCopyBot = (bot: TopBot) => {
+    setTemplateBot(bot);
+    setPresetForCreate(null);
+    setEditingBot(null);
+    setCreateModalOpen(true);
   };
 
   const handleCreateSuccess = () => {
@@ -219,16 +238,57 @@ export function DcaBotsPage({ onNavigate }: DcaBotsPageProps) {
         </Card>
       </div>
 
-      {/* Featured Top 3 Bots (best returns) */}
+      {/* Site-wide: Top 10 Bots by ROI — everyone can see and copy & run */}
       <Card className="p-4 sm:p-6">
         <h3 className="text-base sm:text-lg font-semibold mb-3 flex items-center gap-2">
           <Trophy className="size-5 text-amber-500" />
-          Featured Top 3 Bots
+          Top 10 Bots by ROI
+        </h3>
+        <p className="text-sm text-muted-foreground mb-4">Best-performing bots on the platform. Copy & run any bot to trade the same strategy with your account.</p>
+        {topBots.length === 0 ? (
+          <div className="py-6 text-center text-muted-foreground text-sm">
+            No bots with returns yet. Be the first to run a bot and appear here.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
+            {topBots.map((bot, i) => (
+              <Card key={bot.id} className="p-3 sm:p-4 flex flex-col gap-2 border border-border hover:border-primary/50 transition-colors">
+                <div className="flex items-center gap-2">
+                  <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-amber-500/20 text-amber-600 dark:text-amber-400 font-semibold text-sm">
+                    {i + 1}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="font-medium truncate">{bot.name}</p>
+                    <p className="text-xs text-muted-foreground font-mono">{bot.pair}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1.5 mt-1">
+                  <TrendingUp className="size-4 text-[#10B981]" />
+                  <span className={`font-mono font-semibold text-sm ${bot.realizedPnl >= 0 ? "text-[#10B981]" : "text-[#EF4444]"}`}>
+                    {bot.realizedPnl >= 0 ? "+" : ""}${bot.realizedPnl.toFixed(2)}
+                  </span>
+                  <span className="text-xs text-muted-foreground">({bot.roiPct >= 0 ? "+" : ""}{bot.roiPct.toFixed(1)}% ROI)</span>
+                </div>
+                <Button variant="outline" size="sm" className="w-full mt-auto" onClick={() => handleCopyBot(bot)}>
+                  <CopyPlus className="size-3.5 mr-1.5" />
+                  Copy & run
+                </Button>
+              </Card>
+            ))}
+          </div>
+        )}
+      </Card>
+
+      {/* Per-user: My top performers (highest realized returns) */}
+      <Card className="p-4 sm:p-6">
+        <h3 className="text-base sm:text-lg font-semibold mb-3 flex items-center gap-2">
+          <Activity className="size-5 text-primary" />
+          My top performers
         </h3>
         <p className="text-sm text-muted-foreground mb-4">Your bots with the highest realized returns</p>
         {featuredBots.length === 0 ? (
           <div className="py-6 text-center text-muted-foreground text-sm">
-            No bots yet, or no returns recorded. Create a bot and run it to see top performers here.
+            No bots yet, or no returns recorded. Create a bot and run it to see your top performers here.
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -464,6 +524,7 @@ export function DcaBotsPage({ onNavigate }: DcaBotsPageProps) {
         onSuccess={handleCreateSuccess}
         preset={presetForCreate}
         editBot={editingBot}
+        templateBot={templateBot}
         atBotLimit={atBotLimit}
         limitLabel={limitLabel}
       />

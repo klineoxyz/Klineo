@@ -22,7 +22,7 @@ import {
 } from "@/app/components/ui/select";
 import { ChevronRight, ChevronLeft, Loader2 } from "lucide-react";
 import { toast } from "@/app/lib/toast";
-import { dcaBots, type DcaBotConfig, type DcaBot } from "@/lib/api";
+import { dcaBots, type DcaBotConfig, type DcaBot, type TopBot } from "@/lib/api";
 import type { DcaPreset } from "@/app/data/dcaPresets";
 
 const STEPS = 5;
@@ -36,6 +36,8 @@ export interface CreateBotModalProps {
   preset?: DcaPreset | null;
   /** When set, modal is in edit mode: prefills from this bot and submit calls update. */
   editBot?: DcaBot | null;
+  /** When set, modal prefills from this template (e.g. from leaderboard) for copy & run. */
+  templateBot?: TopBot | null;
   /** When true, show notice that user is at plan limit and cannot start more bots until upgrade. */
   atBotLimit?: boolean;
   /** e.g. "5" or "Unlimited" for display. */
@@ -77,7 +79,7 @@ function applyPresetToConfig(preset: DcaPreset): DcaBotConfig {
   };
 }
 
-export function CreateBotModal({ open, onOpenChange, onSuccess, preset, editBot, atBotLimit, limitLabel }: CreateBotModalProps) {
+export function CreateBotModal({ open, onOpenChange, onSuccess, preset, editBot, templateBot, atBotLimit, limitLabel }: CreateBotModalProps) {
   const [step, setStep] = useState(1);
   const [name, setName] = useState("");
   const [exchange, setExchange] = useState<"binance" | "bybit">("binance");
@@ -95,12 +97,19 @@ export function CreateBotModal({ open, onOpenChange, onSuccess, preset, editBot,
       setPair(editBot.pair ?? "BTC/USDT");
       setTimeframe(editBot.timeframe ?? "1h");
       setConfig({ ...defaultConfig, ...editBot.config });
+    } else if (open && templateBot) {
+      setName("Copy of " + (templateBot.name || "Top Bot"));
+      setExchange(templateBot.exchange ?? "binance");
+      setMarket(templateBot.market ?? "spot");
+      setPair(templateBot.pair ?? "BTC/USDT");
+      setTimeframe(templateBot.timeframe ?? "1h");
+      setConfig({ ...defaultConfig, ...templateBot.config });
     } else if (open && preset) {
       setName(preset.name);
       setPair(preset.suggestedPairs[0] ?? "BTC/USDT");
       setTimeframe(preset.timeframe);
       setConfig(applyPresetToConfig(preset));
-    } else if (open && !preset && !editBot) {
+    } else if (open && !preset && !editBot && !templateBot) {
       setName("");
       setExchange("binance");
       setMarket("spot");
@@ -108,7 +117,7 @@ export function CreateBotModal({ open, onOpenChange, onSuccess, preset, editBot,
       setTimeframe("1h");
       setConfig({ ...defaultConfig });
     }
-  }, [open, preset, editBot]);
+  }, [open, preset, editBot, templateBot]);
 
   useEffect(() => {
     if (!open) setStep(1);
@@ -185,7 +194,7 @@ export function CreateBotModal({ open, onOpenChange, onSuccess, preset, editBot,
       <DialogContent className="sm:max-w-[540px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
-            {editBot ? "Edit DCA Bot" : preset ? `Use preset: ${preset.name}` : "Create DCA Bot"}
+            {editBot ? "Edit DCA Bot" : templateBot ? `Copy & run: ${templateBot.name}` : preset ? `Use preset: ${preset.name}` : "Create DCA Bot"}
           </DialogTitle>
         </DialogHeader>
 
