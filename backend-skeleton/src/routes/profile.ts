@@ -211,6 +211,46 @@ profileRouter.get('/discounts', async (req: AuthenticatedRequest, res) => {
 });
 
 /**
+ * GET /api/me/trader
+ * Get current user's approved Master Trader profile (if any). Used to show "List on Marketplace" in Strategy Backtest.
+ */
+profileRouter.get('/trader', async (req: AuthenticatedRequest, res) => {
+  const client = getSupabase();
+  if (!client) {
+    return res.status(503).json({ error: 'Database unavailable' });
+  }
+
+  try {
+    const { data: trader, error } = await client
+      .from('traders')
+      .select('id, display_name, slug, status')
+      .eq('user_id', req.user!.id)
+      .eq('status', 'approved')
+      .maybeSingle();
+
+    if (error) {
+      console.error('Error fetching my trader:', error);
+      return res.status(500).json({ error: 'Failed to fetch trader' });
+    }
+
+    if (!trader) {
+      return res.json({ trader: null });
+    }
+
+    res.json({
+      trader: {
+        id: trader.id,
+        name: trader.display_name,
+        slug: trader.slug,
+      },
+    });
+  } catch (err) {
+    console.error('My trader get error:', err);
+    res.status(500).json({ error: 'Failed to fetch trader' });
+  }
+});
+
+/**
  * PUT /api/me/profile
  * Update current user's profile
  */

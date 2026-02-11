@@ -1,48 +1,56 @@
-# Marketplace & Copy Trading — How It Works (and the Strategy-Listing Gap)
+# Marketplace & Copy Trading — Design (incl. Strategy Listing)
 
-## How copy trading starts in the Marketplace (current design)
+## Agreed design (from product)
 
-1. **Marketplace lists Master Traders only**  
-   The Marketplace page loads traders from `GET /api/traders`. Those rows come from the **`traders`** table. Only traders with **`status = 'approved'`** are returned. So the Marketplace is a **curated list of approved Master Traders**, not a list of user-created strategies (e.g. DCA bots or backtest strategies).
+- **DCA Bots**: Show in the **DCA Bots** section only (e.g. TOP 10 by ROI). They do **not** get listed in the Marketplace. No change needed for DCA in Marketplace.
+- **Copy trading / Marketplace**: Users who are **approved Master Traders** can **build a strategy in Strategy Backtest** and **list it on the Marketplace**. Other users browse Marketplace (traders + strategies), view a strategy, and copy the Master Trader who listed it.
 
-2. **How a trader gets into the Marketplace**  
-   - User goes to **Become a Master Trader** (link on Marketplace) → **Master Trader Application** page.  
-   - They submit the application (personal info, trading experience, strategy description, proof screenshot, etc.) via `POST /api/master-trader-applications`.  
-   - An admin reviews in **Admin → Master Trader Requests** and **approves** or rejects via `PATCH /api/admin/master-trader-applications/:id`.  
-   - When status is set to **approved**, the backend **creates a row in `traders`** (if one doesn’t already exist for that user): `user_id`, `display_name`, `slug`, `status: 'approved'`.  
-   - That trader then **appears in the Marketplace** (because `GET /api/traders` returns approved traders).  
-   - Performance stats (ROI, drawdown, followers, etc.) come from **`trader_performance`** and **`copy_setups`** (follower count). Who fills `trader_performance` is a separate backend/cron concern (not covered here).
-
-3. **Copy trading flow (follower side)**  
-   - User opens **Marketplace** → sees cards for each approved Master Trader.  
-   - Clicks **View & Copy** on a trader → navigates to **Trader Profile** (same route, view `trader-profile` with trader `id`/`slug`).  
-   - On Trader Profile they click **Copy Trader** → app switches to **Copy Setup** view (`copy-setup` with trader `id`, `name`, `slug`).  
-   - On **Copy Setup** they choose allocation %, max position %, etc., and submit → `POST /api/copy-setups` creates a copy setup (user is now “copying” that trader).  
-   - Their active copy setups are shown under **Copy Trading**; the platform then replicates that trader’s trades to the follower (execution path is backend/trading logic).
-
-So: **copy trading “starts” in the Marketplace by browsing approved Master Traders, opening a Trader Profile, then starting a Copy Setup for that trader.** There is no separate “strategy” entity in the Marketplace — only **people (Master Traders)** who were approved via the application.
+So:
+- **Marketplace** = list of **Master Traders** (people) + list of **Strategies** (backtest strategies listed by those Master Traders).
+- **Strategy listing** = only for approved Master Traders; strategies come from **Strategy Backtest** (config + optional backtest summary), not from DCA Bots.
 
 ---
 
-## Where users can “execute their own strategy” today
+## How copy trading starts today (traders only)
 
-- **Strategy Backtest** (`/strategy-backtest`): Users can backtest a strategy (e.g. SMA crossover). This is **backtest-only**. There is **no** “publish to Marketplace” or “list this strategy”; it does not create a `traders` row or any Marketplace listing.  
-- **DCA Bots** (e.g. DCA Bots page): Users can create and run their own DCA bots. These are **personal automation**. They are **not** listed in the Marketplace and are **not** the same as “Master Traders” in the Marketplace.  
-- **Master Trader Application**: This is the **only** path to appearing in the Marketplace. The applicant is a **person** (display name, bio, proof, etc.), not a specific “strategy” or “bot.” Once approved, they show up as one trader in the list; their performance is tracked in `trader_performance`.
+1. **Marketplace** lists approved **Master Traders** from `GET /api/traders` (from `traders` table, `status = 'approved'`).
+2. A trader gets listed by: **Become a Master Trader** → Application → Admin approves → row in `traders` → appears in Marketplace.
+3. **Copy flow**: Marketplace → View & Copy (trader) → Trader Profile → Copy Trader → Copy Setup (allocation) → `POST /api/copy-setups`. Platform copies that trader’s trades.
 
-So today there is **no** flow for “I run my own strategy (backtest or DCA bot) and I want to **list it in the Marketplace** so others can copy it.” The Marketplace is **only** for approved Master Traders (application-based, human-centric).
+---
+
+## New: Strategy listing (Master Traders only)
+
+- **Who**: Only **approved Master Traders** (user has an approved row in `traders`).
+- **Where**: They build a strategy in **Strategy Backtest**, then **List on Marketplace** (name, description, current backtest config + optional summary).
+- **Storage**: `marketplace_strategies` table — `trader_id`, `name`, `description`, `symbol`, `interval`, `config` (JSONB), `backtest_summary` (JSONB), `status` (draft / listed / unlisted).
+- **Discovery**: Marketplace shows a **Strategies** section (or tab) with listed strategies; each strategy shows the Master Trader who listed it. **Copy** = copy that trader (same Copy Setup flow as today).
+
+**Implemented so far**
+
+- Migration: `supabase/migrations/20260210180000_marketplace_strategies.sql` (table + RLS).
+- Backend: `GET /api/me/trader` (profile router) — returns current user’s approved trader profile so the app can show “List on Marketplace” only to Master Traders.
+
+**Still to do**
+
+- Backend: Marketplace-strategies API — public list (listed only), “my strategies”, create/update/delete.
+- Strategy Backtest UI: “List on Marketplace” button (only if `GET /api/me/trader` returns a trader) + dialog to submit strategy.
+- Marketplace UI: “Strategies” section/tab, list strategies with trader info, “View & Copy” → Trader Profile or Copy Setup for that trader.
+
+---
+
+## DCA Bots (unchanged for Marketplace)
+
+- DCA Bots live in the **DCA Bots** section (e.g. TOP 10 by ROI in that section).
+- They are **not** listed in the Marketplace. No DCA-specific changes required for the Marketplace/copy-trading flow.
 
 ---
 
 ## Summary
 
-| Question | Answer |
-|----------|--------|
-| How does copy trading start in the Marketplace? | User opens Marketplace → picks an approved Master Trader → View & Copy → Trader Profile → Copy Trader → Copy Setup (allocation, etc.) → copy setup is created; platform copies that trader’s trades. |
-| Where can users execute their own strategy? | **Strategy Backtest**: backtest only, no listing. **DCA Bots**: run their own DCA, not in Marketplace. **Master Trader**: apply to become a trader; if approved, they appear in Marketplace (as a person, not as a “strategy” object). |
-| Can users list their own strategy in the Marketplace? | **No.** Only **approved Master Traders** (from Master Trader Application) appear. There is no “publish strategy” or “list my DCA bot / backtest strategy” in the current implementation. |
-
-If you want users to “execute their own strategy and list it in the Marketplace,” you’d need to add a new path, for example:
-
-- A **“Strategy Marketplace”** or **“List my strategy”** flow where a user can attach a strategy (e.g. a DCA bot config or a backtest-derived strategy) to a listing that others can browse and copy, **or**
-- Keep the current Marketplace as **Master-Trader-only** and document that “listing” is only via the Master Trader Application (person-based), and that Strategy Backtest and DCA Bots are for personal use only unless you later add a separate strategy-listing feature.
+| Area              | Behavior |
+|-------------------|----------|
+| DCA Bots          | DCA Bots section only (TOP 10 by ROI, etc.). Not in Marketplace. |
+| Marketplace       | Master Traders (people) + **Strategies** (backtest strategies listed by Master Traders). |
+| Strategy listing  | Only approved Master Traders; from Strategy Backtest → “List on Marketplace”. |
+| Copy trading      | Copy a **trader** (from trader card or from a strategy card: “Copy [Trader name]”). |
