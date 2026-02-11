@@ -378,20 +378,16 @@ function SubscriptionContent({
                       <Badge className="mb-3 w-fit bg-primary text-primary-foreground">Most popular</Badge>
                     )}
                     <div className="mb-3">
-                      <div className="flex flex-wrap items-baseline gap-2">
-                        <h3 className="text-lg font-semibold">
-                          {displayName}
-                        </h3>
-                        {pkg.basePriceUsd != null && pkg.discountPct != null ? (
-                          <>
-                            <span className="text-lg text-muted-foreground line-through">${pkg.basePriceUsd}</span>
-                            <Badge variant="secondary" className="text-xs">50% Discount</Badge>
-                            <span className="text-2xl font-bold text-primary">${pkg.priceUsd}</span>
-                          </>
-                        ) : (
-                          <span className="text-2xl font-bold text-primary">${pkg.priceUsd}</span>
-                        )}
-                      </div>
+                      <h3 className="text-lg font-semibold mb-2">{displayName}</h3>
+                      {pkg.basePriceUsd != null && pkg.discountPct != null ? (
+                        <div className="flex flex-wrap items-baseline gap-2">
+                          <span className="text-3xl font-bold text-primary">${pkg.priceUsd}</span>
+                          <span className="text-base text-muted-foreground line-through">${pkg.basePriceUsd}</span>
+                          <Badge className="text-xs bg-emerald-600 text-white border-0 hover:bg-emerald-600">50% Discount</Badge>
+                        </div>
+                      ) : (
+                        <div className="text-2xl font-bold text-primary">${pkg.priceUsd}</div>
+                      )}
                       <p className="text-sm text-muted-foreground mt-2 font-medium">
                         Buy ${pkg.priceUsd}. Trade until you make <span className="text-foreground font-semibold">${pkg.profitAllowanceUsd.toLocaleString()}</span> profit ({pkg.multiplier}x).
                       </p>
