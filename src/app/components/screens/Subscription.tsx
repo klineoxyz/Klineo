@@ -47,7 +47,7 @@ export function Subscription({ onNavigate }: SubscriptionProps) {
         setPlans({
           joiningFee: { priceUsd: 100, currency: "USD" },
           packages: [
-            { id: "entry_100", priceUsd: 100, multiplier: 3, profitAllowanceUsd: 300 },
+            { id: "entry_100", basePriceUsd: 100, discountPct: 50, priceUsd: 50, multiplier: 3, profitAllowanceUsd: 300 },
             { id: "pro_200", priceUsd: 200, multiplier: 5, profitAllowanceUsd: 1000 },
             { id: "elite_500", priceUsd: 500, multiplier: 10, profitAllowanceUsd: 5000 },
           ],
@@ -193,7 +193,7 @@ export function Subscription({ onNavigate }: SubscriptionProps) {
           plans={{
             joiningFee: { priceUsd: 100, currency: "USD" },
             packages: [
-              { id: "entry_100", priceUsd: 100, multiplier: 3, profitAllowanceUsd: 300 },
+              { id: "entry_100", basePriceUsd: 100, discountPct: 50, priceUsd: 50, multiplier: 3, profitAllowanceUsd: 300 },
               { id: "pro_200", priceUsd: 200, multiplier: 5, profitAllowanceUsd: 1000 },
               { id: "elite_500", priceUsd: 500, multiplier: 10, profitAllowanceUsd: 5000 },
             ],
@@ -341,11 +341,15 @@ function SubscriptionContent({
           </div>
         )}
         <div className="flex flex-wrap gap-x-4 gap-y-1 mb-4 text-sm font-medium">
-          <span className="text-foreground">Starter — <span className="text-primary font-semibold">$100</span></span>
-          <span className="text-muted-foreground">·</span>
-          <span className="text-foreground">Booster — <span className="text-primary font-semibold">$200</span></span>
-          <span className="text-muted-foreground">·</span>
-          <span className="text-foreground">Establish — <span className="text-primary font-semibold">$500</span></span>
+          {packages.map((pkg, i) => (
+            <span key={pkg.id} className="text-foreground">
+              {i > 0 && <span className="text-muted-foreground"> · </span>}
+              {pkg.id === "entry_100" ? "Starter" : pkg.id === "pro_200" ? "Booster" : "Establish"} —{" "}
+              <span className="text-primary font-semibold">
+                {pkg.basePriceUsd != null && pkg.discountPct != null ? `$${pkg.priceUsd} (50% off)` : `$${pkg.priceUsd}`}
+              </span>
+            </span>
+          ))}
         </div>
         {(() => {
           const packageDisplayNames: Record<string, string> = {
@@ -378,7 +382,15 @@ function SubscriptionContent({
                         <h3 className="text-lg font-semibold">
                           {displayName}
                         </h3>
-                        <span className="text-2xl font-bold text-primary">${pkg.priceUsd}</span>
+                        {pkg.basePriceUsd != null && pkg.discountPct != null ? (
+                          <>
+                            <span className="text-lg text-muted-foreground line-through">${pkg.basePriceUsd}</span>
+                            <Badge variant="secondary" className="text-xs">50% Discount</Badge>
+                            <span className="text-2xl font-bold text-primary">${pkg.priceUsd}</span>
+                          </>
+                        ) : (
+                          <span className="text-2xl font-bold text-primary">${pkg.priceUsd}</span>
+                        )}
                       </div>
                       <p className="text-sm text-muted-foreground mt-2 font-medium">
                         Buy ${pkg.priceUsd}. Trade until you make <span className="text-foreground font-semibold">${pkg.profitAllowanceUsd.toLocaleString()}</span> profit ({pkg.multiplier}x).

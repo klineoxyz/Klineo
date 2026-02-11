@@ -34,6 +34,10 @@ export interface CreateBotModalProps {
   onOpenChange: (open: boolean) => void;
   onSuccess?: (bot: DcaBot) => void;
   preset?: DcaPreset | null;
+  /** When true, show notice that user is at plan limit and cannot start more bots until upgrade. */
+  atBotLimit?: boolean;
+  /** e.g. "5" or "Unlimited" for display. */
+  limitLabel?: string;
 }
 
 const defaultConfig: DcaBotConfig = {
@@ -71,7 +75,7 @@ function applyPresetToConfig(preset: DcaPreset): DcaBotConfig {
   };
 }
 
-export function CreateBotModal({ open, onOpenChange, onSuccess, preset }: CreateBotModalProps) {
+export function CreateBotModal({ open, onOpenChange, onSuccess, preset, atBotLimit, limitLabel }: CreateBotModalProps) {
   const [step, setStep] = useState(1);
   const [name, setName] = useState("");
   const [exchange, setExchange] = useState<"binance" | "bybit">("binance");
@@ -459,6 +463,11 @@ export function CreateBotModal({ open, onOpenChange, onSuccess, preset }: Create
           )}
         </div>
 
+        {atBotLimit && (
+          <div className="px-1 py-2 rounded-md border border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-400 text-sm">
+            You&apos;re at your plan limit ({limitLabel ?? "—"} running bot{limitLabel !== "Unlimited" && Number(limitLabel) !== 1 ? "s" : ""}). You can create a bot but won&apos;t be able to start it until you upgrade or pause another bot.
+          </div>
+        )}
         <DialogFooter className="flex-row justify-between sm:justify-between">
           <div>
             {step > 1 && (

@@ -19,7 +19,21 @@ const AMOUNTS: Record<string, number> = {
   LEVEL_500: 500,
 };
 
-/** Profit allowance (USD) for a package code. Used by GET /api/me/entitlement and admin approve. */
+/**
+ * Starter 50% promo: charge $50; tier and entitlements remain Starter.
+ * Precedence: apply this promo first, then coupons apply to the resulting amount.
+ */
+const STARTER_PROMO_FINAL_PRICE_USDT = 50;
+
+/** Price to charge for package (after any built-in promo; before coupon). Used for intent amount and coupon base. */
+export function getPackagePriceForPayment(packageCode: string | null): number {
+  if (!packageCode || packageCode === 'joining_fee') return AMOUNTS.ENTRY_100 ?? 100;
+  const code = String(packageCode).toUpperCase().trim();
+  if (code === 'ENTRY_100') return STARTER_PROMO_FINAL_PRICE_USDT;
+  return AMOUNTS[code] ?? AMOUNTS.ENTRY_100 ?? 100;
+}
+
+/** Profit allowance (USD) for a package code. Used by GET /api/me/entitlement and admin approve. Discount does not change entitlements. */
 export function getPackageProfitAllowanceUsd(packageCode: string): number {
   if (!packageCode || packageCode === 'joining_fee') return 0;
   return Number(AMOUNTS[packageCode]) || 0;
@@ -104,13 +118,10 @@ export async function validateCoupon(
   const discountPercent = parseFloat((coupon as { discount_percent?: number }).discount_percent?.toString() || '0');
   if (discountPercent <= 0 || discountPercent > 100) return { valid: false, error: 'Invalid discount' };
 
-  let originalAmountUsdt: number;
-  if (kind === 'joining_fee') {
-    originalAmountUsdt = AMOUNTS.joining_fee ?? 100;
-  } else {
-    const pc = packageCode || 'ENTRY_100';
-    originalAmountUsdt = AMOUNTS[pc] ?? AMOUNTS.ENTRY_100 ?? 100;
-  }
+  // Precedence: Starter 50% promo first, then coupon applies to that amount.
+  const originalAmountUsdt = kind === 'joining_fee'
+    ? (AMOUNTS.joining_fee ?? 100)
+    : getPackagePriceForPayment(packageCode);
   const amountUsdt = Math.max(0, Math.round((originalAmountUsdt * (1 - discountPercent / 100)) * 100) / 100);
 
   return {
@@ -231,12 +242,9 @@ paymentIntentsRouter.post(
       amountUsdt = result.amountUsdt;
       couponApplied = { code: codeUpper, discountPercent: result.discountPercent };
     } else {
-      if (kind === 'joining_fee') {
-        amountUsdt = AMOUNTS.joining_fee ?? 100;
-      } else {
-        const code = pkgCode || 'ENTRY_100';
-        amountUsdt = AMOUNTS[code] ?? AMOUNTS.ENTRY_100 ?? 100;
-      }
+      amountUsdt = kind === 'joining_fee'
+        ? (AMOUNTS.joining_fee ?? 100)
+        : getPackagePriceForPayment(pkgCode);
     }
 
     // Atomic coupon redemption (prevents race: max_redemptions overflow)

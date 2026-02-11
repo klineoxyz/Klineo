@@ -294,7 +294,11 @@ export function Dashboard({ onNavigate }: DashboardProps) {
                         : "No bots"}
                   </span>
                 </div>
-                <div className="text-base sm:text-lg font-mono font-bold">{dcaSummary.activeBotsCount}</div>
+                <div className="text-base sm:text-lg font-mono font-bold">
+                  {dcaSummary.activeBotsCount}
+                  {entitlement?.maxDcaBots != null && entitlement.maxDcaBots === 0 && " / Unlimited"}
+                  {entitlement?.maxDcaBots != null && entitlement.maxDcaBots > 0 && ` / ${entitlement.maxDcaBots}`}
+                </div>
                 <div className="text-[10px] text-muted-foreground">
                   Paused: {dcaSummary.pausedBotsCount} · Total: {dcaSummary.totalBots}
                 </div>
@@ -381,6 +385,11 @@ export function Dashboard({ onNavigate }: DashboardProps) {
             setDcaCreateModalOpen(false);
           }}
           preset={null}
+          atBotLimit={
+            (entitlement?.maxDcaBots ?? 0) > 0 &&
+            dcaSummary.activeBotsCount >= (entitlement?.maxDcaBots ?? 1)
+          }
+          limitLabel={(entitlement?.maxDcaBots ?? 0) === 0 ? "Unlimited" : String(entitlement?.maxDcaBots ?? "")}
         />
       </div>
     </LoadingWrapper>

@@ -196,7 +196,7 @@ export interface EntitlementResponse {
   profitUsedUsd: number;
   remainingUsd: number;
   hasReferral?: boolean;
-  /** Max running DCA bots allowed by package (Starter 1, Pro 3, Elite 10). */
+  /** Max running (spot) DCA bots by tier. Starter 5, Booster 10, Establish unlimited. 0 = unlimited. */
   maxDcaBots?: number;
 }
 
@@ -206,6 +206,9 @@ export interface BillingPlansResponse {
   packages: Array<{
     id: string;
     priceUsd: number;
+    /** If set, show original price strikethrough and discount badge (e.g. Starter 50% off). */
+    basePriceUsd?: number;
+    discountPct?: number;
     multiplier: number;
     profitAllowanceUsd: number;
   }>;

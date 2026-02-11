@@ -16,11 +16,11 @@ function getSupabase(): SupabaseClient | null {
 
 export const billingRouter: Router = Router();
 
-/** Static plans response (credit-based model) */
+/** Static plans response (credit-based model). Starter has 50% promo: display $100 strikethrough, charge $50; entitlements unchanged. */
 const PLANS_RESPONSE = {
   joiningFee: { priceUsd: 100, currency: 'USD' },
   packages: [
-    { id: 'entry_100', priceUsd: 100, multiplier: 3, profitAllowanceUsd: 300 },
+    { id: 'entry_100', basePriceUsd: 100, discountPct: 50, priceUsd: 50, multiplier: 3, profitAllowanceUsd: 300 },
     { id: 'pro_200', priceUsd: 200, multiplier: 5, profitAllowanceUsd: 1000 },
     { id: 'elite_500', priceUsd: 500, multiplier: 10, profitAllowanceUsd: 5000 },
   ],

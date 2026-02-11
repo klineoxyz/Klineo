@@ -113,18 +113,20 @@ dcaBotsRouter.put(
       const userId = req.user!.id;
 
       if (status === 'running') {
-        const [ent, currentBot, { count: runningCount }] = await Promise.all([
+        const [ent, currentBot, { count: runningSpotCount }] = await Promise.all([
           fetchEntitlement(client, userId),
-          client.from('dca_bots').select('status').eq('id', id).eq('user_id', userId).maybeSingle(),
-          client.from('dca_bots').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('status', 'running'),
+          client.from('dca_bots').select('status, market').eq('id', id).eq('user_id', userId).maybeSingle(),
+          client.from('dca_bots').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('status', 'running').eq('market', 'spot'),
         ]);
         const maxDca = getMaxDcaBots(ent?.active_package_id ?? null);
-        const botWasRunning = (currentBot?.data as { status?: string } | null)?.status === 'running';
-        const runningAfter = (runningCount ?? 0) + (botWasRunning ? 0 : 1);
+        const currentRow = currentBot?.data as { status?: string; market?: string } | null;
+        const botIsSpot = (currentRow?.market ?? 'spot') === 'spot';
+        const botWasRunning = currentRow?.status === 'running';
+        const runningAfter = (runningSpotCount ?? 0) + (botIsSpot && !botWasRunning ? 1 : 0);
         if (maxDca > 0 && runningAfter > maxDca) {
-          return res.status(402).json({
-            error: 'DCA_BOT_LIMIT',
-            message: 'Upgrade to run more DCA bots. Your plan allows ' + maxDca + ' running bot(s).',
+          return res.status(403).json({
+            code: 'DCA_BOT_LIMIT_REACHED',
+            message: 'Your current package allows up to ' + maxDca + ' active DCA bots.',
           });
         }
       }
