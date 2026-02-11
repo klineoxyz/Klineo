@@ -1,14 +1,15 @@
 import { useState, useEffect } from 'react';
 import { Button } from '@/app/components/ui/button';
-import { TrendingUp, Minus, X, Maximize2, Clock, BarChart3 } from 'lucide-react';
+import { TrendingUp, Minus, X, Maximize2, Clock, BarChart3, SlidersHorizontal } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
 } from '@/app/components/ui/dialog';
+import { Popover, PopoverContent, PopoverTrigger } from '@/app/components/ui/popover';
 import { LightweightChartsWidget } from '@/app/components/charts/LightweightChartsWidget';
-import { RsiChart, MacdChart } from '@/app/components/charts/RsiMacdCharts';
+import { RsiChart, MacdChart, AdxChart } from '@/app/components/charts/RsiMacdCharts';
 
 type Timeframe = '1m' | '5m' | '15m' | '30m' | '1h' | '2h' | '4h' | '12h' | '1D' | '5D' | '1W' | '1M';
 
@@ -32,10 +33,11 @@ interface TradingViewChartProps {
   showEMA21?: boolean;
   showEMA50?: boolean;
   showATR?: boolean;
+  showADX?: boolean;
   /** When set, timeframe selector is controlled by parent (sync selection + full history). */
   selectedTimeframe?: Timeframe;
   onTimeframeChange?: (timeframe: Timeframe) => void;
-  /** When provided, show TA tools sidebar on the left for toggling indicators. */
+  /** When provided, show TA tools sidebar on the left (Volume + Indicators selector). */
   onToggleVolume?: () => void;
   onToggleSMA9?: () => void;
   onToggleSMA20?: () => void;
@@ -47,6 +49,7 @@ interface TradingViewChartProps {
   onToggleATR?: () => void;
   onToggleRSI?: () => void;
   onToggleMACD?: () => void;
+  onToggleADX?: () => void;
 }
 
 export function TradingViewChart({
@@ -62,6 +65,7 @@ export function TradingViewChart({
   showEMA21 = false,
   showEMA50 = false,
   showATR = false,
+  showADX = false,
   selectedTimeframe,
   onTimeframeChange,
   onToggleVolume,
@@ -75,6 +79,7 @@ export function TradingViewChart({
   onToggleATR,
   onToggleRSI,
   onToggleMACD,
+  onToggleADX,
 }: TradingViewChartProps) {
   const [timeframe, setTimeframe] = useState<Timeframe>(selectedTimeframe ?? '1h');
   const [drawingMode, setDrawingMode] = useState<'none' | 'trendline' | 'horizontal'>('none');
@@ -93,11 +98,21 @@ export function TradingViewChart({
     onTimeframeChange?.(tf);
   };
 
-  const hasTATools = [onToggleVolume, onToggleSMA9, onToggleSMA20, onToggleSMA50, onToggleEMA9, onToggleEMA21, onToggleEMA50, onToggleBB, onToggleATR, onToggleRSI, onToggleMACD].some(Boolean);
+  const hasTATools = [onToggleVolume, onToggleSMA9, onToggleSMA20, onToggleSMA50, onToggleEMA9, onToggleEMA21, onToggleEMA50, onToggleBB, onToggleATR, onToggleRSI, onToggleMACD, onToggleADX].some(Boolean);
+
+  const indicatorBtn = (on: boolean, onClick: () => void, label: string, color: string) => (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`w-full text-left px-2.5 py-1.5 rounded text-xs font-medium transition-colors ${on ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`}
+    >
+      {label}
+    </button>
+  );
 
   return (
     <div className="relative flex flex-col h-full min-h-[320px] flex-1 min-h-0">
-      {/* Left TA Tools sidebar */}
+      {/* Left toolbar: Volume + Indicators (popover) — compact like TradingView */}
       {hasTATools && (
         <div className="absolute left-0 top-0 bottom-0 z-10 w-9 sm:w-10 flex flex-col items-center py-2 gap-1 border-r border-border/50 bg-[#0a0e13]/95 rounded-l overflow-hidden">
           {onToggleVolume && (
@@ -110,36 +125,48 @@ export function TradingViewChart({
               <BarChart3 className="size-4" />
             </button>
           )}
-          {onToggleSMA9 && (
-            <button type="button" onClick={onToggleSMA9} title="MA(9)" className={`w-7 h-7 flex items-center justify-center rounded text-[10px] font-medium transition-colors ${showSMA9 ? 'bg-[#a78bfa]/20 text-[#a78bfa]' : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50'}`}>MA9</button>
-          )}
-          {onToggleSMA20 && (
-            <button type="button" onClick={onToggleSMA20} title="MA(20)" className={`w-7 h-7 flex items-center justify-center rounded text-[10px] font-medium transition-colors ${showSMA20 ? 'bg-[#FFB000]/20 text-[#FFB000]' : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50'}`}>MA20</button>
-          )}
-          {onToggleSMA50 && (
-            <button type="button" onClick={onToggleSMA50} title="MA(50)" className={`w-7 h-7 flex items-center justify-center rounded text-[10px] font-medium transition-colors ${showSMA50 ? 'bg-[#3B82F6]/20 text-[#3B82F6]' : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50'}`}>MA50</button>
-          )}
-          {onToggleEMA9 && (
-            <button type="button" onClick={onToggleEMA9} title="EMA(9)" className={`w-7 h-7 flex items-center justify-center rounded text-[10px] font-medium transition-colors ${showEMA9 ? 'bg-[#10B981]/20 text-[#10B981]' : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50'}`}>E9</button>
-          )}
-          {onToggleEMA21 && (
-            <button type="button" onClick={onToggleEMA21} title="EMA(21)" className={`w-7 h-7 flex items-center justify-center rounded text-[10px] font-medium transition-colors ${showEMA21 ? 'bg-[#F59E0B]/20 text-[#F59E0B]' : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50'}`}>E21</button>
-          )}
-          {onToggleEMA50 && (
-            <button type="button" onClick={onToggleEMA50} title="EMA(50)" className={`w-7 h-7 flex items-center justify-center rounded text-[10px] font-medium transition-colors ${showEMA50 ? 'bg-[#14b8a6]/20 text-[#14b8a6]' : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50'}`}>E50</button>
-          )}
-          {onToggleBB && (
-            <button type="button" onClick={onToggleBB} title="Bollinger Bands" className={`w-7 h-7 flex items-center justify-center rounded text-[10px] font-medium transition-colors ${showBB ? 'bg-[#8b5cf6]/20 text-[#8b5cf6]' : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50'}`}>BB</button>
-          )}
-          {onToggleATR && (
-            <button type="button" onClick={onToggleATR} title="ATR(14)" className={`w-7 h-7 flex items-center justify-center rounded text-[10px] font-medium transition-colors ${showATR ? 'bg-[#f97316]/20 text-[#f97316]' : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50'}`}>ATR</button>
-          )}
-          {onToggleRSI && (
-            <button type="button" onClick={onToggleRSI} title="RSI" className={`w-7 h-7 flex items-center justify-center rounded text-[10px] font-medium transition-colors ${showRSI ? 'bg-[#ec4899]/20 text-[#ec4899]' : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50'}`}>RSI</button>
-          )}
-          {onToggleMACD && (
-            <button type="button" onClick={onToggleMACD} title="MACD" className={`w-7 h-7 flex items-center justify-center rounded text-[10px] font-medium transition-colors ${showMACD ? 'bg-[#06b6d4]/20 text-[#06b6d4]' : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50'}`}>MACD</button>
-          )}
+          <Popover>
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                title="Indicators"
+                className="w-7 h-7 flex items-center justify-center rounded text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors"
+              >
+                <SlidersHorizontal className="size-4" />
+              </button>
+            </PopoverTrigger>
+            <PopoverContent side="right" align="start" className="w-56 p-2 bg-card border-border">
+              <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide px-2 py-1.5">Indicators</div>
+              <div className="space-y-3">
+                <div>
+                  <div className="text-[10px] text-muted-foreground px-2 py-0.5">Trend (MA / EMA)</div>
+                  <div className="flex flex-col gap-0.5">
+                    {onToggleSMA9 && indicatorBtn(showSMA9, onToggleSMA9, 'SMA(9)', '#a78bfa')}
+                    {onToggleSMA20 && indicatorBtn(showSMA20, onToggleSMA20, 'SMA(20)', '#FFB000')}
+                    {onToggleSMA50 && indicatorBtn(showSMA50, onToggleSMA50, 'SMA(50)', '#3B82F6')}
+                    {onToggleEMA9 && indicatorBtn(showEMA9, onToggleEMA9, 'EMA(9)', '#10B981')}
+                    {onToggleEMA21 && indicatorBtn(showEMA21, onToggleEMA21, 'EMA(21)', '#F59E0B')}
+                    {onToggleEMA50 && indicatorBtn(showEMA50, onToggleEMA50, 'EMA(50)', '#14b8a6')}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-[10px] text-muted-foreground px-2 py-0.5">Volatility</div>
+                  <div className="flex flex-col gap-0.5">
+                    {onToggleBB && indicatorBtn(showBB, onToggleBB, 'Bollinger Bands', '#8b5cf6')}
+                    {onToggleATR && indicatorBtn(showATR, onToggleATR, 'ATR(14)', '#f97316')}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-[10px] text-muted-foreground px-2 py-0.5">Momentum</div>
+                  <div className="flex flex-col gap-0.5">
+                    {onToggleRSI && indicatorBtn(showRSI, onToggleRSI, 'RSI', '#ec4899')}
+                    {onToggleMACD && indicatorBtn(showMACD, onToggleMACD, 'MACD', '#06b6d4')}
+                    {onToggleADX && indicatorBtn(showADX, onToggleADX, 'ADX(14)', '#6366f1')}
+                  </div>
+                </div>
+              </div>
+            </PopoverContent>
+          </Popover>
         </div>
       )}
       {/* Toolbar row: drawing tools (left) + fullscreen (right) — above timeframe to avoid overlap */}
@@ -270,6 +297,14 @@ export function TradingViewChart({
         <div className="mt-2 flex flex-col shrink-0">
           <div className="text-xs text-muted-foreground mb-1 px-1">MACD(12,26,9)</div>
           <MacdChart data={data} height={120} />
+        </div>
+      )}
+
+      {/* ADX sub-chart */}
+      {showADX && data.length > 0 && (
+        <div className="mt-2 flex flex-col shrink-0">
+          <div className="text-xs text-muted-foreground mb-1 px-1">ADX(14)</div>
+          <AdxChart data={data} height={80} />
         </div>
       )}
 

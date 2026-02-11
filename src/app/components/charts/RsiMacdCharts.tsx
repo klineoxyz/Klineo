@@ -5,7 +5,7 @@
 import { useEffect, useRef, useState, useMemo } from "react";
 import { createChart, LineSeries, HistogramSeries } from "lightweight-charts";
 import type { IChartApi, UTCTimestamp } from "lightweight-charts";
-import { computeRSI, computeMACD, type OhlcvRow } from "./indicators";
+import { computeRSI, computeMACD, computeADX, type OhlcvRow } from "./indicators";
 
 const THEME = {
   layout: { background: { type: "solid" as const, color: "#0a0e13" }, textColor: "#9ca3af" },
@@ -180,6 +180,85 @@ export function MacdChart({ data, height = 120 }: { data: OhlcvRow[]; height?: n
     return (
       <div className="flex items-center justify-center bg-[#0a0e13] text-muted-foreground text-xs" style={{ height }}>
         MACD — need more data (min 27 bars)
+      </div>
+    );
+  }
+  return <div ref={containerRef} className="w-full rounded border border-border/30 overflow-hidden" style={{ height }} />;
+}
+
+export function AdxChart({ data, height = 80 }: { data: OhlcvRow[]; height?: number }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const chartRef = useRef<IChartApi | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const seriesData = useMemo(() => {
+    if (!data?.length || data.length < 30) return [];
+    try {
+      const adxData = computeADX(data, 14);
+      return adxData.map((d) => ({ time: toUtc(d.time), value: d.value }));
+    } catch {
+      return [];
+    }
+  }, [data]);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el || seriesData.length === 0) return;
+    if (chartRef.current) return;
+    try {
+      setError(null);
+      const chart = createChart(el, {
+        width: Math.max(el.clientWidth || 400, 100),
+        height,
+        layout: THEME.layout,
+        grid: THEME.grid,
+        rightPriceScale: { ...THEME.rightPriceScale, scaleMargins: { top: 0.1, bottom: 0.1 } },
+        timeScale: THEME.timeScale,
+        attributionLogo: false,
+      });
+      const series = chart.addSeries(LineSeries, { color: "#6366f1", lineWidth: 2 });
+      series.setData(seriesData);
+      series.priceScale().applyOptions({ scaleMargins: { top: 0.1, bottom: 0.1 } });
+      chart.timeScale().fitContent();
+      chartRef.current = chart;
+      const ro = new ResizeObserver(() => {
+        if (chartRef.current) chartRef.current.applyOptions({ width: Math.max(el.clientWidth || 400, 100) });
+      });
+      ro.observe(el);
+      return () => {
+        ro.disconnect();
+        chart.remove();
+        chartRef.current = null;
+      };
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Chart error");
+      return undefined;
+    }
+  }, [height, seriesData.length]);
+
+  useEffect(() => {
+    const chart = chartRef.current;
+    if (!chart || seriesData.length === 0) return;
+    try {
+      const series = chart.series()[0];
+      if (series) series.setData(seriesData);
+      chart.timeScale().fitContent();
+    } catch {
+      // ignore
+    }
+  }, [seriesData]);
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center bg-[#0a0e13] text-muted-foreground text-xs" style={{ height }}>
+        ADX — {error}
+      </div>
+    );
+  }
+  if (seriesData.length === 0) {
+    return (
+      <div className="flex items-center justify-center bg-[#0a0e13] text-muted-foreground text-xs" style={{ height }}>
+        ADX — need more data (min 30 bars)
       </div>
     );
   }

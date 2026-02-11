@@ -241,6 +241,7 @@ export function TradingTerminalNew({ onNavigate }: TradingTerminalProps) {
   const [showATR, setShowATR] = useState(false);
   const [showRSI, setShowRSI] = useState(false);
   const [showMACD, setShowMACD] = useState(false);
+  const [showADX, setShowADX] = useState(false);
   const [showVolume, setShowVolume] = useState(true);
 
   // Futures Strategy panel
@@ -967,64 +968,6 @@ export function TradingTerminalNew({ onNavigate }: TradingTerminalProps) {
                     </div>
               </div>
 
-              <div className="flex flex-wrap items-center gap-1">
-                  <button type="button" onClick={() => setShowSMA9(!showSMA9)} className={`h-6 px-2 text-[10px] sm:text-[11px] font-medium rounded transition-colors ${showSMA9 ? "bg-[#a78bfa]/20 text-[#a78bfa]" : "text-muted-foreground hover:text-foreground"}`}>MA(9)</button>
-                  <button
-                    type="button"
-                    onClick={() => setShowSMA20(!showSMA20)}
-                    className={`h-6 px-2 text-[10px] sm:text-[11px] font-medium rounded transition-colors ${
-                      showSMA20 ? "bg-[#FFB000]/20 text-[#FFB000]" : "text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    MA(20)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setShowSMA50(!showSMA50)}
-                    className={`h-6 px-2 text-[10px] sm:text-[11px] font-medium rounded transition-colors ${
-                      showSMA50 ? "bg-[#3B82F6]/20 text-[#3B82F6]" : "text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    MA(50)
-                  </button>
-                  <button
-                    onClick={() => setShowEMA9(!showEMA9)}
-                    className={`h-6 px-2 text-[10px] sm:text-[11px] font-medium rounded transition-colors ${
-                      showEMA9 ? "bg-[#10B981]/20 text-[#10B981]" : "text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    EMA(9)
-                  </button>
-                  <button type="button" onClick={() => setShowEMA21(!showEMA21)} className={`h-6 px-2 text-[10px] sm:text-[11px] font-medium rounded transition-colors ${showEMA21 ? "bg-[#F59E0B]/20 text-[#F59E0B]" : "text-muted-foreground hover:text-foreground"}`}>EMA(21)</button>
-                  <button type="button" onClick={() => setShowEMA50(!showEMA50)} className={`h-6 px-2 text-[10px] sm:text-[11px] font-medium rounded transition-colors ${showEMA50 ? "bg-[#14b8a6]/20 text-[#14b8a6]" : "text-muted-foreground hover:text-foreground"}`}>EMA(50)</button>
-                  <button
-                    type="button"
-                    onClick={() => setShowBB(!showBB)}
-                    className={`h-6 px-2 text-[10px] sm:text-[11px] font-medium rounded transition-colors ${
-                      showBB ? "bg-[#8b5cf6]/20 text-[#8b5cf6]" : "text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    BB
-                  </button>
-                  <button type="button" onClick={() => setShowATR(!showATR)} className={`h-6 px-2 text-[10px] sm:text-[11px] font-medium rounded transition-colors ${showATR ? "bg-[#f97316]/20 text-[#f97316]" : "text-muted-foreground hover:text-foreground"}`}>ATR</button>
-                  <button
-                    type="button"
-                    onClick={() => setShowRSI(!showRSI)}
-                    className={`h-6 px-2 text-[10px] sm:text-[11px] font-medium rounded transition-colors ${
-                      showRSI ? "bg-[#ec4899]/20 text-[#ec4899]" : "text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    RSI
-                  </button>
-                  <button
-                    onClick={() => setShowMACD(!showMACD)}
-                    className={`h-6 px-2 text-[10px] sm:text-[11px] font-medium rounded transition-colors ${
-                      showMACD ? "bg-[#06b6d4]/20 text-[#06b6d4]" : "text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    MACD
-                  </button>
-                </div>
             </div>
 
             {/* Chart Area */}
@@ -1049,6 +992,7 @@ export function TradingTerminalNew({ onNavigate }: TradingTerminalProps) {
                     showVolume={showVolume}
                     showRSI={showRSI}
                     showMACD={showMACD}
+                    showADX={showADX}
                     showBB={showBB}
                     showSMA9={showSMA9}
                     showSMA20={showSMA20}
@@ -1070,6 +1014,7 @@ export function TradingTerminalNew({ onNavigate }: TradingTerminalProps) {
                     onToggleATR={() => setShowATR((v) => !v)}
                     onToggleRSI={() => setShowRSI((v) => !v)}
                     onToggleMACD={() => setShowMACD((v) => !v)}
+                    onToggleADX={() => setShowADX((v) => !v)}
                   />
               )}
             </div>
