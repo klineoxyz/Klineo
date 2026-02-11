@@ -25,6 +25,9 @@ import {
 } from "@/app/components/ui/dialog";
 import { api } from "@/lib/api";
 import { toast } from "@/app/lib/toast";
+import { GuideButton } from "@/app/components/onboarding/GuideButton";
+
+type TourFlowId = "getting-started" | "payment-activation" | "start-copy-trading";
 
 interface TopBarProps {
   activeView?: string;
@@ -32,6 +35,8 @@ interface TopBarProps {
   onLogout?: () => void;
   sidebarCollapsed?: boolean;
   onOpenMobileNav?: () => void;
+  onStartTour?: (flowId: TourFlowId) => void;
+  onRestartWizard?: () => void;
 }
 
 function planLabelFromPackage(pkg: string | null): string {
@@ -49,6 +54,8 @@ export function TopBar({
   onLogout,
   sidebarCollapsed = false,
   onOpenMobileNav,
+  onStartTour,
+  onRestartWizard,
 }: TopBarProps) {
   const { isDemoMode, setDemoMode, clearDemo, demoCopySetups } = useDemo();
   const liveData = useTopBarLiveData(isDemoMode);
@@ -128,6 +135,7 @@ export function TopBar({
             className="shrink-0 focus:outline-none focus:ring-2 focus:ring-ring rounded"
             title={isDemoMode ? "Switch to Live — connect real Binance/Bybit API" : "Switch to Demo — play with sample data"}
             aria-label={isDemoMode ? "Switch to Live" : "Switch to Demo"}
+            data-onboarding="topbar-demo-toggle"
           >
             {isDemoMode ? (
               <Badge variant="secondary" className="bg-primary/15 text-primary border-primary/30 shrink-0 text-xs cursor-pointer hover:opacity-90">
@@ -240,7 +248,7 @@ export function TopBar({
 
           <ConnectionStatus status={connectionStatus} />
 
-          <Button variant="ghost" size="icon" className="size-9 relative" onClick={() => onNavigate("notifications-center")} aria-label={unreadNotifications > 0 ? `${unreadNotifications} unread notifications` : "Notifications"}>
+          <Button variant="ghost" size="icon" className="size-9 relative" onClick={() => onNavigate("notifications-center")} aria-label={unreadNotifications > 0 ? `${unreadNotifications} unread notifications` : "Notifications"} data-onboarding="topbar-notifications">
             <Bell className="size-4" />
             {unreadNotifications > 0 && (
               <span className="absolute top-1 right-1 size-2 rounded-full bg-[#EF4444] animate-pulse" aria-hidden />
@@ -251,9 +259,12 @@ export function TopBar({
             {isMasterTraderApproved && (
               <Badge variant="secondary" className="text-[10px] font-bold px-1.5 py-0 shrink-0" title="Master Trader">MT</Badge>
             )}
+          {onStartTour && onRestartWizard && (
+            <GuideButton onStartFlow={onStartTour} onRestartWizard={onRestartWizard} />
+          )}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="size-9">
+              <Button variant="ghost" size="icon" className="size-9" data-onboarding="topbar-profile">
                 <User className="size-4" />
               </Button>
             </DropdownMenuTrigger>

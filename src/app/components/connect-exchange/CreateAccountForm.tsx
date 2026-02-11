@@ -77,7 +77,7 @@ export function CreateAccountForm({
             />
           </div>
 
-          <div>
+          <div data-onboarding="connect-exchange-env">
             <Label className="text-slate-300 text-sm font-medium">Environment</Label>
             <Select value={environment} onValueChange={onEnvironmentChange} disabled={loading}>
               <SelectTrigger className="mt-2 h-11 bg-white/5 border-white/10 text-white">
@@ -151,6 +151,7 @@ export function CreateAccountForm({
               className="mt-2 h-11 bg-white/5 border-white/10 text-white font-mono placeholder:text-slate-500 focus:border-primary/50"
               disabled={loading}
               autoComplete="off"
+              data-onboarding="connect-exchange-key"
             />
           </div>
           <div>
@@ -163,6 +164,7 @@ export function CreateAccountForm({
               className="mt-2 h-11 bg-white/5 border-white/10 text-white font-mono placeholder:text-slate-500 focus:border-primary/50"
               disabled={loading}
               autoComplete="off"
+              data-onboarding="connect-exchange-secret"
             />
           </div>
 
@@ -206,6 +208,7 @@ export function CreateAccountForm({
               onClick={onCreateAccount}
               disabled={!canSubmit || loading}
               className="w-full h-12 mt-1 bg-primary hover:bg-primary/90 text-primary-foreground font-medium shadow-lg hover:shadow-primary/25 transition-all disabled:opacity-50"
+              data-onboarding="connect-exchange-submit"
             >
               {loading ? "Verifying…" : "Create Account"}
             </Button>

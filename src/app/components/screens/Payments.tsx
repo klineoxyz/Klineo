@@ -453,7 +453,7 @@ export function Payments({ onNavigate, viewData }: PaymentsProps) {
           </Card>
 
           {currentIntent && currentIntent.status === "draft" && (
-            <Card className="p-6 space-y-4">
+            <Card className="p-6 space-y-4" data-onboarding="payments-submit-tx">
               {Number(currentIntent.amount_usdt) === 0 ? (
                 <>
                   <h3 className="text-lg font-semibold">100% discount — no payment required</h3>
@@ -491,7 +491,7 @@ export function Payments({ onNavigate, viewData }: PaymentsProps) {
                       )}
                     </p>
                   )}
-                  <div className="flex flex-wrap items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2" data-onboarding="payments-amount">
                     <span className="text-muted-foreground">Send exactly:</span>
                     <span className="font-mono font-semibold text-lg">{currentIntent.amount_usdt} USDT</span>
                     <Button
@@ -506,7 +506,7 @@ export function Payments({ onNavigate, viewData }: PaymentsProps) {
                       Copy amount
                     </Button>
                   </div>
-                  <div className="space-y-2">
+                  <div className="space-y-2" data-onboarding="payments-safe-address">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="text-muted-foreground">Treasury Safe address:</span>
                       <Button
@@ -541,6 +541,7 @@ export function Payments({ onNavigate, viewData }: PaymentsProps) {
                       className="font-mono"
                       value={txHash}
                       onChange={(e) => setTxHash(e.target.value)}
+                      data-onboarding="payments-txhash"
                     />
                     <Label className="text-muted-foreground">From wallet (auto-filled from Contribution wallet)</Label>
                     <Input
@@ -548,9 +549,10 @@ export function Payments({ onNavigate, viewData }: PaymentsProps) {
                       className="font-mono"
                       value={fromWallet}
                       onChange={(e) => setFromWallet(e.target.value)}
+                      data-onboarding="payments-fromwallet"
                     />
                     <div className="flex gap-2">
-                      <Button onClick={handleSubmitTx} disabled={!txHash.trim() || submitting !== null}>
+                      <Button onClick={handleSubmitTx} disabled={!txHash.trim() || submitting !== null} data-onboarding="payments-submit-button">
                         {submitting ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
                         Submit for review
                       </Button>

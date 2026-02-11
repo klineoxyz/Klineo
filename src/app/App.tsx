@@ -52,6 +52,10 @@ import { MobileNavSheet } from "@/app/components/layout/MobileNavSheet";
 import { ErrorBoundary } from "@/app/components/ui/error-boundary";
 import { ROUTES, pathForView, viewForPath, PUBLIC_PATHS, REF_CODE_STORAGE_KEY } from "@/app/config/routes";
 import { api } from "@/lib/api";
+import type { EntitlementResponse } from "@/lib/api";
+import { useOnboardingStatus } from "@/app/hooks/useOnboardingStatus";
+import { TourController } from "@/app/components/onboarding/TourController";
+import { GuideButton } from "@/app/components/onboarding/GuideButton";
 
 /** Show a single toast when the API returns 429 (rate limited). */
 function useRateLimitToast() {
@@ -77,6 +81,9 @@ export default function App() {
   useRateLimitToast();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [tourFlowId, setTourFlowId] = useState<string | null>(null);
+  const [entitlement, setEntitlement] = useState<EntitlementResponse | null>(null);
+  const { status: onboardingStatus, loading: onboardingLoading, markAutoRun } = useOnboardingStatus();
 
   const pathname = location.pathname;
   const activeView = viewForPath(pathname);
@@ -116,6 +123,18 @@ export default function App() {
       refClaimAttempted.current = false;
     }
   }, [isAuthenticated]);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    api.get<EntitlementResponse>("/api/me/entitlement").then(setEntitlement).catch(() => setEntitlement(null));
+  }, [isAuthenticated]);
+
+  useEffect(() => {
+    if (!isAuthenticated || onboardingLoading || !onboardingStatus) return;
+    if (onboardingStatus.tutorialCompleted || onboardingStatus.tourAutoRunAt) return;
+    setTourFlowId("getting-started");
+    markAutoRun();
+  }, [isAuthenticated, onboardingLoading, onboardingStatus?.tutorialCompleted, onboardingStatus?.tourAutoRunAt, markAutoRun]);
 
   if (loading) {
     return (
@@ -272,6 +291,8 @@ export default function App() {
         onLogout={handleLogout}
         sidebarCollapsed={sidebarCollapsed}
         onOpenMobileNav={() => setMobileNavOpen(true)}
+        onStartTour={(flowId) => setTourFlowId(flowId)}
+        onRestartWizard={() => handleNavigate("onboarding-wizard")}
       />
       <div className="flex-1 flex overflow-hidden min-w-0">
         <Sidebar
@@ -310,6 +331,12 @@ export default function App() {
         />
       )}
       <Toaster />
+      <TourController
+        flowId={tourFlowId as "getting-started" | "payment-activation" | "start-copy-trading" | null}
+        onFinish={() => setTourFlowId(null)}
+        onSkip={() => setTourFlowId(null)}
+        entitlement={entitlement}
+      />
     </div>
   );
 }

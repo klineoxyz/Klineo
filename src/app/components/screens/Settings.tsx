@@ -1022,7 +1022,7 @@ export function Settings({ onNavigate }: SettingsProps) {
           </Card>
         </TabsContent>
 
-        <TabsContent value="exchange" className="space-y-6">
+        <TabsContent value="exchange" className="space-y-6" data-onboarding="settings-exchange-section">
           {isDemoMode && (
             <Alert className="border-amber-500/30 bg-amber-500/10">
               <AlertTriangle className="size-4 text-amber-600 dark:text-amber-400" />
@@ -1109,7 +1109,7 @@ export function Settings({ onNavigate }: SettingsProps) {
               )}
             </div>
             {!isDemoMode && (
-              <Button onClick={() => setConnectModalOpen(true)} className="gap-2 bg-primary text-primary-foreground">
+              <Button onClick={() => setConnectModalOpen(true)} className="gap-2 bg-primary text-primary-foreground" data-onboarding="settings-connect-exchange">
                 <Key className="size-4" />
                 Connect Exchange
               </Button>
@@ -1144,7 +1144,7 @@ export function Settings({ onNavigate }: SettingsProps) {
                 In <strong>Live</strong> mode, connect your Binance or Bybit API keys to enable copy trading and portfolio tracking. Switch to Live using the toggle in the top left.
               </p>
               {!isDemoMode && (
-                <Button onClick={() => setConnectModalOpen(true)} className="gap-2">
+                <Button onClick={() => setConnectModalOpen(true)} className="gap-2" data-onboarding="settings-connect-exchange">
                   <Key className="size-4" />
                   Connect Exchange
                 </Button>

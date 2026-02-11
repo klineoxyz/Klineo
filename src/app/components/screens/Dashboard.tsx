@@ -106,20 +106,35 @@ export function Dashboard({ onNavigate }: DashboardProps) {
       loadingComponent={<DashboardLoading />}
     >
       <div className="p-3 sm:p-5 space-y-3 sm:space-y-4 max-w-6xl mx-auto">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3" data-onboarding="dashboard-header">
           <div>
             <h1 className="text-lg sm:text-xl font-semibold">Dashboard</h1>
             <p className="text-xs sm:text-sm text-muted-foreground">Overview of your trading activity</p>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleRefresh}
-            className="gap-1.5 w-full sm:w-auto shrink-0"
-          >
-            <RefreshCw className="size-3.5" />
-            Refresh Data
-          </Button>
+          <div className="flex items-center gap-2 flex-wrap">
+            {onNavigate && (
+              <>
+                <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => onNavigate("subscription")} data-onboarding="dashboard-cta-packages">
+                  Packages
+                </Button>
+                <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => onNavigate("marketplace")} data-onboarding="dashboard-cta-marketplace">
+                  Marketplace
+                </Button>
+                <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => onNavigate("copy-trading")} data-onboarding="dashboard-cta-copytrading">
+                  Copy Trading
+                </Button>
+              </>
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleRefresh}
+              className="gap-1.5 w-full sm:w-auto shrink-0"
+            >
+              <RefreshCw className="size-3.5" />
+              Refresh Data
+            </Button>
+          </div>
         </div>
 
         {/* Demo mode banner */}
@@ -138,7 +153,7 @@ export function Dashboard({ onNavigate }: DashboardProps) {
             <AlertDescription className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-xs sm:text-sm">
               <span>Your package allowance is exhausted. Buy a new package to continue copy trading.</span>
               {onNavigate && (
-                <Button variant="outline" size="sm" className="border-[#EF4444]/50 text-[#EF4444] hover:bg-[#EF4444]/10 shrink-0 h-8 text-xs" onClick={() => onNavigate("subscription")}>
+                <Button variant="outline" size="sm" className="border-[#EF4444]/50 text-[#EF4444] hover:bg-[#EF4444]/10 shrink-0 h-8 text-xs" onClick={() => onNavigate("subscription")} data-onboarding="dashboard-cta-packages">
                   <Package className="size-3 mr-1" />
                   Buy package
                 </Button>
@@ -260,6 +275,7 @@ export function Dashboard({ onNavigate }: DashboardProps) {
                     size="sm"
                     className="h-7 text-xs w-full"
                     onClick={() => setDcaCreateModalOpen(true)}
+                    data-onboarding="dashboard-create-dca"
                   >
                     <Plus className="size-3 mr-1" />
                     Create your first bot
@@ -325,6 +341,7 @@ export function Dashboard({ onNavigate }: DashboardProps) {
                     variant="outline"
                     className="h-7 text-xs shrink-0"
                     onClick={() => setDcaCreateModalOpen(true)}
+                    data-onboarding="dashboard-create-dca"
                   >
                     <Plus className="size-3" />
                   </Button>

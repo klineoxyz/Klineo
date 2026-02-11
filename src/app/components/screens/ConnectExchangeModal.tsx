@@ -170,7 +170,7 @@ export function ConnectExchangeModal({
           </div>
 
           {/* Exchange selector row */}
-          <div className="shrink-0 px-4 sm:px-8 pb-4 sm:pb-6 overflow-x-auto">
+          <div className="shrink-0 px-4 sm:px-8 pb-4 sm:pb-6 overflow-x-auto" data-onboarding="connect-exchange-selector">
             <ExchangeSelectorRow selected={exchange} onSelect={handleExchangeSelect} />
           </div>
 
@@ -201,7 +201,7 @@ export function ConnectExchangeModal({
             </div>
 
             {/* Right column: Step guide — fills space and scrolls */}
-            <div className="min-h-0 min-w-0 h-full overflow-y-auto overflow-x-hidden pr-1">
+            <div className="min-h-0 min-w-0 h-full overflow-y-auto overflow-x-hidden pr-1" data-onboarding="connect-exchange-steps">
               <ExchangeStepGuide steps={steps} />
             </div>
           </div>

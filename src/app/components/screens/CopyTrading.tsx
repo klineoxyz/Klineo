@@ -178,7 +178,7 @@ export function CopyTrading({ onNavigate }: CopyTradingProps) {
           </div>
         </Card>
       ) : (
-        <Card>
+        <Card data-onboarding="copytrading-table">
           <div className="p-4 sm:p-6 border-b border-border">
             <h3 className="text-base sm:text-lg font-semibold">Active Copy Positions</h3>
           </div>
@@ -243,7 +243,7 @@ export function CopyTrading({ onNavigate }: CopyTradingProps) {
                   <TableCell className="text-muted-foreground">
                     {formatDistanceToNow(new Date(setup.createdAt), { addSuffix: true })}
                   </TableCell>
-                  <TableCell className="text-right">
+                  <TableCell className="text-right" data-onboarding="copytrading-actions">
                     <div className="flex items-center justify-end gap-2">
                       {isDemo ? (
                         <span className="text-xs text-muted-foreground">Use Exit demo to clear</span>

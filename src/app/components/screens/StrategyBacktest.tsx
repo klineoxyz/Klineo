@@ -1978,7 +1978,7 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
               </div>
 
               {/* Price Chart — Live market data when connected, else demo */}
-              <Card id="backtest-chart" className="p-4 sm:p-6 bg-card/50 overflow-hidden flex flex-col gap-4">
+              <Card id="backtest-chart" className="p-4 sm:p-6 bg-card/50 overflow-hidden flex flex-col gap-4" data-onboarding="backtest-chart">
                 {/* Live / Demo data strip — like pro trading platforms */}
                 <div className={`flex flex-wrap items-center gap-2 py-2 px-3 rounded-lg text-sm ${backtestDataSource === "live" ? "bg-green-500/10 border border-green-500/30" : "bg-amber-500/10 border border-amber-500/30"}`}>
                   {backtestDataSource === "live" && backtestExchangeLabel ? (
@@ -2445,6 +2445,7 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
                   <Button
                     className="w-full bg-primary"
                     onClick={openGoLiveFutures}
+                    data-onboarding="backtest-go-live"
                   >
                     <Zap className="h-4 w-4 mr-2" />
                     Go Live (Futures)
@@ -2467,6 +2468,7 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
                 addDemoFromBacktest(backtestTrades, symbol);
                 toast.success("Demo mode on — backtest trades now appear in Trade History, Orders, and Positions.");
               }}
+              data-onboarding="backtest-run-demo"
             >
               Run Demo
             </Button>
@@ -2475,6 +2477,7 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
                 variant="outline"
                 className="w-full border-primary text-primary hover:bg-primary/10"
                 onClick={handleListOnMarketplaceOpen}
+                data-onboarding="backtest-list-marketplace"
               >
                 <Share2 className="h-4 w-4 mr-2" />
                 List on Marketplace

@@ -133,7 +133,7 @@ export function Referrals({ onNavigate }: ReferralsProps) {
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
-              <div className="space-y-2 min-w-0">
+              <div className="space-y-2 min-w-0" data-onboarding="referrals-link">
                 <Label className="text-xs text-muted-foreground uppercase tracking-wide">Referral Link</Label>
                 <div className="flex gap-2 flex-col sm:flex-row">
                   <Input value={referralMe?.referralLink ?? ""} readOnly className="font-mono text-sm min-w-0" placeholder="—" />
@@ -405,6 +405,7 @@ export function Referrals({ onNavigate }: ReferralsProps) {
                 (referralMe?.earningsSummary?.requestableUsd ?? 0) < (referralMe?.earningsSummary?.minPayoutUsd ?? 50)
               }
               onClick={() => handleRequestPayout()}
+              data-onboarding="referrals-request-payout"
             >
               {requestPayoutLoading ? (
                 <>

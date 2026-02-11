@@ -9,6 +9,16 @@ import {
 } from "@/app/config/navigation";
 import { pathForView } from "@/app/config/routes";
 import { Shield, Sparkles, Zap } from "lucide-react";
+
+const ONBOARDING_NAV_KEYS: Record<string, string> = {
+  marketplace: "nav-marketplace",
+  "copy-trading": "nav-copy-trading",
+  subscription: "nav-packages",
+  settings: "nav-settings",
+  "dca-bots": "nav-dca-bots",
+  "strategy-backtest": "nav-strategy-backtest",
+  referrals: "nav-referrals",
+};
 import { cn } from "@/app/components/ui/utils";
 
 interface MobileNavSheetProps {
@@ -59,6 +69,7 @@ export function MobileNavSheet({
                       "w-full flex items-center gap-3 px-4 py-3 min-h-[44px] text-left text-sm transition-colors hover:bg-secondary/50 relative",
                       isActive && "bg-secondary text-primary"
                     )}
+                    {...(ONBOARDING_NAV_KEYS[item.id] ? { "data-onboarding": ONBOARDING_NAV_KEYS[item.id] } : {})}
                   >
                     {isActive && (
                       <div className="absolute left-0 top-0 bottom-0 w-1 bg-accent" />

@@ -172,9 +172,9 @@ export function Marketplace({ onNavigate }: MarketplaceProps) {
         </div>
 
         <Tabs defaultValue="traders" className="space-y-4">
-          <TabsList className="grid w-full max-w-[280px] grid-cols-2">
-            <TabsTrigger value="traders">Traders</TabsTrigger>
-            <TabsTrigger value="strategies">Strategies</TabsTrigger>
+          <TabsList className="grid w-full max-w-[280px] grid-cols-2" data-onboarding="marketplace-tabs">
+            <TabsTrigger value="traders" data-onboarding="marketplace-tab-traders">Traders</TabsTrigger>
+            <TabsTrigger value="strategies" data-onboarding="marketplace-tab-strategies">Strategies</TabsTrigger>
           </TabsList>
 
           <TabsContent value="traders" className="space-y-4">
@@ -204,7 +204,7 @@ export function Marketplace({ onNavigate }: MarketplaceProps) {
 
         {/* Trader Cards */}
         {!error && traders.length > 0 && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" data-onboarding="marketplace-trader-grid">
             {traders.map((trader) => {
               // Determine risk level from drawdown
               const risk = trader.drawdown > -10 ? "Low" : trader.drawdown > -15 ? "Medium" : "High";
@@ -264,6 +264,7 @@ export function Marketplace({ onNavigate }: MarketplaceProps) {
                       variant="outline"
                       onClick={() => onNavigate("trader-profile", { id: trader.id, slug: trader.slug })}
                       className="gap-1"
+                      data-onboarding="marketplace-view-copy"
                     >
                       <Eye className="size-3" />
                       View & Copy

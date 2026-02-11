@@ -11,6 +11,16 @@ import {
 } from "@/app/config/navigation";
 import { pathForView } from "@/app/config/routes";
 
+const ONBOARDING_NAV_KEYS: Record<string, string> = {
+  marketplace: "nav-marketplace",
+  "copy-trading": "nav-copy-trading",
+  subscription: "nav-packages",
+  settings: "nav-settings",
+  "dca-bots": "nav-dca-bots",
+  "strategy-backtest": "nav-strategy-backtest",
+  referrals: "nav-referrals",
+};
+
 interface SidebarProps {
   activeView: string;
   onNavigate: (view: string) => void;
@@ -67,6 +77,7 @@ export function Sidebar({ activeView, onNavigate, isCollapsed, onToggleCollapse,
                     isCollapsed && "justify-center px-2"
                   )}
                   title={isCollapsed ? item.label : undefined}
+                  {...(ONBOARDING_NAV_KEYS[item.id] ? { "data-onboarding": ONBOARDING_NAV_KEYS[item.id] } : {})}
                 >
                   {isActive && <div className="absolute left-0 top-0 bottom-0 w-1 bg-accent" />}
                   <Icon className={cn(

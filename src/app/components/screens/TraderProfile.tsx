@@ -190,6 +190,7 @@ export function TraderProfile({ onNavigate, traderData }: TraderProfileProps) {
         <Button 
           onClick={() => onNavigate("copy-setup", { id: trader.id, name: trader.name, slug: trader.slug })} 
           className="bg-primary text-primary-foreground"
+          data-onboarding="traderprofile-copy"
         >
           <Copy className="size-4 mr-2" />
           Copy Trader

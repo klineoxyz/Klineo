@@ -273,7 +273,7 @@ function SubscriptionContent({
   return (
     <>
       {/* Joining Fee — one-time; once paid, show Paid and only packages */}
-      <Card className={`p-4 sm:p-6 ${joiningFeePaid ? "border-[#10B981]/30 bg-[#10B981]/5" : "border-primary/30 bg-primary/5"}`}>
+      <Card className={`p-4 sm:p-6 ${joiningFeePaid ? "border-[#10B981]/30 bg-[#10B981]/5" : "border-primary/30 bg-primary/5"}`} data-onboarding="packages-joining-fee">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
             <div className="flex items-center gap-2 mb-1">
@@ -299,6 +299,7 @@ function SubscriptionContent({
               className="w-full sm:w-auto shrink-0"
               onClick={onJoiningFeeCheckout}
               disabled={joiningFeeLoading}
+              data-onboarding="packages-pay-joining"
             >
               {joiningFeeLoading ? (
                 <Loader2 className="size-4 animate-spin" />
@@ -369,10 +370,15 @@ function SubscriptionContent({
                 const popular = pkg.id === "pro_200";
                 const features = packageFeatures[pkg.id] ?? { copyTrades: 1, bots: 5, canCreateStrategy: true, listStrategyInMarket: false };
                 const displayName = packageDisplayNames[pkg.id] ?? `$${pkg.priceUsd} package`;
+                const onboardingCardKey =
+                  pkg.id === "entry_100" ? "packages-entry" : pkg.id === "pro_200" ? "packages-pro" : "packages-elite";
+                const onboardingBuyKey =
+                  pkg.id === "entry_100" ? "packages-entry-buy" : pkg.id === "pro_200" ? "packages-pro-buy" : "packages-elite-buy";
                 return (
                   <Card
                     key={pkg.id}
                     className={`p-4 sm:p-6 flex flex-col ${popular ? "border-primary/50 ring-2 ring-primary/20" : ""}`}
+                    data-onboarding={onboardingCardKey}
                   >
                     {popular && (
                       <Badge className="mb-3 w-fit bg-primary text-primary-foreground">Most popular</Badge>
@@ -431,6 +437,7 @@ function SubscriptionContent({
                       variant={popular ? "default" : "outline"}
                       onClick={() => onPackageCheckout(pkg.id)}
                       disabled={!!packageLoading || !joiningFeePaid}
+                      data-onboarding={onboardingBuyKey}
                     >
                       {packageLoading === pkg.id ? (
                         <Loader2 className="size-4 animate-spin" />

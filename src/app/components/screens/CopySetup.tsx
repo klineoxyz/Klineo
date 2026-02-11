@@ -129,6 +129,7 @@ export function CopySetup({ onNavigate, traderData }: CopySetupProps) {
                       className="mt-2"
                       value={allocationValue}
                       onChange={(e) => setAllocationValue(e.target.value)}
+                      data-onboarding="copysetup-allocation"
                     />
                     <p className="text-xs text-muted-foreground mt-1">Enter the amount to allocate</p>
                   </div>
@@ -143,6 +144,7 @@ export function CopySetup({ onNavigate, traderData }: CopySetupProps) {
                       onChange={(e) => setAllocationValue(e.target.value)}
                       min="1"
                       max="100"
+                      data-onboarding="copysetup-allocation"
                     />
                     <p className="text-xs text-muted-foreground mt-1">Max: 100% per trader</p>
                   </div>
@@ -166,6 +168,7 @@ export function CopySetup({ onNavigate, traderData }: CopySetupProps) {
                     onChange={(e) => setMaxPositionPct(e.target.value)}
                     min="1"
                     max="100"
+                    data-onboarding="copysetup-maxpos"
                   />
                   <p className="text-xs text-muted-foreground mt-1">Per individual position (optional)</p>
                 </div>
@@ -227,6 +230,7 @@ export function CopySetup({ onNavigate, traderData }: CopySetupProps) {
               className="w-full bg-primary text-primary-foreground" 
               onClick={handleSubmit}
               disabled={isSubmitting || !allocationValue}
+              data-onboarding="copysetup-submit"
             >
               {isSubmitting ? (
                 <>
