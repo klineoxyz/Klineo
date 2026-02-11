@@ -24,7 +24,7 @@ function authEngine(req: Request): boolean {
   return (headerSecret === DCA_ENGINE_SECRET) || (bearer === DCA_ENGINE_SECRET);
 }
 
-export const dcaEngineRouter = Router();
+export const dcaEngineRouter: Router = Router();
 
 dcaEngineRouter.post('/tick', async (req: Request, res: Response) => {
   if (!authEngine(req)) {

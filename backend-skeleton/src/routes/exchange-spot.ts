@@ -13,7 +13,7 @@ import { getTickerPrice as getBinanceTicker } from '../lib/binance.js';
 import { getTickerPrice as getBybitTicker } from '../lib/bybit.js';
 import { roundToStep, clampAndRoundQty } from '../lib/symbols.js';
 
-export const exchangeSpotRouter = Router();
+export const exchangeSpotRouter: Router = Router();
 exchangeSpotRouter.use(verifySupabaseJWT);
 
 exchangeSpotRouter.post(
