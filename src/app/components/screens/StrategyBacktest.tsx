@@ -1752,6 +1752,32 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
                   <Share2 className="h-4 w-4" />
                   Share
                 </Button>
+                {myTrader ? (
+                  <Button
+                    variant="default"
+                    size="sm"
+                    className="gap-2 border-primary bg-primary text-primary-foreground hover:bg-primary/90"
+                    onClick={handleListOnMarketplaceOpen}
+                    data-onboarding="backtest-list-marketplace"
+                  >
+                    <Share2 className="h-4 w-4" />
+                    List on Marketplace
+                  </Button>
+                ) : (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="inline-block">
+                        <Button variant="outline" size="sm" className="gap-2" disabled>
+                          <Share2 className="h-4 w-4" />
+                          List on Marketplace
+                        </Button>
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom" className="max-w-xs">
+                      Only approved Master Traders can list strategies. Apply via Master Trader Application if you haven’t yet.
+                    </TooltipContent>
+                  </Tooltip>
+                )}
               </div>
             )}
           </div>
