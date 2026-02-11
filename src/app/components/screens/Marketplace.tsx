@@ -3,14 +3,15 @@ import { Input } from "@/app/components/ui/input";
 import { Button } from "@/app/components/ui/button";
 import { Badge } from "@/app/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/app/components/ui/select";
-import { Search, TrendingUp, TrendingDown, Users, Eye, RefreshCw, AlertTriangle, Clock } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/app/components/ui/tabs";
+import { Search, TrendingUp, TrendingDown, Users, Eye, RefreshCw, AlertTriangle, Clock, BarChart3 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { ROUTES } from "@/app/config/routes";
 import { MarketplaceLoading } from "./MarketplaceLoading";
 import { LoadingWrapper } from "@/app/components/ui/loading-wrapper";
 import { AdvancedFiltersModal, AdvancedFiltersButton, type FilterValues } from "./AdvancedFiltersModal";
-import { api } from "@/lib/api";
+import { api, marketplaceStrategies, type MarketplaceStrategy } from "@/lib/api";
 import { toast } from "@/app/lib/toast";
 import { EmptyTraders } from "@/app/components/ui/empty-state";
 import { ErrorState } from "@/app/components/ui/error-state";
@@ -34,10 +35,25 @@ interface MarketplaceProps {
 
 export function Marketplace({ onNavigate }: MarketplaceProps) {
   const [traders, setTraders] = useState<Trader[]>([]);
+  const [strategies, setStrategies] = useState<MarketplaceStrategy[]>([]);
+  const [strategiesLoading, setStrategiesLoading] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [advancedFilters, setAdvancedFilters] = useState<FilterValues | null>(null);
+
+  const loadStrategies = async () => {
+    setStrategiesLoading(true);
+    try {
+      const data = await marketplaceStrategies.list({ limit: 50 });
+      setStrategies(data.strategies || []);
+    } catch (err: any) {
+      toast.error("Failed to load strategies", { description: err?.message });
+      setStrategies([]);
+    } finally {
+      setStrategiesLoading(false);
+    }
+  };
 
   const loadTraders = async () => {
     setIsLoading(true);
@@ -58,8 +74,13 @@ export function Marketplace({ onNavigate }: MarketplaceProps) {
     loadTraders();
   }, []);
 
+  useEffect(() => {
+    loadStrategies();
+  }, []);
+
   const handleRefresh = () => {
     loadTraders();
+    loadStrategies();
   };
 
   const handleApplyFilters = (filters: FilterValues) => {
@@ -150,6 +171,13 @@ export function Marketplace({ onNavigate }: MarketplaceProps) {
           />
         </div>
 
+        <Tabs defaultValue="traders" className="space-y-4">
+          <TabsList className="grid w-full max-w-[280px] grid-cols-2">
+            <TabsTrigger value="traders">Traders</TabsTrigger>
+            <TabsTrigger value="strategies">Strategies</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="traders" className="space-y-4">
         {/* Error State */}
         {error && !isLoading && (
           <ErrorState
@@ -246,6 +274,86 @@ export function Marketplace({ onNavigate }: MarketplaceProps) {
             })}
           </div>
         )}
+
+          </TabsContent>
+
+          <TabsContent value="strategies" className="space-y-4">
+            {strategiesLoading ? (
+              <div className="py-8 text-center text-muted-foreground text-sm">Loading strategies…</div>
+            ) : strategies.length === 0 ? (
+              <Card className="p-8 text-center">
+                <BarChart3 className="size-10 mx-auto text-muted-foreground mb-3" />
+                <p className="text-sm text-muted-foreground">No strategies listed yet.</p>
+                <p className="text-xs text-muted-foreground mt-1">Master Traders can list backtest strategies from Strategy Backtest.</p>
+              </Card>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {strategies.map((strat) => {
+                  const roi = strat.roi ?? (strat.backtestSummary?.roi as number) ?? null;
+                  return (
+                    <Card key={strat.id} className="p-5 space-y-4 hover:border-accent/50 transition-colors">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1 min-w-0">
+                          <div className="font-semibold text-lg mb-1 truncate">{strat.name}</div>
+                          <div className="text-xs text-muted-foreground">
+                            by {strat.trader?.name ?? "Master Trader"} · {strat.symbol} {strat.interval}
+                          </div>
+                          {strat.description && (
+                            <p className="text-xs text-muted-foreground mt-2 line-clamp-2">{strat.description}</p>
+                          )}
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        {roi != null && (
+                          <div>
+                            <div className="text-xs text-muted-foreground uppercase tracking-wide">Backtest ROI</div>
+                            <div className={`text-lg font-mono font-bold ${Number(roi) >= 0 ? "text-[#10B981]" : "text-[#EF4444]"}`}>
+                              {Number(roi) >= 0 ? "+" : ""}{Number(roi).toFixed(1)}%
+                            </div>
+                          </div>
+                        )}
+                        {strat.winRate != null && (
+                          <div>
+                            <div className="text-xs text-muted-foreground uppercase tracking-wide">Win rate</div>
+                            <div className="text-lg font-mono font-bold">{Number(strat.winRate).toFixed(1)}%</div>
+                          </div>
+                        )}
+                        {strat.maxDrawdown != null && (
+                          <div>
+                            <div className="text-xs text-muted-foreground uppercase tracking-wide">Max DD</div>
+                            <div className="text-lg font-mono font-bold text-[#EF4444]">{Number(strat.maxDrawdown).toFixed(1)}%</div>
+                          </div>
+                        )}
+                        {strat.totalTrades != null && (
+                          <div>
+                            <div className="text-xs text-muted-foreground uppercase tracking-wide">Trades</div>
+                            <div className="text-lg font-mono font-bold">{Number(strat.totalTrades)}</div>
+                          </div>
+                        )}
+                      </div>
+                      <div className="pt-4 border-t border-border flex justify-end">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="gap-1"
+                          onClick={() =>
+                            strat.trader
+                              ? onNavigate("trader-profile", { id: strat.trader.id, slug: strat.trader.slug })
+                              : null
+                          }
+                          disabled={!strat.trader}
+                        >
+                          <Eye className="size-3" />
+                          View & Copy
+                        </Button>
+                      </div>
+                    </Card>
+                  );
+                })}
+              </div>
+            )}
+          </TabsContent>
+        </Tabs>
 
       {/* Refresh Button */}
       <div className="flex justify-center mt-4">

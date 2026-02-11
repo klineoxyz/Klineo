@@ -26,16 +26,13 @@ So:
 - **Storage**: `marketplace_strategies` table — `trader_id`, `name`, `description`, `symbol`, `interval`, `config` (JSONB), `backtest_summary` (JSONB), `status` (draft / listed / unlisted).
 - **Discovery**: Marketplace shows a **Strategies** section (or tab) with listed strategies; each strategy shows the Master Trader who listed it. **Copy** = copy that trader (same Copy Setup flow as today).
 
-**Implemented so far**
+**Implemented**
 
 - Migration: `supabase/migrations/20260210180000_marketplace_strategies.sql` (table + RLS).
-- Backend: `GET /api/me/trader` (profile router) — returns current user’s approved trader profile so the app can show “List on Marketplace” only to Master Traders.
-
-**Still to do**
-
-- Backend: Marketplace-strategies API — public list (listed only), “my strategies”, create/update/delete.
-- Strategy Backtest UI: “List on Marketplace” button (only if `GET /api/me/trader` returns a trader) + dialog to submit strategy.
-- Marketplace UI: “Strategies” section/tab, list strategies with trader info, “View & Copy” → Trader Profile or Copy Setup for that trader.
+- Backend: `GET /api/me/trader` (profile router) — returns current user’s approved trader profile.
+- Backend: `GET /api/marketplace-strategies` (public list, status=listed), `GET /api/marketplace-strategies/my` (auth), `POST/PATCH/DELETE /api/marketplace-strategies` (auth, owner only). See `backend-skeleton/src/routes/marketplace-strategies.ts`.
+- Strategy Backtest UI: “List on Marketplace” button (only when user is an approved Master Trader and has backtest results), plus dialog (name, description) to submit current config and backtest summary.
+- Marketplace UI: “Traders” and “Strategies” tabs; Strategies tab lists strategies from the API with “View & Copy” → Trader Profile (copy the Master Trader who listed the strategy).
 
 ---
 

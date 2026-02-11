@@ -6,6 +6,7 @@ import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
+import { Textarea } from "@/app/components/ui/textarea";
 import { Badge } from "@/app/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/app/components/ui/tabs";
 import {
@@ -63,7 +64,7 @@ import {
 import { toast } from "sonner";
 import { useAuth } from "@/app/contexts/AuthContext";
 import { useDemo } from "@/app/contexts/DemoContext";
-import { api, exchangeConnections, strategies, candles as candlesApi, type ExchangeConnection, type KlineCandle } from "@/lib/api";
+import { api, exchangeConnections, strategies, candles as candlesApi, meTrader, marketplaceStrategies, type ExchangeConnection, type KlineCandle } from "@/lib/api";
 import { fetchUsdtPairs } from "@/lib/binance";
 import { BacktestLightweightChart } from "@/app/components/charts/BacktestLightweightChart";
 import {
@@ -781,6 +782,13 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
   const [goLiveRiskAccepted, setGoLiveRiskAccepted] = useState(false);
   const [isGoLiveSubmitting, setIsGoLiveSubmitting] = useState(false);
 
+  // List on Marketplace (Master Traders only)
+  const [myTrader, setMyTrader] = useState<{ id: string; name: string; slug: string } | null>(null);
+  const [listOnMarketplaceOpen, setListOnMarketplaceOpen] = useState(false);
+  const [listStrategyName, setListStrategyName] = useState("");
+  const [listStrategyDescription, setListStrategyDescription] = useState("");
+  const [isListingStrategy, setIsListingStrategy] = useState(false);
+
   // Backtest data: from exchange (live) when user has a connection, else synthetic (date range + timeframe)
   const [backtestResult, setBacktestResult] = useState(() =>
     runBacktestFromRealCandles(
@@ -1152,6 +1160,16 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
       .catch(() => setEntitlement(null));
   }, [user?.id]);
 
+  useEffect(() => {
+    if (!user?.id) {
+      setMyTrader(null);
+      return;
+    }
+    meTrader()
+      .then((res) => setMyTrader(res.trader ?? null))
+      .catch(() => setMyTrader(null));
+  }, [user?.id]);
+
   const showUnlockAllowanceCard =
     entitlement == null ||
     !(entitlement.joiningFeePaid && (entitlement.activePackageId || entitlement.status === "active"));
@@ -1230,6 +1248,64 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
     const firstOfType = strategyOptions.find((s) => s.strategy_type === strategyTypeFilter);
     if (firstOfType && firstOfType.id !== strategy) setStrategy(firstOfType.id);
   }, [strategyTypeFilter]);
+
+  const handleListOnMarketplaceOpen = () => {
+    setListStrategyName(`${selectedStrategy?.name ?? strategy} — ${symbol}`);
+    setListStrategyDescription("");
+    setListOnMarketplaceOpen(true);
+  };
+
+  const handleListOnMarketplaceSubmit = async () => {
+    const name = listStrategyName.trim();
+    if (!name) {
+      toast.error("Enter a strategy name");
+      return;
+    }
+    setIsListingStrategy(true);
+    try {
+      const backtestConfig = buildBacktestConfig({
+        strategy,
+        direction,
+        rsiPeriod,
+        rsiOversold,
+        rsiOverbought,
+        maFastType,
+        maFastPeriod,
+        maSlowType,
+        maSlowPeriod,
+        breakoutLookback,
+        breakoutThresholdPct,
+        meanReversionLookback,
+        meanReversionZScore,
+        momentumRocPeriod,
+        momentumMinPct,
+        volumeFilterEnabled,
+        volumeMaPeriod,
+        atrPeriod,
+      });
+      await marketplaceStrategies.create({
+        name,
+        description: listStrategyDescription.trim() || undefined,
+        symbol,
+        interval: timeframe,
+        config: backtestConfig,
+        backtestSummary: {
+          roi: kpis.roi,
+          winRate: kpis.winRate,
+          maxDrawdown: kpis.maxDrawdownPercent,
+          totalTrades: kpis.totalTrades,
+        },
+        status: "listed",
+      });
+      setListOnMarketplaceOpen(false);
+      toast.success("Strategy listed on Marketplace");
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Failed to list strategy";
+      toast.error(msg);
+    } finally {
+      setIsListingStrategy(false);
+    }
+  };
 
   const handleShare = React.useCallback(async () => {
     const name = selectedStrategy?.name ?? "Strategy";
@@ -2394,6 +2470,16 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
             >
               Run Demo
             </Button>
+            {myTrader && hasResults && (
+              <Button
+                variant="outline"
+                className="w-full border-primary text-primary hover:bg-primary/10"
+                onClick={handleListOnMarketplaceOpen}
+              >
+                <Share2 className="h-4 w-4 mr-2" />
+                List on Marketplace
+              </Button>
+            )}
           </div>
 
           {/* Packages / Allowance CTA — hide when user has paid onboarding and has an active package */}
@@ -2524,6 +2610,51 @@ export function StrategyBacktest({ onNavigate }: StrategyBacktestProps) {
                 </>
               ) : (
                 "Go Live"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* List on Marketplace (Master Traders only) */}
+      <Dialog open={listOnMarketplaceOpen} onOpenChange={setListOnMarketplaceOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>List on Marketplace</DialogTitle>
+            <DialogDescription>
+              Publish this backtest strategy to the Marketplace so others can discover it and copy you as a Master Trader.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Strategy name</Label>
+              <Input
+                value={listStrategyName}
+                onChange={(e) => setListStrategyName(e.target.value)}
+                placeholder="e.g. RSI Oversold — BTC/USDT"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Description (optional)</Label>
+              <Textarea
+                value={listStrategyDescription}
+                onChange={(e) => setListStrategyDescription(e.target.value)}
+                placeholder="Brief description of the strategy and backtest period..."
+                rows={3}
+                className="resize-none"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setListOnMarketplaceOpen(false)}>Cancel</Button>
+            <Button onClick={handleListOnMarketplaceSubmit} disabled={isListingStrategy || !listStrategyName.trim()}>
+              {isListingStrategy ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Listing…
+                </>
+              ) : (
+                "List on Marketplace"
               )}
             </Button>
           </DialogFooter>

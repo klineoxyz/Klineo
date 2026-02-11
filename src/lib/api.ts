@@ -513,3 +513,74 @@ export const dcaBots = {
     api.put(`/api/dca-bots/${id}`, data),
   delete: async (id: string): Promise<void> => api.delete(`/api/dca-bots/${id}`),
 };
+
+// Marketplace strategies (backtest strategies listed by Master Traders)
+export interface MarketplaceStrategyTrader {
+  id: string;
+  name: string;
+  slug: string;
+  avatarUrl?: string | null;
+}
+
+export interface MarketplaceStrategy {
+  id: string;
+  traderId: string;
+  trader: MarketplaceStrategyTrader | null;
+  name: string;
+  description: string | null;
+  symbol: string;
+  interval: string;
+  config: Record<string, unknown>;
+  backtestSummary: Record<string, unknown>;
+  roi: number | null;
+  winRate: number | null;
+  maxDrawdown: number | null;
+  totalTrades: number | null;
+  status: string;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface MarketplaceStrategiesListResponse {
+  strategies: MarketplaceStrategy[];
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+}
+
+export interface ListMarketplaceStrategyRequest {
+  name: string;
+  description?: string;
+  symbol: string;
+  interval?: string;
+  config: Record<string, unknown>;
+  backtestSummary?: Record<string, unknown>;
+  status?: 'draft' | 'listed';
+}
+
+export const marketplaceStrategies = {
+  list: async (params?: { page?: number; limit?: number }): Promise<MarketplaceStrategiesListResponse> => {
+    const sp = new URLSearchParams();
+    if (params?.page != null) sp.set('page', String(params.page));
+    if (params?.limit != null) sp.set('limit', String(params.limit));
+    const q = sp.toString();
+    return api.get(`/api/marketplace-strategies${q ? `?${q}` : ''}`);
+  },
+  listMy: async (): Promise<{ strategies: MarketplaceStrategy[] }> =>
+    api.get('/api/marketplace-strategies/my'),
+  get: async (id: string): Promise<MarketplaceStrategy> =>
+    api.get(`/api/marketplace-strategies/${id}`),
+  create: async (data: ListMarketplaceStrategyRequest): Promise<{ strategy: MarketplaceStrategy }> =>
+    api.post('/api/marketplace-strategies', data),
+  update: async (id: string, data: { name?: string; description?: string; status?: string }): Promise<{ strategy: MarketplaceStrategy }> =>
+    api.patch(`/api/marketplace-strategies/${id}`, data),
+  delete: async (id: string): Promise<void> => api.delete(`/api/marketplace-strategies/${id}`),
+};
+
+/** Current user's approved Master Trader profile (for "List on Marketplace" in Strategy Backtest). */
+export interface MeTraderResponse {
+  trader: { id: string; name: string; slug: string } | null;
+}
+
+export const meTrader = async (): Promise<MeTraderResponse> => api.get('/api/me/trader');
