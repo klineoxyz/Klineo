@@ -690,12 +690,21 @@ export function Admin() {
     }
   };
 
-  const copyCouponURL = (code: string, appliesTo?: string) => {
+  const copyCouponURL = async (code: string, appliesTo?: string) => {
+    if (!code?.trim()) {
+      toast.error("No coupon code");
+      return;
+    }
     const base = typeof window !== "undefined" ? window.location.origin.replace(/\/$/, "") : "https://www.klineo.xyz";
-    const path = appliesTo === "onboarding" ? "/payments" : "/packages";
-    const url = `${base}${path}?coupon=${code}`;
-    copyToClipboard(url);
-    toast.success("Coupon URL copied", { description: `${code} → ${path}` });
+    const isOnboarding = appliesTo === "onboarding" || (code || "").toUpperCase().startsWith("OB");
+    const path = isOnboarding ? "/payments" : "/packages";
+    const url = `${base}${path}?coupon=${encodeURIComponent(code.trim())}`;
+    const ok = await copyToClipboard(url);
+    if (ok) {
+      toast.success("Coupon URL copied", { description: `${code} → ${path}` });
+    } else {
+      toast.error("Copy failed", { description: url.length > 80 ? `${url.slice(0, 77)}… — paste this manually` : url });
+    }
   };
 
   return (
@@ -2100,8 +2109,9 @@ export function Admin() {
             <div className="space-y-2">
               {coupons.filter(c => c.status === "Active").slice(0, 5).map((coupon) => {
                 const base = typeof window !== "undefined" ? window.location.origin.replace(/\/$/, "") : "https://www.klineo.xyz";
-                const path = coupon.appliesTo === "onboarding" ? "/payments" : "/packages";
-                const url = `${base}${path}?coupon=${coupon.code}`;
+                const isOB = coupon.appliesTo === "onboarding" || (coupon.code || "").toUpperCase().startsWith("OB");
+                const path = isOB ? "/payments" : "/packages";
+                const url = `${base}${path}?coupon=${encodeURIComponent((coupon.code || "").trim())}`;
                 return (
                 <div key={coupon.id} className="flex items-center gap-3 p-3 bg-secondary/30 rounded border border-border">
                   <div className="flex-1 min-w-0 flex flex-col gap-0.5">
@@ -2449,7 +2459,14 @@ export function Admin() {
                         <TableCell className="font-mono text-xs">{pi.user_id?.slice(0, 8)}...</TableCell>
                         <TableCell>{pi.kind === 'joining_fee' ? 'Joining fee' : pi.package_code || 'Package'}</TableCell>
                         <TableCell className="font-mono">{Number(pi.amount_usdt ?? 0) === 0 ? '0 (100% off)' : `${pi.amount_usdt} USDT`}</TableCell>
-                        <TableCell className="text-sm">{pi.discount_percent != null ? `${pi.discount_percent}%` : '—'}</TableCell>
+                        <TableCell className="text-sm font-medium">
+                          {(() => {
+                            const pct = pi.discount_percent != null ? Number(pi.discount_percent) : null;
+                            if (pct != null) return `${pct}%`;
+                            if (pi.coupon_code) return Number(pi.amount_usdt ?? 0) === 0 ? '100%' : 'Applied';
+                            return '—';
+                          })()}
+                        </TableCell>
                         <TableCell className="font-mono text-xs">{pi.coupon_code || '—'}</TableCell>
                         <TableCell>
                           <Badge variant="outline">{pi.status}</Badge>
