@@ -506,8 +506,8 @@ export function MasterTraderApplication({ onNavigate }: MasterTraderApplicationP
               <div className="text-xs text-muted-foreground">Active Copiers</div>
             </div>
             <div className="p-4 bg-secondary/30 rounded border border-border">
-              <div className="text-2xl font-bold text-primary mb-1">$0</div>
-              <div className="text-xs text-muted-foreground">Earned This Month</div>
+              <div className="text-2xl font-bold text-primary mb-1">—</div>
+              <div className="text-xs text-muted-foreground">Last Month Position</div>
             </div>
             <div className="p-4 bg-secondary/30 rounded border border-border">
               <div className="text-2xl font-bold text-[#10B981] mb-1">Active</div>
