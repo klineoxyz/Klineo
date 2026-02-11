@@ -7,6 +7,7 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { financialRatiosRouter, getMarketingSpend, postMarketingSpend } from './admin-financial-ratios.js';
 import { getPackageProfitAllowanceUsd } from './payment-intents.js';
 import { invalidateKillSwitchCache } from '../lib/platformSettings.js';
+import { allocatePurchaseRevenue } from '../lib/allocatePurchaseRevenue.js';
 
 let supabase: SupabaseClient | null = null;
 
@@ -1676,7 +1677,7 @@ adminRouter.post('/payments/intents/:id/approve',
 
     const { data: intent, error: findErr } = await client
       .from('payment_intents')
-      .select('id, user_id, kind, package_code, coupon_code, status')
+      .select('id, user_id, kind, package_code, coupon_code, status, amount_usdt')
       .eq('id', intentId)
       .single();
 
@@ -1782,6 +1783,33 @@ adminRouter.post('/payments/intents/:id/approve',
         reason: note,
       });
     } catch { /* non-fatal */ }
+
+    // Referral rewards: only when there was a successful payment (amount > 0) and admin approved.
+    // Zero-amount (e.g. 100% discount) = no dollar value → no referral allocation.
+    const amountUsdt = Number((intent as { amount_usdt?: number }).amount_usdt ?? 0);
+    if (kind === 'package' && amountUsdt > 0) {
+      const idempotencyKey = `payment_intent:${intentId}`;
+      const { data: purchaseRow, error: insErr } = await client
+        .from('eligible_purchases')
+        .insert({
+          user_id: userId,
+          purchase_type: 'package',
+          amount: amountUsdt,
+          currency: 'USDT',
+          status: 'completed',
+          idempotency_key: idempotencyKey,
+          metadata: { source: 'payment_intent', intent_id: intentId },
+        })
+        .select('id')
+        .single();
+      if (!insErr && purchaseRow?.id) {
+        const allocResult = await allocatePurchaseRevenue(client, purchaseRow.id, { requestId: intentId });
+        if (!allocResult.ok) {
+          console.error(`[admin approve] referral allocation failed for intent ${intentId}:`, allocResult.error);
+        }
+      }
+      // 23505 = unique violation (idempotency_key): already recorded for this intent; skip
+    }
 
     const { data: updated } = await client.from('payment_intents').select('id, status, reviewed_at, review_note').eq('id', intentId).single();
     res.json(updated);

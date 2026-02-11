@@ -130,6 +130,15 @@ If allocation is run again for the same purchase (e.g. internal retry), the API 
 
 ---
 
+## 5) When Referral Rewards Are Given
+
+Payments are **manual only** (no CoinPayments in use). Referral rewards are allocated only when **there was a successful payment** and **admins have approved/confirmed** it in the admin panel:
+
+- **Payment intents (manual/Safe):** When an admin approves the intent in the admin panel (`POST /api/admin/payments/intents/:id/approve`), the backend creates an `eligible_purchases` row with the intent’s `amount_usdt` and runs allocation. Referral rewards are given only after admin approval.
+- **Zero amount / full discount:** If the user paid **$0** (e.g. 100% discount or coupon), there is no dollar value to distribute. The system does **not** create an eligible purchase for $0 and does **not** run referral allocation. The DB function `allocate_purchase_revenue` also returns `invalid_amount` when `amount <= 0`, so no referral rewards are ever credited for zero-value transactions.
+
+---
+
 ## Running Tests and Dev Seed
 
 - **Unit tests:**  
