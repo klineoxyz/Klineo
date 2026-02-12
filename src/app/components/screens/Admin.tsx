@@ -135,6 +135,7 @@ export function Admin() {
   const [masterTraderReviewStatus, setMasterTraderReviewStatus] = useState<"view" | "approved" | "rejected">("view");
   const [masterTraderReviewMessage, setMasterTraderReviewMessage] = useState("");
   const [masterTraderReviewLoading, setMasterTraderReviewLoading] = useState(false);
+  const [masterTraderProofImageError, setMasterTraderProofImageError] = useState(false);
 
   // Execution Debug (admin support)
   const [executionDebugEmail, setExecutionDebugEmail] = useState("");
@@ -216,6 +217,11 @@ export function Admin() {
       setMasterTraderApplicationsLoading(false);
     }
   };
+
+  // Reset proof image error when opening the review dialog
+  useEffect(() => {
+    if (masterTraderReviewApp) setMasterTraderProofImageError(false);
+  }, [masterTraderReviewApp]);
 
   const handleMasterTraderReview = async () => {
     if (!masterTraderReviewApp || masterTraderReviewStatus === "view") return;
@@ -1757,6 +1763,7 @@ export function Admin() {
                     masterTraderApplications.map((app: any) => {
                       const fd = app.formData || {};
                       const get = (camel: string) => fd[camel] ?? fd[camel.replace(/([A-Z])/g, (m: string) => "_" + m.toLowerCase())];
+                      const tableProofUrl = app.proofUrl || (() => { const u = get("proofUrl") ?? get("tradingProofUrl"); return u != null && String(u).trim() !== "" ? String(u).trim() : null; })();
                       const tradingStyleLabel: Record<string, string> = { day: "Day Trading", swing: "Swing Trading", scalping: "Scalping", position: "Position Trading" };
                       const marketsLabel: Record<string, string> = { spot: "Spot Only", futures: "Futures Only", both: "Both Spot & Futures" };
                       return (
@@ -1771,8 +1778,8 @@ export function Admin() {
                           <TableCell className="text-xs">{get("preferredMarkets") ? (marketsLabel[String(get("preferredMarkets"))] ?? get("preferredMarkets")) : "—"}</TableCell>
                           <TableCell className="text-xs">{get("avgMonthlyReturn") != null && get("avgMonthlyReturn") !== "" ? `${get("avgMonthlyReturn")}%` : "—"}</TableCell>
                           <TableCell className="text-xs">
-                            {app.proofUrl ? (
-                              <a href={app.proofUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">View screenshot</a>
+                            {tableProofUrl ? (
+                              <a href={tableProofUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">View screenshot</a>
                             ) : "—"}
                           </TableCell>
                           <TableCell className="text-xs text-muted-foreground">
@@ -1838,7 +1845,7 @@ export function Admin() {
             )}
           </Card>
 
-          <Dialog open={!!masterTraderReviewApp} onOpenChange={(open) => !open && setMasterTraderReviewApp(null)}>
+          <Dialog open={!!masterTraderReviewApp} onOpenChange={(open) => { if (!open) { setMasterTraderReviewApp(null); setMasterTraderProofImageError(false); } }}>
             <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>
@@ -1881,18 +1888,31 @@ export function Admin() {
                   {/* 3. Proof of Performance — exact labels from application form (screenshot required; profile URL optional) */}
                   <div className="rounded border border-border p-4 space-y-2 bg-muted/30">
                     <h4 className="text-sm font-semibold">Proof of Performance</h4>
-                    {/* Trading History Screenshot * — required on form; user uploads snapshot */}
+                    {/* Trading History Screenshot * — required on form; user uploads snapshot. Use proofUrl from app or fallback to formData. */}
                     <div className="space-y-2">
                       <dt className="text-muted-foreground text-xs font-medium">Trading History Screenshot *</dt>
                       <dd>
-                        {masterTraderReviewApp.proofUrl ? (
-                          <div className="space-y-2">
-                            <a href={masterTraderReviewApp.proofUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline inline-block">Open in new tab</a>
-                            <img src={masterTraderReviewApp.proofUrl} alt="Trading history screenshot submitted by applicant" className="max-w-full max-h-72 object-contain rounded border border-border bg-background block" />
-                          </div>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">No screenshot uploaded</span>
-                        )}
+                        {(() => {
+                          const displayProofUrl = (masterTraderReviewApp.proofUrl && String(masterTraderReviewApp.proofUrl).trim()) || v(get("proofUrl")) || v(get("tradingProofUrl"));
+                          if (!displayProofUrl) {
+                            return <span className="text-xs text-muted-foreground">No screenshot uploaded</span>;
+                          }
+                          return (
+                            <div className="space-y-2">
+                              <a href={displayProofUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline inline-block">Open in new tab</a>
+                              {masterTraderProofImageError ? (
+                                <p className="text-xs text-amber-600 dark:text-amber-500">Image could not be loaded. Use the link above to open the screenshot in a new tab.</p>
+                              ) : (
+                                <img
+                                  src={displayProofUrl}
+                                  alt="Trading history screenshot submitted by applicant"
+                                  className="max-w-full max-h-72 object-contain rounded border border-border bg-background block"
+                                  onError={() => setMasterTraderProofImageError(true)}
+                                />
+                              )}
+                            </div>
+                          );
+                        })()}
                       </dd>
                     </div>
                     <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs pt-2 border-t border-border">
