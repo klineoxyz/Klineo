@@ -1740,7 +1740,7 @@ export function Admin() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="master-trader-requests" className="space-y-6" onFocus={() => loadMasterTraderApplications()}>
+        <TabsContent value="master-trader-requests" className="space-y-6">
           <Card>
             <div className="p-4 border-b border-border">
               <h3 className="text-lg font-semibold">Master Trader Requests</h3>
@@ -1793,7 +1793,7 @@ export function Admin() {
                           <TableCell className="text-xs">{get("avgMonthlyReturn") != null && get("avgMonthlyReturn") !== "" ? `${get("avgMonthlyReturn")}%` : "—"}</TableCell>
                           <TableCell className="text-xs">
                             {tableProofUrl ? (
-                              <a href={tableProofUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">View screenshot</a>
+                              <a href={tableProofUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline" onClick={(e) => e.stopPropagation()}>View screenshot</a>
                             ) : "—"}
                           </TableCell>
                           <TableCell className="text-xs text-muted-foreground">
@@ -1810,10 +1810,13 @@ export function Admin() {
                           <TableCell className="text-right">
                             <div className="flex justify-end gap-2">
                               <Button
+                                type="button"
                                 variant="ghost"
                                 size="sm"
-                                onClick={() => {
-                                  setMasterTraderReviewApp({ id: app.id, userEmail: app.userEmail, formData: app.formData, proofUrl: app.proofUrl });
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  setMasterTraderReviewApp({ id: app.id, userEmail: app.userEmail, formData: app.formData, proofUrl: tableProofUrl ?? app.proofUrl });
                                   setMasterTraderReviewStatus("view");
                                   setMasterTraderReviewMessage("");
                                 }}
@@ -1823,11 +1826,14 @@ export function Admin() {
                               {app.status === "pending" && (
                                 <>
                                   <Button
+                                    type="button"
                                     variant="outline"
                                     size="sm"
                                     className="text-[#10B981] border-[#10B981]/50"
-                                    onClick={() => {
-                                      setMasterTraderReviewApp({ id: app.id, userEmail: app.userEmail, formData: app.formData, proofUrl: app.proofUrl });
+                                    onClick={(e) => {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      setMasterTraderReviewApp({ id: app.id, userEmail: app.userEmail, formData: app.formData, proofUrl: tableProofUrl ?? app.proofUrl });
                                       setMasterTraderReviewStatus("approved");
                                       setMasterTraderReviewMessage("");
                                     }}
@@ -1835,11 +1841,14 @@ export function Admin() {
                                     Approve
                                   </Button>
                                   <Button
+                                    type="button"
                                     variant="outline"
                                     size="sm"
                                     className="text-[#EF4444] border-[#EF4444]/50"
-                                    onClick={() => {
-                                      setMasterTraderReviewApp({ id: app.id, userEmail: app.userEmail, formData: app.formData, proofUrl: app.proofUrl });
+                                    onClick={(e) => {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      setMasterTraderReviewApp({ id: app.id, userEmail: app.userEmail, formData: app.formData, proofUrl: tableProofUrl ?? app.proofUrl });
                                       setMasterTraderReviewStatus("rejected");
                                       setMasterTraderReviewMessage("");
                                     }}
@@ -1909,14 +1918,17 @@ export function Admin() {
                         {(() => {
                           const displayProofUrl = (masterTraderReviewApp.proofUrl && String(masterTraderReviewApp.proofUrl).trim()) || v(get("proofUrl")) || v(get("tradingProofUrl"));
                           const imageUrl = masterTraderProofSignedUrl || displayProofUrl;
+                          const linkUrl = imageUrl || displayProofUrl;
                           if (!displayProofUrl && !masterTraderProofSignedUrl) {
                             return <span className="text-xs text-muted-foreground">No screenshot uploaded</span>;
                           }
                           return (
                             <div className="space-y-2">
-                              <a href={imageUrl || displayProofUrl || "#"} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline inline-block">Open in new tab</a>
+                              {linkUrl && (
+                                <a href={linkUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline inline-block">Open screenshot in new tab</a>
+                              )}
                               {masterTraderProofImageError ? (
-                                <p className="text-xs text-amber-600 dark:text-amber-500">Image could not be loaded. Use the link above to open the screenshot in a new tab.</p>
+                                <p className="text-xs text-amber-600 dark:text-amber-500">Image could not be loaded inline. Use the link above to open the screenshot in a new tab.</p>
                               ) : imageUrl ? (
                                 <img
                                   src={imageUrl}
