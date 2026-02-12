@@ -182,7 +182,11 @@ async function signedRequest<T>(
   return data.result as T;
 }
 
-/** One signed request with single retry on timestamp/sign error (invalidate cache and retry). */
+/**
+ * One signed request with single retry on timestamp/sign error.
+ * Retry uses fresh timestamp: we invalidate the time-offset cache then call signedRequest(..., undefined),
+ * so the next request computes Date.now() + getExchangeTimeOffset() which fetches fresh server time.
+ */
 async function signedRequestWithRetry<T>(
   method: 'GET' | 'POST',
   endpoint: string,

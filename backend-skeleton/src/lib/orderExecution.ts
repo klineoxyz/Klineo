@@ -22,6 +22,17 @@ const DEFAULT_FEE_BUFFER_PERCENT = 0.2;
 const DEFAULT_FUTURES_LEVERAGE = 10;
 /** Post-place verify: max time to wait for getOrder (LIVE only). */
 const VERIFY_ORDER_TIMEOUT_MS = 2500;
+/** Delay before retry when verify returns NOT_FOUND or UNKNOWN (visibility delay). */
+const VERIFY_RETRY_DELAY_MS = 300;
+
+export type VerifyOrderStatus = 'FOUND' | 'NOT_FOUND' | 'UNKNOWN';
+
+export interface VerifyOrderResult {
+  status: VerifyOrderStatus;
+  verify_endpoint?: string;
+  verify_request_params?: Record<string, string>;
+  verify_response_snippet?: string;
+}
 
 export interface PreflightResult {
   allowed: boolean;
@@ -134,8 +145,68 @@ async function getFuturesBalanceBybit(
 }
 
 /**
- * Post-place verify: call getOrder (or equivalent) with short timeout.
- * Returns true if order is found (or verify failed/timeout — do not fail the place). Returns false only when exchange says order not found.
+ * Single verify attempt: call getOrder (or equivalent). Returns FOUND / NOT_FOUND / UNKNOWN.
+ * NOT_FOUND only when exchange explicitly says order does not exist (e.g. Binance -2013).
+ * Empty list / timeout / other errors -> UNKNOWN (do not fail the place).
+ */
+async function verifyOrderAttempt(
+  exchange: 'binance' | 'bybit',
+  marketType: 'spot' | 'futures',
+  credentials: { apiKey: string; apiSecret: string },
+  environment: 'production' | 'testnet',
+  symbol: string,
+  orderId: string
+): Promise<VerifyOrderResult> {
+  const sym = SYM(symbol);
+  const baseParams: Record<string, string> = { symbol: sym, orderId };
+  const sanitizeSnippet = (s: string) => s.replace(/api[_-]?key/gi, '[REDACTED]').replace(/secret/gi, '[REDACTED]').slice(0, 300);
+
+  try {
+    if (exchange === 'binance' && marketType === 'spot') {
+      const endpoint = 'GET /api/v3/order';
+      const creds: binance.BinanceCredentials = { apiKey: credentials.apiKey, apiSecret: credentials.apiSecret, environment };
+      try {
+        await binance.getSpotOrder(creds, { symbol: sym, orderId: parseInt(orderId, 10) });
+        return { status: 'FOUND' };
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        if (/\(-2013\)/.test(msg)) {
+          return { status: 'NOT_FOUND', verify_endpoint: endpoint, verify_request_params: { ...baseParams }, verify_response_snippet: sanitizeSnippet(msg) };
+        }
+        return { status: 'UNKNOWN', verify_endpoint: endpoint, verify_response_snippet: sanitizeSnippet(msg) };
+      }
+    }
+    if (exchange === 'bybit' && marketType === 'spot') {
+      const endpoint = 'GET /v5/order/realtime';
+      const creds: bybit.BybitCredentials = { apiKey: credentials.apiKey, apiSecret: credentials.apiSecret, environment };
+      const order = await bybit.getSpotOrder(creds, { symbol: sym, orderId });
+      if (order != null) return { status: 'FOUND' };
+      return { status: 'UNKNOWN', verify_endpoint: endpoint, verify_request_params: { category: 'spot', ...baseParams }, verify_response_snippet: 'retCode=0, list empty (order may be filled or delayed)' };
+    }
+    if (exchange === 'binance' && marketType === 'futures') {
+      const endpoint = 'GET /fapi/v1/order';
+      const creds: binanceFutures.BinanceFuturesCredentials = { apiKey: credentials.apiKey, apiSecret: credentials.apiSecret, environment };
+      const order = await binanceFutures.getOrder(creds, sym, orderId);
+      if (order != null) return { status: 'FOUND' };
+      return { status: 'UNKNOWN', verify_endpoint: endpoint, verify_request_params: { ...baseParams }, verify_response_snippet: 'order null (error or not found)' };
+    }
+    if (exchange === 'bybit' && marketType === 'futures') {
+      const endpoint = 'GET /v5/order/realtime';
+      const creds: bybitFutures.BybitFuturesCredentials = { apiKey: credentials.apiKey, apiSecret: credentials.apiSecret, environment };
+      const order = await bybitFutures.getOrder(creds, sym, orderId);
+      if (order != null) return { status: 'FOUND' };
+      return { status: 'UNKNOWN', verify_endpoint: endpoint, verify_request_params: { category: 'linear', ...baseParams }, verify_response_snippet: 'retCode=0, list empty (order may be filled or delayed)' };
+    }
+    return { status: 'UNKNOWN' };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return { status: 'UNKNOWN', verify_response_snippet: sanitizeSnippet(msg) };
+  }
+}
+
+/**
+ * Post-place verify with 2.5s timeout and one 300ms retry on NOT_FOUND/UNKNOWN to reduce false negatives.
+ * Returns FOUND / NOT_FOUND / UNKNOWN. Never blocks the place: UNKNOWN -> treat as success with warning; NOT_FOUND -> still PLACED with verify_status for UI.
  */
 async function verifyOrderAfterPlace(
   exchange: 'binance' | 'bybit',
@@ -144,39 +215,19 @@ async function verifyOrderAfterPlace(
   environment: 'production' | 'testnet',
   symbol: string,
   orderId: string
-): Promise<boolean> {
-  const sym = SYM(symbol);
-  const timeoutPromise = new Promise<boolean>((resolve) => {
-    setTimeout(() => resolve(true), VERIFY_ORDER_TIMEOUT_MS);
+): Promise<VerifyOrderResult> {
+  const timeoutPromise = new Promise<VerifyOrderResult>((resolve) => {
+    setTimeout(() => resolve({ status: 'UNKNOWN', verify_response_snippet: 'verify timeout' }), VERIFY_ORDER_TIMEOUT_MS);
   });
-  const verifyPromise = (async (): Promise<boolean> => {
-    try {
-      if (exchange === 'binance' && marketType === 'spot') {
-        const creds: binance.BinanceCredentials = { apiKey: credentials.apiKey, apiSecret: credentials.apiSecret, environment };
-        await binance.getSpotOrder(creds, { symbol: sym, orderId: parseInt(orderId, 10) });
-        return true;
-      }
-      if (exchange === 'bybit' && marketType === 'spot') {
-        const creds: bybit.BybitCredentials = { apiKey: credentials.apiKey, apiSecret: credentials.apiSecret, environment };
-        const order = await bybit.getSpotOrder(creds, { symbol: sym, orderId });
-        return order != null;
-      }
-      if (exchange === 'binance' && marketType === 'futures') {
-        const creds: binanceFutures.BinanceFuturesCredentials = { apiKey: credentials.apiKey, apiSecret: credentials.apiSecret, environment };
-        const order = await binanceFutures.getOrder(creds, sym, orderId);
-        return order != null;
-      }
-      if (exchange === 'bybit' && marketType === 'futures') {
-        const creds: bybitFutures.BybitFuturesCredentials = { apiKey: credentials.apiKey, apiSecret: credentials.apiSecret, environment };
-        const order = await bybitFutures.getOrder(creds, sym, orderId);
-        return order != null;
-      }
-      return true;
-    } catch {
-      return false;
-    }
-  })();
-  return Promise.race([verifyPromise, timeoutPromise]);
+  const doVerify = async (): Promise<VerifyOrderResult> => {
+    const first = await verifyOrderAttempt(exchange, marketType, credentials, environment, symbol, orderId);
+    if (first.status === 'FOUND') return first;
+    if (first.status === 'NOT_FOUND') return first;
+    await new Promise((r) => setTimeout(r, VERIFY_RETRY_DELAY_MS));
+    const second = await verifyOrderAttempt(exchange, marketType, credentials, environment, symbol, orderId);
+    return second;
+  };
+  return Promise.race([doVerify(), timeoutPromise]);
 }
 
 function sanitizeForAudit(obj: unknown): unknown {
@@ -493,20 +544,23 @@ export async function executeOrder(
           });
           return { success: false, status: 'FAILED', reason_code: 'NO_ORDER_ID', message: 'Exchange did not return orderId' };
         }
+        let verifyResult: VerifyOrderResult | null = null;
         if (!demoMode) {
-          const verified = await verifyOrderAfterPlace('binance', 'spot', params.credentials, env, sym, orderId);
-          if (!verified) {
-            await writeAudit(client, {
-              ...auditRow,
-              exchange_order_id: orderId,
-              exchange_response: res,
-              status: 'FAILED',
-              error_code: 'ORDER_NOT_FOUND_AFTER_PLACE',
-              error_message: 'Order not found on exchange after place. Check permissions, account, and symbol.',
-            });
-            return { success: false, status: 'FAILED', reason_code: 'ORDER_NOT_FOUND_AFTER_PLACE', message: 'Order not found on exchange after place. Check permissions, account, and symbol.' };
-          }
+          verifyResult = await verifyOrderAfterPlace('binance', 'spot', params.credentials, env, sym, orderId);
         }
+        const precheckWithVerify = {
+          ...preflight,
+          feeBufferUsed: feePct,
+          ...(verifyResult && {
+            verify_status: verifyResult.status,
+            ...(verifyResult.status === 'NOT_FOUND' && {
+              verify_endpoint: verifyResult.verify_endpoint,
+              verify_request_params: verifyResult.verify_request_params,
+              verify_response_snippet: verifyResult.verify_response_snippet,
+            }),
+            ...(verifyResult.status === 'UNKNOWN' && { verify_warning: 'Could not confirm order on exchange; it may be filled or delayed.' }),
+          }),
+        };
         await writeAudit(client, {
           ...auditRow,
           exchange_order_id: orderId,
@@ -515,9 +569,13 @@ export async function executeOrder(
           min_notional: preflight.minNotional ?? null,
           available_balance: availableBalance,
           required_balance: requiredBalance,
-          precheck_result: { ...preflight, feeBufferUsed: feePct },
+          precheck_result: precheckWithVerify,
         });
-        return { success: true, status: 'PLACED', exchange_order_id: orderId, message: 'Order placed' };
+        const message =
+          verifyResult?.status === 'NOT_FOUND'
+            ? 'Order placed. Not found on exchange immediately — check open orders or history.'
+            : 'Order placed';
+        return { success: true, status: 'PLACED', exchange_order_id: orderId, message };
       } else {
         const creds: bybit.BybitCredentials = {
           apiKey: params.credentials.apiKey,
@@ -543,20 +601,23 @@ export async function executeOrder(
           });
           return { success: false, status: 'FAILED', reason_code: 'NO_ORDER_ID', message: 'Exchange did not return orderId' };
         }
+        let verifyResultSpot: VerifyOrderResult | null = null;
         if (!demoMode) {
-          const verified = await verifyOrderAfterPlace('bybit', 'spot', params.credentials, env, sym, orderId);
-          if (!verified) {
-            await writeAudit(client, {
-              ...auditRow,
-              exchange_order_id: orderId,
-              exchange_response: res,
-              status: 'FAILED',
-              error_code: 'ORDER_NOT_FOUND_AFTER_PLACE',
-              error_message: 'Order not found on exchange after place. Check permissions, account, and symbol.',
-            });
-            return { success: false, status: 'FAILED', reason_code: 'ORDER_NOT_FOUND_AFTER_PLACE', message: 'Order not found on exchange after place. Check permissions, account, and symbol.' };
-          }
+          verifyResultSpot = await verifyOrderAfterPlace('bybit', 'spot', params.credentials, env, sym, orderId);
         }
+        const precheckWithVerifySpot = {
+          ...preflight,
+          feeBufferUsed: feePct,
+          ...(verifyResultSpot && {
+            verify_status: verifyResultSpot.status,
+            ...(verifyResultSpot.status === 'NOT_FOUND' && {
+              verify_endpoint: verifyResultSpot.verify_endpoint,
+              verify_request_params: verifyResultSpot.verify_request_params,
+              verify_response_snippet: verifyResultSpot.verify_response_snippet,
+            }),
+            ...(verifyResultSpot.status === 'UNKNOWN' && { verify_warning: 'Could not confirm order on exchange; it may be filled or delayed.' }),
+          }),
+        };
         await writeAudit(client, {
           ...auditRow,
           exchange_order_id: orderId,
@@ -565,9 +626,13 @@ export async function executeOrder(
           min_notional: preflight.minNotional ?? null,
           available_balance: availableBalance,
           required_balance: requiredBalance,
-          precheck_result: { ...preflight, feeBufferUsed: feePct },
+          precheck_result: precheckWithVerifySpot,
         });
-        return { success: true, status: 'PLACED', exchange_order_id: orderId, message: 'Order placed' };
+        const messageSpot =
+          verifyResultSpot?.status === 'NOT_FOUND'
+            ? 'Order placed. Not found on exchange immediately — check open orders or history.'
+            : 'Order placed';
+        return { success: true, status: 'PLACED', exchange_order_id: orderId, message: messageSpot };
       }
     } catch (e) {
       const err = e as Error & { bybitReasonCode?: string; retCode?: number };
@@ -665,20 +730,24 @@ export async function executeOrder(
           await writeAudit(client, { ...auditRow, status: 'FAILED', error_code: 'NO_ORDER_ID', error_message: 'Exchange did not return orderId', exchange_response: res });
           return { success: false, status: 'FAILED', reason_code: 'NO_ORDER_ID', message: 'Exchange did not return orderId' };
         }
+        let verifyResultFut: VerifyOrderResult | null = null;
         if (!demoMode) {
-          const verified = await verifyOrderAfterPlace('binance', 'futures', params.credentials, env, sym, orderId);
-          if (!verified) {
-            await writeAudit(client, {
-              ...auditRow,
-              exchange_order_id: orderId,
-              exchange_response: res,
-              status: 'FAILED',
-              error_code: 'ORDER_NOT_FOUND_AFTER_PLACE',
-              error_message: 'Order not found on exchange after place. Check permissions, account, and symbol.',
-            });
-            return { success: false, status: 'FAILED', reason_code: 'ORDER_NOT_FOUND_AFTER_PLACE', message: 'Order not found on exchange after place. Check permissions, account, and symbol.' };
-          }
+          verifyResultFut = await verifyOrderAfterPlace('binance', 'futures', params.credentials, env, sym, orderId);
         }
+        const precheckWithVerifyFut = {
+          ...preflight,
+          availableBalance: availableMargin,
+          requiredBalance: requiredMargin,
+          ...(verifyResultFut && {
+            verify_status: verifyResultFut.status,
+            ...(verifyResultFut.status === 'NOT_FOUND' && {
+              verify_endpoint: verifyResultFut.verify_endpoint,
+              verify_request_params: verifyResultFut.verify_request_params,
+              verify_response_snippet: verifyResultFut.verify_response_snippet,
+            }),
+            ...(verifyResultFut.status === 'UNKNOWN' && { verify_warning: 'Could not confirm order on exchange; it may be filled or delayed.' }),
+          }),
+        };
         await writeAudit(client, {
           ...auditRow,
           exchange_order_id: orderId,
@@ -686,9 +755,13 @@ export async function executeOrder(
           status: 'PLACED',
           available_balance: availableMargin,
           required_balance: requiredMargin,
-          precheck_result: { ...preflight, availableBalance: availableMargin, requiredBalance: requiredMargin },
+          precheck_result: precheckWithVerifyFut,
         });
-        return { success: true, status: 'PLACED', exchange_order_id: orderId, message: 'Order placed' };
+        const messageFut =
+          verifyResultFut?.status === 'NOT_FOUND'
+            ? 'Order placed. Not found on exchange immediately — check open orders or history.'
+            : 'Order placed';
+        return { success: true, status: 'PLACED', exchange_order_id: orderId, message: messageFut };
       } else {
         const creds: bybitFutures.BybitFuturesCredentials = {
           apiKey: params.credentials.apiKey,
@@ -701,20 +774,24 @@ export async function executeOrder(
           await writeAudit(client, { ...auditRow, status: 'FAILED', error_code: 'NO_ORDER_ID', error_message: 'Exchange did not return orderId', exchange_response: res });
           return { success: false, status: 'FAILED', reason_code: 'NO_ORDER_ID', message: 'Exchange did not return orderId' };
         }
+        let verifyResultBybitFut: VerifyOrderResult | null = null;
         if (!demoMode) {
-          const verified = await verifyOrderAfterPlace('bybit', 'futures', params.credentials, env, sym, orderId);
-          if (!verified) {
-            await writeAudit(client, {
-              ...auditRow,
-              exchange_order_id: orderId,
-              exchange_response: res,
-              status: 'FAILED',
-              error_code: 'ORDER_NOT_FOUND_AFTER_PLACE',
-              error_message: 'Order not found on exchange after place. Check permissions, account, and symbol.',
-            });
-            return { success: false, status: 'FAILED', reason_code: 'ORDER_NOT_FOUND_AFTER_PLACE', message: 'Order not found on exchange after place. Check permissions, account, and symbol.' };
-          }
+          verifyResultBybitFut = await verifyOrderAfterPlace('bybit', 'futures', params.credentials, env, sym, orderId);
         }
+        const precheckWithVerifyBybitFut = {
+          ...preflight,
+          availableBalance: availableMargin,
+          requiredBalance: requiredMargin,
+          ...(verifyResultBybitFut && {
+            verify_status: verifyResultBybitFut.status,
+            ...(verifyResultBybitFut.status === 'NOT_FOUND' && {
+              verify_endpoint: verifyResultBybitFut.verify_endpoint,
+              verify_request_params: verifyResultBybitFut.verify_request_params,
+              verify_response_snippet: verifyResultBybitFut.verify_response_snippet,
+            }),
+            ...(verifyResultBybitFut.status === 'UNKNOWN' && { verify_warning: 'Could not confirm order on exchange; it may be filled or delayed.' }),
+          }),
+        };
         await writeAudit(client, {
           ...auditRow,
           exchange_order_id: orderId,
@@ -722,9 +799,13 @@ export async function executeOrder(
           status: 'PLACED',
           available_balance: availableMargin,
           required_balance: requiredMargin,
-          precheck_result: { ...preflight, availableBalance: availableMargin, requiredBalance: requiredMargin },
+          precheck_result: precheckWithVerifyBybitFut,
         });
-        return { success: true, status: 'PLACED', exchange_order_id: orderId, message: 'Order placed' };
+        const messageBybitFut =
+          verifyResultBybitFut?.status === 'NOT_FOUND'
+            ? 'Order placed. Not found on exchange immediately — check open orders or history.'
+            : 'Order placed';
+        return { success: true, status: 'PLACED', exchange_order_id: orderId, message: messageBybitFut };
       }
     } catch (e) {
       const err = e as Error & { bybitReasonCode?: string };

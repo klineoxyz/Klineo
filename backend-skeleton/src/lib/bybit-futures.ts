@@ -88,6 +88,7 @@ async function signedRequest<T>(
   return data.result as T;
 }
 
+/** Retry uses fresh timestamp: invalidate cache then signedRequest(undefined) fetches new offset. */
 async function signedRequestWithRetry<T>(
   method: 'GET' | 'POST',
   endpoint: string,
@@ -270,7 +271,10 @@ export async function getOpenOrders(
   }));
 }
 
-/** Query single order by orderId. GET /v5/order/realtime with orderId. */
+/**
+ * Query single order by orderId. GET /v5/order/realtime.
+ * category=linear required for USDT perpetual; symbol required (e.g. BTCUSDT); when querying by orderId, open/closed orders are returned.
+ */
 export async function getOrder(
   creds: BybitFuturesCredentials,
   symbol: string,
