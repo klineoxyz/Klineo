@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { verifySupabaseJWT, AuthenticatedRequest } from '../middleware/auth.js';
+import { verifySupabaseJWT, requireSmokeTestsAdminIfHeader, AuthenticatedRequest } from '../middleware/auth.js';
 import { requireJoiningFee } from '../middleware/requireEntitlement.js';
 import { validate, uuidParam } from '../middleware/validation.js';
 import { exchangeConnectionLimiter } from '../middleware/rateLimit.js';
@@ -364,10 +364,12 @@ exchangeConnectionsRouter.post(
 /**
  * POST /api/exchange-connections/:id/futures/test
  * Test Futures API (no order placed). Updates futures_test_status, futures_last_error.
+ * When x-klineo-smoke-tests: true, requires admin role.
  */
 exchangeConnectionsRouter.post(
   '/:id/futures/test',
   uuidParam('id'),
+  requireSmokeTestsAdminIfHeader,
   async (req: AuthenticatedRequest, res) => {
     const client = getSupabase();
     if (!client) {
@@ -449,10 +451,12 @@ exchangeConnectionsRouter.post(
  * POST /api/exchange-connections/:id/futures/enable
  * Set leverage, margin mode, position mode for BTCUSDT (no order). Sets futures_enabled true.
  * Body: { default_leverage?, margin_mode?, position_mode? }
+ * When x-klineo-smoke-tests: true, requires admin role.
  */
 exchangeConnectionsRouter.post(
   '/:id/futures/enable',
   uuidParam('id'),
+  requireSmokeTestsAdminIfHeader,
   validate([
     body('default_leverage').optional().isInt({ min: 1, max: 125 }).withMessage('Leverage 1-125'),
     body('margin_mode').optional().isIn(['isolated', 'cross', 'Isolated', 'Cross', 'ISOLATED', 'CROSS']).withMessage('isolated or cross'),

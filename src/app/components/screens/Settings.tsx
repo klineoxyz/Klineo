@@ -29,7 +29,14 @@ import { ConnectExchangeModal } from "@/app/components/screens/ConnectExchangeMo
 import { ROUTES } from "@/app/config/routes";
 import { useMasterTraderStatus } from "@/app/hooks/useMasterTraderStatus";
 import { FuturesEnableModal } from "@/app/components/screens/FuturesEnableModal";
-import { Users, DollarSign, Ticket, Package } from "lucide-react";
+import { Users, DollarSign, Ticket, Package, FlaskConical, Zap } from "lucide-react";
+import {
+  getSmokeExchangeTestsEnabled,
+  getSmokeRunnerCronTestEnabled,
+  setSmokeExchangeTestsEnabled,
+  setSmokeRunnerCronTestEnabled,
+  isLiveSmokeTestsEnabled,
+} from "@/lib/smokeTestToggles";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/app/components/ui/table";
 
 interface SettingsProps {
@@ -37,7 +44,7 @@ interface SettingsProps {
 }
 
 export function Settings({ onNavigate }: SettingsProps) {
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
   const { isDemoMode } = useDemo();
   const { isApproved: isMasterTraderApproved } = useMasterTraderStatus();
   const [connectModalOpen, setConnectModalOpen] = useState(false);
@@ -391,6 +398,8 @@ export function Settings({ onNavigate }: SettingsProps) {
   }, [fetchMyDiscounts]);
 
   const [activeSettingsTab, setActiveSettingsTab] = useState("profile");
+  const [smokeExchangeEnabled, setSmokeExchangeEnabled] = useState(() => getSmokeExchangeTestsEnabled());
+  const [smokeRunnerCronEnabled, setSmokeRunnerCronEnabled] = useState(() => getSmokeRunnerCronTestEnabled());
   const handleSettingsTabChange = useCallback((value: string) => {
     setActiveSettingsTab(value);
     if (value === "profile") fetchMyDiscounts();
@@ -587,6 +596,7 @@ export function Settings({ onNavigate }: SettingsProps) {
           </TabsTrigger>
           <TabsTrigger value="packages">Packages</TabsTrigger>
           <TabsTrigger value="notifications">Notifications</TabsTrigger>
+          {isAdmin && <TabsTrigger value="admin-tools">Admin Tools</TabsTrigger>}
         </TabsList>
 
         <TabsContent value="profile" className="space-y-6">
@@ -1527,6 +1537,58 @@ export function Settings({ onNavigate }: SettingsProps) {
             </div>
           </Card>
         </TabsContent>
+
+        {isAdmin && (
+          <TabsContent value="admin-tools" className="space-y-6">
+            {isLiveSmokeTestsEnabled() && (
+              <Alert className="border-amber-500/50 bg-amber-500/10">
+                <Zap className="size-4 text-amber-600 dark:text-amber-500" />
+                <AlertDescription>
+                  <strong>LIVE trading tests enabled.</strong> Smoke tests (Admin → Smoke Test) will run futures/test, futures/enable, futures/order, and runner/cron (cron-secret) when you run them. Turn off when not needed.
+                </AlertDescription>
+              </Alert>
+            )}
+            <Card className="p-4 sm:p-6 space-y-4">
+              <h3 className="text-base sm:text-lg font-semibold flex items-center gap-2">
+                <FlaskConical className="size-5" />
+                Smoke Test Live Options
+              </h3>
+              <p className="text-sm text-muted-foreground">
+                When enabled, the Smoke Test page (Admin panel) will run exchange and runner cron tests. Stored in this browser only. Backend requires admin + <code className="text-xs bg-muted px-1 rounded">x-klineo-smoke-tests: true</code> header.
+              </p>
+              <div className="space-y-4 pt-2">
+                <div className="flex items-center justify-between rounded-lg border border-border p-4">
+                  <div>
+                    <Label htmlFor="smoke-exchange-toggle" className="font-medium">Enable Exchange Smoke Tests</Label>
+                    <p className="text-xs text-muted-foreground mt-1">Run futures/test, futures/enable, futures/order in Smoke Test</p>
+                  </div>
+                  <Switch
+                    id="smoke-exchange-toggle"
+                    checked={smokeExchangeEnabled}
+                    onCheckedChange={(checked) => {
+                      setSmokeExchangeTestsEnabled(checked);
+                      setSmokeExchangeEnabled(checked);
+                    }}
+                  />
+                </div>
+                <div className="flex items-center justify-between rounded-lg border border-border p-4">
+                  <div>
+                    <Label htmlFor="smoke-runner-cron-toggle" className="font-medium">Enable Runner Cron Secret Test</Label>
+                    <p className="text-xs text-muted-foreground mt-1">Run POST /api/runner/cron (cron-secret) in Smoke Test</p>
+                  </div>
+                  <Switch
+                    id="smoke-runner-cron-toggle"
+                    checked={smokeRunnerCronEnabled}
+                    onCheckedChange={(checked) => {
+                      setSmokeRunnerCronTestEnabled(checked);
+                      setSmokeRunnerCronEnabled(checked);
+                    }}
+                  />
+                </div>
+              </div>
+            </Card>
+          </TabsContent>
+        )}
       </Tabs>
     </div>
   );

@@ -101,3 +101,26 @@ export function requireAdmin(
   }
   next();
 }
+
+const SMOKE_TESTS_HEADER = 'x-klineo-smoke-tests';
+
+/**
+ * When request includes x-klineo-smoke-tests: true (live smoke test), require admin role.
+ * Use after verifySupabaseJWT. If header is absent, passes through.
+ */
+export function requireSmokeTestsAdminIfHeader(
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction
+) {
+  const h = req.headers[SMOKE_TESTS_HEADER.toLowerCase()] ?? req.headers[SMOKE_TESTS_HEADER];
+  const hasHeader = h === 'true';
+  if (!hasHeader) return next();
+  if (req.user?.role !== 'admin') {
+    return res.status(403).json({
+      error: 'Smoke live tests require admin role',
+      message: 'Send header x-klineo-smoke-tests only when running as admin from Smoke Test page.',
+    });
+  }
+  next();
+}

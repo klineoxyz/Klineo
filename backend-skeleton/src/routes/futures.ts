@@ -6,7 +6,7 @@
  */
 
 import { Router } from 'express';
-import { verifySupabaseJWT, AuthenticatedRequest } from '../middleware/auth.js';
+import { verifySupabaseJWT, requireSmokeTestsAdminIfHeader, AuthenticatedRequest } from '../middleware/auth.js';
 import { validate } from '../middleware/validation.js';
 import { body } from 'express-validator';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
@@ -67,9 +67,11 @@ futuresRouter.use(verifySupabaseJWT);
  * POST /api/futures/order
  * Body: { connectionId, symbol, side, type: 'MARKET', qty? (base), quoteSizeUsdt? }
  * Provide either qty (base asset) or quoteSizeUsdt (USDT size; we convert using mark price).
+ * When x-klineo-smoke-tests: true, requires admin role.
  */
 futuresRouter.post(
   '/order',
+  requireSmokeTestsAdminIfHeader,
   validate([
     body('connectionId').isUUID().withMessage('connectionId required'),
     body('symbol').isString().notEmpty().withMessage('symbol required'),

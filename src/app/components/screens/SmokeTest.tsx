@@ -9,6 +9,7 @@ import { Loader2, Copy, Trash2, CheckCircle2, XCircle, MinusCircle, ChevronDown,
 import { useAuth } from "@/app/contexts/AuthContext";
 import { api } from "@/lib/api";
 import { runAllTests, runLaunchTests, runTestByName, smokeTests, type SmokeTestResult, sanitizeResponse } from "@/lib/smokeTests";
+import { getSmokeTogglesState } from "@/lib/smokeTestToggles";
 import { toast } from "sonner";
 
 type EntitlementState = {
@@ -135,10 +136,12 @@ export function SmokeTest(props?: { embedInAdmin?: boolean }) {
   };
 
   const handleCopyReport = () => {
+    const toggles = getSmokeTogglesState();
     // Create fully sanitized report (no secrets; apiKey/apiSecret/token redacted)
     const report = {
       reportId: crypto.randomUUID?.() ?? `report-${Date.now()}`,
       timestamp: new Date().toISOString(),
+      toggles: { exchangeSmokeTests: toggles.exchange, runnerCronSecretTest: toggles.runnerCron },
       environment: {
         api_domain: maskedApiDomain,
         supabase_domain: maskedSupabaseDomain,
@@ -417,6 +420,20 @@ export function SmokeTest(props?: { embedInAdmin?: boolean }) {
           </Button>
         </Card>
       )}
+
+      {/* Toggles used for this run (when results exist) */}
+      {results.length > 0 && (() => {
+        const toggles = getSmokeTogglesState();
+        return (
+          <div className="rounded border border-border bg-muted/30 px-4 py-2 text-xs text-muted-foreground">
+            <span className="font-medium text-foreground">Toggles for live tests: </span>
+            <span>Exchange smoke tests = {toggles.exchange ? 'ON' : 'OFF'}</span>
+            <span className="mx-2">|</span>
+            <span>Runner cron secret test = {toggles.runnerCron ? 'ON' : 'OFF'}</span>
+            <span className="ml-2">— Skips show reason (flag, auth, or missing header) in Message column.</span>
+          </div>
+        );
+      })()}
 
       {/* Overall Status Banner */}
       <Card className={`p-4 ${

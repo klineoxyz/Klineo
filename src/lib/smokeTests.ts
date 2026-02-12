@@ -5,6 +5,7 @@
 
 import { api } from './api';
 import { pathForView, viewForPath } from '@/app/config/routes';
+import { getSmokeExchangeTestsEnabled, getSmokeRunnerCronTestEnabled } from './smokeTestToggles';
 
 export interface SmokeTestResult {
   name: string;
@@ -185,10 +186,12 @@ export function sanitizeResponse(data: unknown): unknown {
   return sanitized;
 }
 
+const SMOKE_TESTS_HEADER = 'x-klineo-smoke-tests';
+
 /**
- * Get auth headers for fetch
+ * Get auth headers for fetch. When addSmokeHeader is true, adds x-klineo-smoke-tests: true for backend guardrails.
  */
-async function getAuthHeaders(): Promise<HeadersInit> {
+async function getAuthHeaders(addSmokeHeader = false): Promise<HeadersInit> {
   const { supabase } = await import('./supabase');
   const { data } = await supabase.auth.getSession();
   const token = data.session?.access_token;
@@ -199,6 +202,9 @@ async function getAuthHeaders(): Promise<HeadersInit> {
 
   if (token) {
     (headers as Record<string, string>)['Authorization'] = `Bearer ${token}`;
+  }
+  if (addSmokeHeader) {
+    (headers as Record<string, string>)[SMOKE_TESTS_HEADER] = 'true';
   }
 
   return headers;
@@ -900,11 +906,11 @@ export const smokeTests: SmokeTestDefinition[] = [
       if (!user) {
         return { name: 'POST /api/exchange-connections/:id/futures/test', status: 'SKIP', message: 'Login required' };
       }
-      if (!import.meta.env.VITE_ENABLE_EXCHANGE_SMOKE_TESTS) {
-        return { name: 'POST /api/exchange-connections/:id/futures/test', status: 'SKIP', message: 'VITE_ENABLE_EXCHANGE_SMOKE_TESTS not set' };
+      if (!getSmokeExchangeTestsEnabled()) {
+        return { name: 'POST /api/exchange-connections/:id/futures/test', status: 'SKIP', message: 'Exchange smoke tests disabled (toggle or VITE_ENABLE_EXCHANGE_SMOKE_TESTS)' };
       }
       const baseURL = getBaseURL();
-      const headers = await getAuthHeaders();
+      const headers = await getAuthHeaders(true);
       const listRes = await fetch(`${baseURL}/api/exchange-connections`, { headers });
       if (!listRes.ok) {
         return { name: 'POST /api/exchange-connections/:id/futures/test', status: 'SKIP', message: 'Could not list connections' };
@@ -928,11 +934,11 @@ export const smokeTests: SmokeTestDefinition[] = [
       if (!user) {
         return { name: 'POST /api/exchange-connections/:id/futures/enable', status: 'SKIP', message: 'Login required' };
       }
-      if (!import.meta.env.VITE_ENABLE_EXCHANGE_SMOKE_TESTS) {
-        return { name: 'POST /api/exchange-connections/:id/futures/enable', status: 'SKIP', message: 'Optional; only with VITE_ENABLE_EXCHANGE_SMOKE_TESTS (e.g. testnet)' };
+      if (!getSmokeExchangeTestsEnabled()) {
+        return { name: 'POST /api/exchange-connections/:id/futures/enable', status: 'SKIP', message: 'Exchange smoke tests disabled (toggle or VITE_ENABLE_EXCHANGE_SMOKE_TESTS)' };
       }
       const baseURL = getBaseURL();
-      const headers = await getAuthHeaders();
+      const headers = await getAuthHeaders(true);
       const listRes = await fetch(`${baseURL}/api/exchange-connections`, { headers });
       if (!listRes.ok) {
         return { name: 'POST /api/exchange-connections/:id/futures/enable', status: 'SKIP', message: 'Could not list connections' };
@@ -966,11 +972,11 @@ export const smokeTests: SmokeTestDefinition[] = [
       if (!user) {
         return { name: 'POST /api/futures/order', status: 'SKIP', message: 'Login required' };
       }
-      if (!import.meta.env.VITE_ENABLE_EXCHANGE_SMOKE_TESTS) {
-        return { name: 'POST /api/futures/order', status: 'SKIP', message: 'VITE_ENABLE_EXCHANGE_SMOKE_TESTS not set' };
+      if (!getSmokeExchangeTestsEnabled()) {
+        return { name: 'POST /api/futures/order', status: 'SKIP', message: 'Exchange smoke tests disabled (toggle or VITE_ENABLE_EXCHANGE_SMOKE_TESTS)' };
       }
       const baseURL = getBaseURL();
-      const headers = await getAuthHeaders();
+      const headers = await getAuthHeaders(true);
       const listRes = await fetch(`${baseURL}/api/exchange-connections`, { headers });
       if (!listRes.ok) {
         return { name: 'POST /api/futures/order', status: 'SKIP', message: 'Could not list connections' };
@@ -1033,23 +1039,23 @@ export const smokeTests: SmokeTestDefinition[] = [
       return result;
     }
   },
-  // POST /api/runner/cron with x-cron-secret (no JWT) — only when VITE_ENABLE_RUNNER_CRON_TEST=true and cron-secret configured (never display secret)
+  // POST /api/runner/cron with x-cron-secret (no JWT) — only when toggle or VITE_ENABLE_RUNNER_CRON_TEST and cron-secret configured (never display secret)
   {
     name: 'POST /api/runner/cron (cron-secret)',
     category: 'admin',
     run: async () => {
-      if (!import.meta.env.VITE_ENABLE_RUNNER_CRON_TEST) {
-        return { name: 'POST /api/runner/cron (cron-secret)', status: 'SKIP', message: 'cron-secret test disabled; configured: no' };
+      if (!getSmokeRunnerCronTestEnabled()) {
+        return { name: 'POST /api/runner/cron (cron-secret)', status: 'SKIP', message: 'Runner cron secret test disabled (toggle or VITE_ENABLE_RUNNER_CRON_TEST)' };
       }
       const secret = import.meta.env.VITE_RUNNER_CRON_SECRET as string | undefined;
       if (!secret?.trim()) {
-        return { name: 'POST /api/runner/cron (cron-secret)', status: 'SKIP', message: 'cron-secret configured: no' };
+        return { name: 'POST /api/runner/cron (cron-secret)', status: 'SKIP', message: 'cron-secret configured: no (RUNNER_CRON_SECRET in backend only)' };
       }
       const baseURL = getBaseURL();
       const result = await runTest('POST /api/runner/cron (cron-secret)', () =>
         fetch(`${baseURL}/api/runner/cron`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'x-cron-secret': secret },
+          headers: { 'Content-Type': 'application/json', 'x-cron-secret': secret, [SMOKE_TESTS_HEADER]: 'true' },
         })
       );
       if (result.httpCode === 200 || result.httpCode === 503) {
@@ -1182,13 +1188,13 @@ const LAUNCH_PRESET_NAMES = [
 ];
 
 /**
- * Run Launch preset: Public + Auth + Runner status; Futures tests SKIP unless VITE_ENABLE_EXCHANGE_SMOKE_TESTS;
- * POST /api/runner/cron (cron-secret) SKIP unless VITE_ENABLE_RUNNER_CRON_TEST.
+ * Run Launch preset: Public + Auth + Runner status; Futures tests SKIP unless toggle or VITE_ENABLE_EXCHANGE_SMOKE_TESTS;
+ * POST /api/runner/cron (cron-secret) SKIP unless toggle or VITE_ENABLE_RUNNER_CRON_TEST.
  */
 export async function runLaunchTests(): Promise<SmokeTestResult[]> {
   const results: SmokeTestResult[] = [];
-  const exchangeSmokeEnabled = import.meta.env.VITE_ENABLE_EXCHANGE_SMOKE_TESTS === 'true';
-  const runnerCronTestEnabled = import.meta.env.VITE_ENABLE_RUNNER_CRON_TEST === 'true';
+  const exchangeSmokeEnabled = getSmokeExchangeTestsEnabled();
+  const runnerCronTestEnabled = getSmokeRunnerCronTestEnabled();
   let stopAfter401 = false;
 
   for (const name of LAUNCH_PRESET_NAMES) {
@@ -1201,13 +1207,13 @@ export async function runLaunchTests(): Promise<SmokeTestResult[]> {
     }
     if (name.startsWith('POST /api/exchange-connections/:id/futures') || name === 'POST /api/futures/order') {
       if (!exchangeSmokeEnabled) {
-        results.push({ name, status: 'SKIP', message: 'VITE_ENABLE_EXCHANGE_SMOKE_TESTS not set' });
+        results.push({ name, status: 'SKIP', message: 'Exchange smoke tests disabled (toggle or env)' });
         continue;
       }
     }
     if (name === 'POST /api/runner/cron (cron-secret)') {
       if (!runnerCronTestEnabled) {
-        results.push({ name, status: 'SKIP', message: 'VITE_ENABLE_RUNNER_CRON_TEST not set' });
+        results.push({ name, status: 'SKIP', message: 'Runner cron secret test disabled (toggle or env)' });
         continue;
       }
     }
