@@ -269,12 +269,18 @@ dcaBotsRouter.post(
       const now = new Date();
       const result = await processOneBot(client, bot as Parameters<typeof processOneBot>[1], now, 'user-trigger');
       const success = result.status === 'ok';
-      const message = 'error' in result ? result.error : ('reason' in result ? result.reason : null);
+      let errorMessage: string | undefined = 'error' in result ? result.error : ('reason' in result ? result.reason : null) ?? undefined;
+      if (!success && !errorMessage) errorMessage = 'Tick failed';
+      if (!success) {
+        const { data: updated } = await client.from('dca_bots').select('last_tick_error').eq('id', id).maybeSingle();
+        const detail = (updated as { last_tick_error?: string } | null)?.last_tick_error;
+        if (detail) errorMessage = detail;
+      }
       return res.json({
         success,
         status: result.status,
-        error: message ?? undefined,
-        message: success ? 'Tick completed' : (message ?? 'Tick failed'),
+        error: errorMessage,
+        message: success ? 'Tick completed' : errorMessage ?? 'Tick failed',
       });
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Trigger tick failed';

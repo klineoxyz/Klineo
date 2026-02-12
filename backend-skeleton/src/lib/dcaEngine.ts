@@ -542,10 +542,12 @@ export async function processOneBot(
     const qty = roundToStep(Math.max(qtyRaw, filters.minQty), filters.stepSize);
     const notional = parseFloat(qty) * price;
     if (notional < filters.minNotional) {
+      const minUsd = Math.ceil(filters.minNotional * 100) / 100;
+      const errMsg = `Base order below min notional (min $${minUsd} for ${bot.pair}). Increase base order size to at least $${minUsd} or add USDT on your exchange.`;
       await releaseDcaLock(client, bot.id, {
         last_tick_at: now.toISOString(),
         last_tick_status: 'skipped',
-        last_tick_error: 'Base order below min notional',
+        last_tick_error: errMsg,
         next_tick_at: new Date(now.getTime() + TICK_INTERVAL_SEC * 1000).toISOString(),
         is_locked: false,
       });

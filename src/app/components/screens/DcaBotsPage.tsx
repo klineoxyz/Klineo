@@ -1,7 +1,7 @@
 /**
  * DCA Bots page — grid-style DCA ladders, presets, and My Bots table.
  */
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
 import { Badge } from "@/app/components/ui/badge";
@@ -51,6 +51,7 @@ export function DcaBotsPage({ onNavigate }: DcaBotsPageProps) {
   const [topBots, setTopBots] = useState<TopBot[]>([]);
   const [templateBot, setTemplateBot] = useState<TopBot | null>(null);
   const [triggerTickId, setTriggerTickId] = useState<string | null>(null);
+  const myBotsSectionRef = useRef<HTMLDivElement>(null);
 
   const loadBots = async () => {
     setLoading(true);
@@ -283,30 +284,49 @@ export function DcaBotsPage({ onNavigate }: DcaBotsPageProps) {
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
-            {topBots.map((bot, i) => (
-              <Card key={bot.id} className="p-3 sm:p-4 flex flex-col gap-2 border border-border hover:border-primary/50 transition-colors">
-                <div className="flex items-center gap-2">
-                  <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-amber-500/20 text-amber-600 dark:text-amber-400 font-semibold text-sm">
-                    {i + 1}
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <p className="font-medium truncate">{bot.name}</p>
-                    <p className="text-xs text-muted-foreground font-mono">{bot.pair}</p>
+            {topBots.map((bot, i) => {
+              const userRunningSame = bots.some(
+                (b) => b.status === "running" && b.pair === bot.pair && b.exchange === bot.exchange
+              );
+              return (
+                <Card key={bot.id} className="p-3 sm:p-4 flex flex-col gap-2 border border-border hover:border-primary/50 transition-colors">
+                  <div className="flex items-center gap-2">
+                    <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-amber-500/20 text-amber-600 dark:text-amber-400 font-semibold text-sm">
+                      {i + 1}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium truncate">{bot.name}</p>
+                      <p className="text-xs text-muted-foreground font-mono">{bot.pair}</p>
+                    </div>
+                    {userRunningSame && (
+                      <Badge variant="default" className="shrink-0 text-xs">Running</Badge>
+                    )}
                   </div>
-                </div>
-                <div className="flex items-center gap-1.5 mt-1">
-                  <TrendingUp className="size-4 text-[#10B981]" />
-                  <span className={`font-mono font-semibold text-sm ${bot.realizedPnl >= 0 ? "text-[#10B981]" : "text-[#EF4444]"}`}>
-                    {bot.realizedPnl >= 0 ? "+" : ""}${bot.realizedPnl.toFixed(2)}
-                  </span>
-                  <span className="text-xs text-muted-foreground">({bot.roiPct >= 0 ? "+" : ""}{bot.roiPct.toFixed(1)}% ROI)</span>
-                </div>
-                <Button variant="outline" size="sm" className="w-full mt-auto" onClick={() => handleCopyBot(bot)}>
-                  <CopyPlus className="size-3.5 mr-1.5" />
-                  Copy & run
-                </Button>
-              </Card>
-            ))}
+                  <div className="flex items-center gap-1.5 mt-1">
+                    <TrendingUp className="size-4 text-[#10B981]" />
+                    <span className={`font-mono font-semibold text-sm ${bot.realizedPnl >= 0 ? "text-[#10B981]" : "text-[#EF4444]"}`}>
+                      {bot.realizedPnl >= 0 ? "+" : ""}${bot.realizedPnl.toFixed(2)}
+                    </span>
+                    <span className="text-xs text-muted-foreground">({bot.roiPct >= 0 ? "+" : ""}{bot.roiPct.toFixed(1)}% ROI)</span>
+                  </div>
+                  {userRunningSame ? (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      className="w-full mt-auto"
+                      onClick={() => myBotsSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })}
+                    >
+                      View in My Bots
+                    </Button>
+                  ) : (
+                    <Button variant="outline" size="sm" className="w-full mt-auto" onClick={() => handleCopyBot(bot)}>
+                      <CopyPlus className="size-3.5 mr-1.5" />
+                      Copy & run
+                    </Button>
+                  )}
+                </Card>
+              );
+            })}
           </div>
         )}
       </Card>
@@ -412,7 +432,8 @@ export function DcaBotsPage({ onNavigate }: DcaBotsPageProps) {
       </Card>
 
       {/* My Bots table */}
-      <Card>
+      <div ref={myBotsSectionRef}>
+        <Card>
         <div className="p-4 sm:p-6 border-b border-border flex flex-col gap-2">
           <h3 className="text-base sm:text-lg font-semibold">My Bots</h3>
           {atBotLimit && activeBots.length > 0 && (
@@ -572,7 +593,8 @@ export function DcaBotsPage({ onNavigate }: DcaBotsPageProps) {
             </TableBody>
           </Table>
         )}
-      </Card>
+        </Card>
+      </div>
 
       <CreateBotModal
         open={createModalOpen}
