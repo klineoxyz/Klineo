@@ -29,6 +29,8 @@ export type VerifyOrderStatus = 'FOUND' | 'NOT_FOUND' | 'UNKNOWN';
 
 export interface VerifyOrderResult {
   status: VerifyOrderStatus;
+  verify_used?: 'orderId' | 'orderLinkId';
+  verify_identifier_value?: string;
   verify_endpoint?: string;
   verify_request_params?: Record<string, string>;
   verify_response_snippet?: string;
@@ -145,20 +147,25 @@ async function getFuturesBalanceBybit(
 }
 
 /**
- * Single verify attempt: call getOrder (or equivalent). Returns FOUND / NOT_FOUND / UNKNOWN.
+ * Single verify attempt by one identifier. Returns FOUND / NOT_FOUND / UNKNOWN.
  * NOT_FOUND only when exchange explicitly says order does not exist (e.g. Binance -2013).
- * Empty list / timeout / other errors -> UNKNOWN (do not fail the place).
  */
-async function verifyOrderAttempt(
+async function verifyOrderAttemptOne(
   exchange: 'binance' | 'bybit',
   marketType: 'spot' | 'futures',
   credentials: { apiKey: string; apiSecret: string },
   environment: 'production' | 'testnet',
   symbol: string,
-  orderId: string
+  orderId: string | undefined,
+  orderLinkId: string | undefined,
+  identifier: 'orderId' | 'orderLinkId'
 ): Promise<VerifyOrderResult> {
   const sym = SYM(symbol);
-  const baseParams: Record<string, string> = { symbol: sym, orderId };
+  const value = identifier === 'orderId' ? orderId : orderLinkId;
+  if (value == null || value === '') return { status: 'UNKNOWN' };
+  const baseParams: Record<string, string> = { symbol: sym };
+  if (identifier === 'orderId') baseParams.orderId = value;
+  else baseParams.orderLinkId = value;
   const sanitizeSnippet = (s: string) => s.replace(/api[_-]?key/gi, '[REDACTED]').replace(/secret/gi, '[REDACTED]').slice(0, 300);
 
   try {
@@ -166,12 +173,12 @@ async function verifyOrderAttempt(
       const endpoint = 'GET /api/v3/order';
       const creds: binance.BinanceCredentials = { apiKey: credentials.apiKey, apiSecret: credentials.apiSecret, environment };
       try {
-        await binance.getSpotOrder(creds, { symbol: sym, orderId: parseInt(orderId, 10) });
-        return { status: 'FOUND' };
+        await binance.getSpotOrder(creds, { symbol: sym, orderId: parseInt(value, 10) });
+        return { status: 'FOUND', verify_used: 'orderId', verify_identifier_value: value };
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         if (/\(-2013\)/.test(msg)) {
-          return { status: 'NOT_FOUND', verify_endpoint: endpoint, verify_request_params: { ...baseParams }, verify_response_snippet: sanitizeSnippet(msg) };
+          return { status: 'NOT_FOUND', verify_used: 'orderId', verify_identifier_value: value, verify_endpoint: endpoint, verify_request_params: { ...baseParams }, verify_response_snippet: sanitizeSnippet(msg) };
         }
         return { status: 'UNKNOWN', verify_endpoint: endpoint, verify_response_snippet: sanitizeSnippet(msg) };
       }
@@ -179,22 +186,26 @@ async function verifyOrderAttempt(
     if (exchange === 'bybit' && marketType === 'spot') {
       const endpoint = 'GET /v5/order/realtime';
       const creds: bybit.BybitCredentials = { apiKey: credentials.apiKey, apiSecret: credentials.apiSecret, environment };
-      const order = await bybit.getSpotOrder(creds, { symbol: sym, orderId });
-      if (order != null) return { status: 'FOUND' };
+      const order = identifier === 'orderId'
+        ? await bybit.getSpotOrder(creds, { symbol: sym, orderId: value })
+        : await bybit.getSpotOrder(creds, { symbol: sym, orderLinkId: value });
+      if (order != null) return { status: 'FOUND', verify_used: identifier, verify_identifier_value: value };
       return { status: 'UNKNOWN', verify_endpoint: endpoint, verify_request_params: { category: 'spot', ...baseParams }, verify_response_snippet: 'retCode=0, list empty (order may be filled or delayed)' };
     }
     if (exchange === 'binance' && marketType === 'futures') {
       const endpoint = 'GET /fapi/v1/order';
       const creds: binanceFutures.BinanceFuturesCredentials = { apiKey: credentials.apiKey, apiSecret: credentials.apiSecret, environment };
-      const order = await binanceFutures.getOrder(creds, sym, orderId);
-      if (order != null) return { status: 'FOUND' };
+      const order = await binanceFutures.getOrder(creds, sym, value);
+      if (order != null) return { status: 'FOUND', verify_used: 'orderId', verify_identifier_value: value };
       return { status: 'UNKNOWN', verify_endpoint: endpoint, verify_request_params: { ...baseParams }, verify_response_snippet: 'order null (error or not found)' };
     }
     if (exchange === 'bybit' && marketType === 'futures') {
       const endpoint = 'GET /v5/order/realtime';
       const creds: bybitFutures.BybitFuturesCredentials = { apiKey: credentials.apiKey, apiSecret: credentials.apiSecret, environment };
-      const order = await bybitFutures.getOrder(creds, sym, orderId);
-      if (order != null) return { status: 'FOUND' };
+      const order = identifier === 'orderId'
+        ? await bybitFutures.getOrder(creds, sym, orderId, undefined)
+        : await bybitFutures.getOrder(creds, sym, undefined, orderLinkId);
+      if (order != null) return { status: 'FOUND', verify_used: identifier, verify_identifier_value: value };
       return { status: 'UNKNOWN', verify_endpoint: endpoint, verify_request_params: { category: 'linear', ...baseParams }, verify_response_snippet: 'retCode=0, list empty (order may be filled or delayed)' };
     }
     return { status: 'UNKNOWN' };
@@ -205,8 +216,8 @@ async function verifyOrderAttempt(
 }
 
 /**
- * Post-place verify with 2.5s timeout and one 300ms retry on NOT_FOUND/UNKNOWN to reduce false negatives.
- * Returns FOUND / NOT_FOUND / UNKNOWN. Never blocks the place: UNKNOWN -> treat as success with warning; NOT_FOUND -> still PLACED with verify_status for UI.
+ * Post-place verify with 2.5s timeout and one 300ms retry. For Bybit, tries orderId then orderLinkId so we don't false-UNKNOWN when place returned orderLinkId.
+ * Returns FOUND / NOT_FOUND / UNKNOWN. Never blocks the place.
  */
 async function verifyOrderAfterPlace(
   exchange: 'binance' | 'bybit',
@@ -214,18 +225,33 @@ async function verifyOrderAfterPlace(
   credentials: { apiKey: string; apiSecret: string },
   environment: 'production' | 'testnet',
   symbol: string,
-  orderId: string
+  orderId: string,
+  orderLinkId?: string
 ): Promise<VerifyOrderResult> {
   const timeoutPromise = new Promise<VerifyOrderResult>((resolve) => {
     setTimeout(() => resolve({ status: 'UNKNOWN', verify_response_snippet: 'verify timeout' }), VERIFY_ORDER_TIMEOUT_MS);
   });
+  const tryOnce = async (): Promise<VerifyOrderResult> => {
+    if (exchange === 'bybit' && orderId && orderLinkId) {
+      const byOrderId = await verifyOrderAttemptOne(exchange, marketType, credentials, environment, symbol, orderId, orderLinkId, 'orderId');
+      if (byOrderId.status === 'FOUND') return byOrderId;
+      if (byOrderId.status === 'NOT_FOUND') return byOrderId;
+      const byOrderLinkId = await verifyOrderAttemptOne(exchange, marketType, credentials, environment, symbol, orderId, orderLinkId, 'orderLinkId');
+      if (byOrderLinkId.status === 'FOUND') return byOrderLinkId;
+      if (byOrderLinkId.status === 'NOT_FOUND') return byOrderLinkId;
+      return byOrderLinkId;
+    }
+    const id = orderId ? 'orderId' : 'orderLinkId';
+    const val = orderId || orderLinkId;
+    if (!val) return { status: 'UNKNOWN' };
+    return verifyOrderAttemptOne(exchange, marketType, credentials, environment, symbol, orderId || undefined, orderLinkId, id as 'orderId' | 'orderLinkId');
+  };
   const doVerify = async (): Promise<VerifyOrderResult> => {
-    const first = await verifyOrderAttempt(exchange, marketType, credentials, environment, symbol, orderId);
+    const first = await tryOnce();
     if (first.status === 'FOUND') return first;
     if (first.status === 'NOT_FOUND') return first;
     await new Promise((r) => setTimeout(r, VERIFY_RETRY_DELAY_MS));
-    const second = await verifyOrderAttempt(exchange, marketType, credentials, environment, symbol, orderId);
-    return second;
+    return tryOnce();
   };
   return Promise.race([doVerify(), timeoutPromise]);
 }
@@ -533,7 +559,18 @@ export async function executeOrder(
           newClientOrderId: params.clientOrderId ?? undefined,
           timeInForce: orderType === 'LIMIT' ? 'GTC' : undefined,
         });
-        const orderId = String((res as { orderId?: number }).orderId ?? '');
+        const resAny = res as { code?: number; orderId?: number; msg?: string };
+        if (resAny.code != null && resAny.code !== 0) {
+          await writeAudit(client, {
+            ...auditRow,
+            status: 'FAILED',
+            error_code: 'EXCHANGE_ERROR',
+            error_message: resAny.msg ?? `Exchange returned code ${resAny.code}`,
+            exchange_response: res,
+          });
+          return { success: false, status: 'FAILED', reason_code: 'EXCHANGE_ERROR', message: resAny.msg ?? `Exchange returned code ${resAny.code}` };
+        }
+        const orderId = String(resAny.orderId ?? '');
         if (!orderId) {
           await writeAudit(client, {
             ...auditRow,
@@ -553,6 +590,8 @@ export async function executeOrder(
           feeBufferUsed: feePct,
           ...(verifyResult && {
             verify_status: verifyResult.status,
+            verify_used: verifyResult.verify_used,
+            verify_identifier_value: verifyResult.verify_identifier_value,
             ...(verifyResult.status === 'NOT_FOUND' && {
               verify_endpoint: verifyResult.verify_endpoint,
               verify_request_params: verifyResult.verify_request_params,
@@ -590,26 +629,30 @@ export async function executeOrder(
           price,
           orderLinkId: params.clientOrderId ?? undefined,
         });
-        const orderId = (res as { orderId?: string; orderLinkId?: string }).orderId ?? (res as { orderLinkId?: string }).orderLinkId ?? '';
-        if (!orderId) {
+        const bybitSpotRes = res as { orderId?: string; orderLinkId?: string };
+        const orderIdSpot = bybitSpotRes.orderId ?? bybitSpotRes.orderLinkId ?? '';
+        if (!orderIdSpot) {
           await writeAudit(client, {
             ...auditRow,
             status: 'FAILED',
             error_code: 'NO_ORDER_ID',
-            error_message: 'Exchange did not return orderId',
+            error_message: 'Exchange did not return orderId or orderLinkId',
             exchange_response: res,
           });
-          return { success: false, status: 'FAILED', reason_code: 'NO_ORDER_ID', message: 'Exchange did not return orderId' };
+          return { success: false, status: 'FAILED', reason_code: 'NO_ORDER_ID', message: 'Exchange did not return orderId or orderLinkId' };
         }
+        const orderLinkIdSpot = bybitSpotRes.orderLinkId ?? undefined;
         let verifyResultSpot: VerifyOrderResult | null = null;
         if (!demoMode) {
-          verifyResultSpot = await verifyOrderAfterPlace('bybit', 'spot', params.credentials, env, sym, orderId);
+          verifyResultSpot = await verifyOrderAfterPlace('bybit', 'spot', params.credentials, env, sym, bybitSpotRes.orderId ?? orderIdSpot, orderLinkIdSpot);
         }
         const precheckWithVerifySpot = {
           ...preflight,
           feeBufferUsed: feePct,
           ...(verifyResultSpot && {
             verify_status: verifyResultSpot.status,
+            verify_used: verifyResultSpot.verify_used,
+            verify_identifier_value: verifyResultSpot.verify_identifier_value,
             ...(verifyResultSpot.status === 'NOT_FOUND' && {
               verify_endpoint: verifyResultSpot.verify_endpoint,
               verify_request_params: verifyResultSpot.verify_request_params,
@@ -620,7 +663,7 @@ export async function executeOrder(
         };
         await writeAudit(client, {
           ...auditRow,
-          exchange_order_id: orderId,
+          exchange_order_id: orderIdSpot,
           exchange_response: res,
           status: 'PLACED',
           min_notional: preflight.minNotional ?? null,
@@ -632,7 +675,7 @@ export async function executeOrder(
           verifyResultSpot?.status === 'NOT_FOUND'
             ? 'Order placed. Not found on exchange immediately — check open orders or history.'
             : 'Order placed';
-        return { success: true, status: 'PLACED', exchange_order_id: orderId, message: messageSpot };
+        return { success: true, status: 'PLACED', exchange_order_id: orderIdSpot, message: messageSpot };
       }
     } catch (e) {
       const err = e as Error & { bybitReasonCode?: string; retCode?: number };
@@ -725,14 +768,25 @@ export async function executeOrder(
           environment: env,
         };
         const res = await binanceFutures.placeOrder(creds, { symbol: sym, side, type: orderType as 'MARKET', qty });
-        const orderId = String(res.orderId ?? '');
-        if (!orderId) {
+        const orderIdFut = String(res.orderId ?? '');
+        const statusFut = (res.status ?? '').toUpperCase();
+        if (['REJECTED', 'CANCELED', 'CANCELLED', 'EXPIRED'].includes(statusFut)) {
+          await writeAudit(client, {
+            ...auditRow,
+            status: 'FAILED',
+            error_code: 'EXCHANGE_ERROR',
+            error_message: `Exchange reported order status: ${res.status}`,
+            exchange_response: res,
+          });
+          return { success: false, status: 'FAILED', reason_code: 'EXCHANGE_ERROR', message: `Order not accepted: ${res.status}` };
+        }
+        if (!orderIdFut) {
           await writeAudit(client, { ...auditRow, status: 'FAILED', error_code: 'NO_ORDER_ID', error_message: 'Exchange did not return orderId', exchange_response: res });
           return { success: false, status: 'FAILED', reason_code: 'NO_ORDER_ID', message: 'Exchange did not return orderId' };
         }
         let verifyResultFut: VerifyOrderResult | null = null;
         if (!demoMode) {
-          verifyResultFut = await verifyOrderAfterPlace('binance', 'futures', params.credentials, env, sym, orderId);
+          verifyResultFut = await verifyOrderAfterPlace('binance', 'futures', params.credentials, env, sym, orderIdFut);
         }
         const precheckWithVerifyFut = {
           ...preflight,
@@ -740,6 +794,8 @@ export async function executeOrder(
           requiredBalance: requiredMargin,
           ...(verifyResultFut && {
             verify_status: verifyResultFut.status,
+            verify_used: verifyResultFut.verify_used,
+            verify_identifier_value: verifyResultFut.verify_identifier_value,
             ...(verifyResultFut.status === 'NOT_FOUND' && {
               verify_endpoint: verifyResultFut.verify_endpoint,
               verify_request_params: verifyResultFut.verify_request_params,
@@ -750,7 +806,7 @@ export async function executeOrder(
         };
         await writeAudit(client, {
           ...auditRow,
-          exchange_order_id: orderId,
+          exchange_order_id: orderIdFut,
           exchange_response: res,
           status: 'PLACED',
           available_balance: availableMargin,
@@ -761,22 +817,41 @@ export async function executeOrder(
           verifyResultFut?.status === 'NOT_FOUND'
             ? 'Order placed. Not found on exchange immediately — check open orders or history.'
             : 'Order placed';
-        return { success: true, status: 'PLACED', exchange_order_id: orderId, message: messageFut };
+        return { success: true, status: 'PLACED', exchange_order_id: orderIdFut, message: messageFut };
       } else {
         const creds: bybitFutures.BybitFuturesCredentials = {
           apiKey: params.credentials.apiKey,
           apiSecret: params.credentials.apiSecret,
           environment: env,
         };
-        const res = await bybitFutures.placeOrder(creds, { symbol: sym, side, type: orderType as 'MARKET', qty });
-        const orderId = res.orderId ?? '';
-        if (!orderId) {
-          await writeAudit(client, { ...auditRow, status: 'FAILED', error_code: 'NO_ORDER_ID', error_message: 'Exchange did not return orderId', exchange_response: res });
-          return { success: false, status: 'FAILED', reason_code: 'NO_ORDER_ID', message: 'Exchange did not return orderId' };
+        const res = await bybitFutures.placeOrder(creds, {
+          symbol: sym,
+          side,
+          type: orderType as 'MARKET',
+          qty,
+          orderLinkId: params.clientOrderId ?? undefined,
+        });
+        const orderIdBybitFut = res.orderId ?? '';
+        const orderLinkIdBybitFut = res.orderLinkId ?? undefined;
+        const orderStatusBybitFut = (res.status ?? '').toLowerCase();
+        if (orderStatusBybitFut === 'rejected' || orderStatusBybitFut === 'cancelled' || orderStatusBybitFut === 'canceled') {
+          await writeAudit(client, {
+            ...auditRow,
+            status: 'FAILED',
+            error_code: 'EXCHANGE_ERROR',
+            error_message: `Exchange reported order status: ${res.status}`,
+            exchange_response: res,
+          });
+          return { success: false, status: 'FAILED', reason_code: 'EXCHANGE_ERROR', message: `Order not accepted: ${res.status}` };
+        }
+        const primaryIdBybitFut = orderIdBybitFut || orderLinkIdBybitFut || '';
+        if (!primaryIdBybitFut) {
+          await writeAudit(client, { ...auditRow, status: 'FAILED', error_code: 'NO_ORDER_ID', error_message: 'Exchange did not return orderId or orderLinkId', exchange_response: res });
+          return { success: false, status: 'FAILED', reason_code: 'NO_ORDER_ID', message: 'Exchange did not return orderId or orderLinkId' };
         }
         let verifyResultBybitFut: VerifyOrderResult | null = null;
         if (!demoMode) {
-          verifyResultBybitFut = await verifyOrderAfterPlace('bybit', 'futures', params.credentials, env, sym, orderId);
+          verifyResultBybitFut = await verifyOrderAfterPlace('bybit', 'futures', params.credentials, env, sym, orderIdBybitFut || undefined, orderLinkIdBybitFut);
         }
         const precheckWithVerifyBybitFut = {
           ...preflight,
@@ -784,6 +859,8 @@ export async function executeOrder(
           requiredBalance: requiredMargin,
           ...(verifyResultBybitFut && {
             verify_status: verifyResultBybitFut.status,
+            verify_used: verifyResultBybitFut.verify_used,
+            verify_identifier_value: verifyResultBybitFut.verify_identifier_value,
             ...(verifyResultBybitFut.status === 'NOT_FOUND' && {
               verify_endpoint: verifyResultBybitFut.verify_endpoint,
               verify_request_params: verifyResultBybitFut.verify_request_params,
@@ -794,7 +871,7 @@ export async function executeOrder(
         };
         await writeAudit(client, {
           ...auditRow,
-          exchange_order_id: orderId,
+          exchange_order_id: primaryIdBybitFut,
           exchange_response: res,
           status: 'PLACED',
           available_balance: availableMargin,
@@ -805,7 +882,7 @@ export async function executeOrder(
           verifyResultBybitFut?.status === 'NOT_FOUND'
             ? 'Order placed. Not found on exchange immediately — check open orders or history.'
             : 'Order placed';
-        return { success: true, status: 'PLACED', exchange_order_id: orderId, message: messageBybitFut };
+        return { success: true, status: 'PLACED', exchange_order_id: primaryIdBybitFut, message: messageBybitFut };
       }
     } catch (e) {
       const err = e as Error & { bybitReasonCode?: string };

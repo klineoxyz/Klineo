@@ -11,6 +11,11 @@ import {
 } from "@/app/components/ui/dialog";
 import { Badge } from "@/app/components/ui/badge";
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/app/components/ui/tooltip";
+import {
   Table,
   TableBody,
   TableCell,
@@ -35,6 +40,7 @@ export interface ExecutionLogEntry {
   error_code: string | null;
   error_message: string | null;
   exchange_order_id: string | null;
+  precheck_result?: { verify_status?: string } | null;
   created_at: string;
 }
 
@@ -114,24 +120,40 @@ export function ExecutionLogsModal({
                       <TableCell className="font-mono text-sm">{row.symbol}</TableCell>
                       <TableCell className="text-sm">{row.side}</TableCell>
                       <TableCell>
-                        <Badge
-                          variant={
-                            row.status === "PLACED"
-                              ? "default"
-                              : row.status === "SKIPPED"
-                                ? "secondary"
-                                : "destructive"
-                          }
-                          className={
-                            row.status === "PLACED"
-                              ? "bg-green-600 hover:bg-green-700"
-                              : row.status === "SKIPPED"
-                                ? "bg-amber-600 hover:bg-amber-700"
-                                : ""
-                          }
-                        >
-                          {row.status}
-                        </Badge>
+                        <div className="flex flex-col gap-1">
+                          <Badge
+                            variant={
+                              row.status === "PLACED"
+                                ? "default"
+                                : row.status === "SKIPPED"
+                                  ? "secondary"
+                                  : "destructive"
+                            }
+                            className={
+                              row.status === "PLACED"
+                                ? "bg-green-600 hover:bg-green-700"
+                                : row.status === "SKIPPED"
+                                  ? "bg-amber-600 hover:bg-amber-700"
+                                  : ""
+                            }
+                          >
+                            {row.status}
+                          </Badge>
+                          {row.status === "PLACED" &&
+                            (row.precheck_result?.verify_status === "NOT_FOUND" ||
+                              row.precheck_result?.verify_status === "UNKNOWN") && (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <span className="text-xs text-muted-foreground cursor-help underline decoration-dotted">
+                                    Verify: {row.precheck_result.verify_status}
+                                  </span>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  Order placed but not confirmed instantly. Check exchange open orders or history.
+                                </TooltipContent>
+                              </Tooltip>
+                            )}
+                        </div>
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground max-w-[200px] truncate" title={row.error_message ?? undefined}>
                         {row.error_message ?? "—"}

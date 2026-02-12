@@ -200,7 +200,8 @@ export async function placeOrder(
   if (params.positionSide && params.positionSide !== 'BOTH') {
     body.positionIdx = params.positionSide === 'LONG' ? '1' : '2';
   }
-  const result = await signedRequestWithRetry<{ orderId?: string; orderStatus?: string }>(
+  if (params.orderLinkId != null) body.orderLinkId = params.orderLinkId;
+  const result = await signedRequestWithRetry<{ orderId?: string; orderLinkId?: string; orderStatus?: string }>(
     'POST',
     '/v5/order/create',
     creds,
@@ -210,6 +211,7 @@ export async function placeOrder(
   const out = result as any;
   return {
     orderId: out?.orderId ?? '',
+    orderLinkId: out?.orderLinkId ?? undefined,
     status: out?.orderStatus ?? 'UNKNOWN',
   };
 }
@@ -272,21 +274,27 @@ export async function getOpenOrders(
 }
 
 /**
- * Query single order by orderId. GET /v5/order/realtime.
- * category=linear required for USDT perpetual; symbol required (e.g. BTCUSDT); when querying by orderId, open/closed orders are returned.
+ * Query single order by orderId or orderLinkId. GET /v5/order/realtime.
+ * category=linear required for USDT perpetual; symbol required (e.g. BTCUSDT).
+ * Pass either orderId or orderLinkId (priority: orderId if both provided).
  */
 export async function getOrder(
   creds: BybitFuturesCredentials,
   symbol: string,
-  orderId: string
+  orderId?: string,
+  orderLinkId?: string
 ): Promise<{ orderId: string; status: string } | null> {
   const sym = symbol.replace('/', '').toUpperCase();
+  if (!orderId && !orderLinkId) return null;
   try {
+    const params: Record<string, string> = { category: CATEGORY, symbol: sym };
+    if (orderId) params.orderId = orderId;
+    else if (orderLinkId) params.orderLinkId = orderLinkId;
     const result = await signedRequest<{ list?: Array<{ orderId?: string; orderStatus?: string }> }>(
       'GET',
       '/v5/order/realtime',
       creds,
-      { category: CATEGORY, symbol: sym, orderId }
+      params
     );
     const list = result?.list ?? [];
     const o = list[0];

@@ -20,11 +20,15 @@ export interface FuturesPlaceOrderParams {
   stopLoss?: string;   // price
   takeProfit?: string; // price
   positionSide?: 'BOTH' | 'LONG' | 'SHORT';
+  /** Bybit: orderLinkId (client order id) for verify/lookup. */
+  orderLinkId?: string;
 }
 
 export interface FuturesOrderResult {
   orderId: string;
   status: string;
+  /** Bybit: orderLinkId when placed with one. */
+  orderLinkId?: string;
   code?: number;
   message?: string;
 }

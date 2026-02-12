@@ -50,7 +50,7 @@ tradingRouter.get('/execution-logs', async (req: AuthenticatedRequest, res) => {
     const source = req.query.source as string | undefined;
     let query = client
       .from('order_execution_audit')
-      .select('id, source, bot_id, copy_setup_id, exchange, market_type, symbol, side, order_type, requested_qty, requested_quote, status, error_code, error_message, exchange_order_id, min_notional, created_at')
+      .select('id, source, bot_id, copy_setup_id, exchange, market_type, symbol, side, order_type, requested_qty, requested_quote, status, error_code, error_message, exchange_order_id, min_notional, precheck_result, created_at')
       .eq('user_id', req.user!.id)
       .order('created_at', { ascending: false })
       .limit(100);
@@ -81,6 +81,7 @@ tradingRouter.get('/execution-logs', async (req: AuthenticatedRequest, res) => {
         error_message: row.error_message,
         exchange_order_id: row.exchange_order_id,
         min_notional: row.min_notional,
+        precheck_result: row.precheck_result ?? null,
         created_at: row.created_at,
       })),
     });
