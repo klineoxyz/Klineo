@@ -126,7 +126,8 @@ export async function apiRequest<T = unknown>(
 }
 
 export const api = {
-  get: <T = unknown>(path: string) => apiRequest<T>(path, { method: 'GET' }),
+  get: <T = unknown>(path: string, options: RequestInit = {}) =>
+    apiRequest<T>(path, { method: 'GET', ...options }),
   post: <T = unknown>(path: string, body?: unknown) =>
     apiRequest<T>(path, { method: 'POST', body: body ? JSON.stringify(body) : undefined }),
   put: <T = unknown>(path: string, body?: unknown) =>

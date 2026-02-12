@@ -208,8 +208,10 @@ export function Admin() {
   const loadMasterTraderApplications = async (status?: string) => {
     setMasterTraderApplicationsLoading(true);
     try {
-      const params = status ? `?status=${status}` : "";
-      const data = await api.get(`/api/admin/master-trader-applications${params}`);
+      const qs = new URLSearchParams();
+      if (status) qs.set("status", status);
+      qs.set("_", String(Date.now())); // bypass cache so we get fresh list (avoid 304)
+      const data = await api.get(`/api/admin/master-trader-applications?${qs.toString()}`, { cache: "no-store" });
       setMasterTraderApplications((data as any).applications || []);
     } catch (err: any) {
       console.error('Failed to load Master Trader applications:', err);
@@ -229,7 +231,7 @@ export function Admin() {
     setMasterTraderProofImageError(false);
     const rawUrl = masterTraderReviewApp.proofUrl ?? (masterTraderReviewApp.formData as any)?.proofUrl ?? (masterTraderReviewApp.formData as any)?.tradingProofUrl;
     if (rawUrl && masterTraderReviewApp.id) {
-      api.get<{ url: string }>(`/api/admin/master-trader-applications/${masterTraderReviewApp.id}/proof-url`)
+      api.get<{ url: string }>(`/api/admin/master-trader-applications/${masterTraderReviewApp.id}/proof-url`, { cache: "no-store" })
         .then((data) => { setMasterTraderProofSignedUrl(data.url); })
         .catch(() => { setMasterTraderProofSignedUrl(null); });
     } else {
@@ -1740,8 +1742,8 @@ export function Admin() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="master-trader-requests" className="space-y-6">
-          <Card>
+        <TabsContent value="master-trader-requests" className="space-y-6" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
+          <Card onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
             <div className="p-4 border-b border-border">
               <h3 className="text-lg font-semibold">Master Trader Requests</h3>
               <p className="text-sm text-muted-foreground">Review and approve or reject applications. Use <strong>View</strong> to see the full application (all form fields: personal info, trading experience, proof screenshot, profile URL, strategy). Approved traders can submit strategies and compete for TOP 10 monthly campaign rewards. Rejected applicants see the reason on their application page and can apply again.</p>
@@ -1929,12 +1931,13 @@ export function Admin() {
                               )}
                               {masterTraderProofImageError ? (
                                 <p className="text-xs text-amber-600 dark:text-amber-500">Image could not be loaded inline. Use the link above to open the screenshot in a new tab.</p>
-                              ) : imageUrl ? (
+                              ) : linkUrl ? (
                                 <img
-                                  src={imageUrl}
+                                  src={linkUrl}
                                   alt="Trading history screenshot submitted by applicant"
                                   className="max-w-full max-h-72 object-contain rounded border border-border bg-background block"
                                   onError={() => setMasterTraderProofImageError(true)}
+                                  referrerPolicy="no-referrer"
                                 />
                               ) : null}
                             </div>
