@@ -42,22 +42,22 @@ function encryptedConfigToBase64(raw: unknown): string {
 export const tradingRouter: Router = Router();
 tradingRouter.use(verifySupabaseJWT);
 
-/** Last 100 order execution audit rows for current user. Optional filter by source. */
+/** Last N order execution audit rows for current user. Optional filter by source. Default limit=10, max 100. */
 tradingRouter.get('/execution-logs', async (req: AuthenticatedRequest, res) => {
   const client = getSupabase();
   if (!client) return res.status(503).json({ error: 'Database unavailable' });
   try {
     const source = req.query.source as string | undefined;
-    let query = client
+    const limitRaw = parseInt(String(req.query.limit), 10) || 10;
+    const limit = Math.min(Math.max(1, limitRaw), 100);
+    const query = client
       .from('order_execution_audit')
       .select('id, source, bot_id, copy_setup_id, exchange, market_type, symbol, side, order_type, requested_qty, requested_quote, status, error_code, error_message, exchange_order_id, min_notional, precheck_result, created_at')
       .eq('user_id', req.user!.id)
       .order('created_at', { ascending: false })
-      .limit(100);
-    if (source && ['DCA', 'GRID', 'COPY', 'TERMINAL'].includes(source)) {
-      query = query.eq('source', source);
-    }
-    const { data, error } = await query;
+      .limit(limit);
+    const filtered = source && ['DCA', 'GRID', 'COPY', 'TERMINAL'].includes(source) ? query.eq('source', source) : query;
+    const { data, error } = await filtered;
     if (error) {
       console.error('Execution logs error:', error);
       return res.status(500).json({ error: 'Failed to fetch execution logs' });

@@ -844,8 +844,9 @@ export async function executeOrder(
           });
           return { success: false, status: 'FAILED', reason_code: 'EXCHANGE_ERROR', message: `Order not accepted: ${res.status}` };
         }
-        const primaryIdBybitFut = orderIdBybitFut || orderLinkIdBybitFut || '';
-        if (!primaryIdBybitFut) {
+        // Accept orderId OR orderLinkId; prefer orderId when both exist. exchange_response already has both for traceability.
+        const exchangeOrderIdBybitFut = orderIdBybitFut || orderLinkIdBybitFut || '';
+        if (!exchangeOrderIdBybitFut) {
           await writeAudit(client, { ...auditRow, status: 'FAILED', error_code: 'NO_ORDER_ID', error_message: 'Exchange did not return orderId or orderLinkId', exchange_response: res });
           return { success: false, status: 'FAILED', reason_code: 'NO_ORDER_ID', message: 'Exchange did not return orderId or orderLinkId' };
         }
@@ -860,7 +861,7 @@ export async function executeOrder(
           ...(verifyResultBybitFut && {
             verify_status: verifyResultBybitFut.status,
             verify_used: verifyResultBybitFut.verify_used,
-            verify_identifier_value: verifyResultBybitFut.verify_identifier_value,
+            verify_identifier_value: verifyResultBybitFut.verify_identifier_value ?? undefined,
             ...(verifyResultBybitFut.status === 'NOT_FOUND' && {
               verify_endpoint: verifyResultBybitFut.verify_endpoint,
               verify_request_params: verifyResultBybitFut.verify_request_params,
@@ -871,7 +872,7 @@ export async function executeOrder(
         };
         await writeAudit(client, {
           ...auditRow,
-          exchange_order_id: primaryIdBybitFut,
+          exchange_order_id: exchangeOrderIdBybitFut,
           exchange_response: res,
           status: 'PLACED',
           available_balance: availableMargin,
@@ -882,7 +883,7 @@ export async function executeOrder(
           verifyResultBybitFut?.status === 'NOT_FOUND'
             ? 'Order placed. Not found on exchange immediately — check open orders or history.'
             : 'Order placed';
-        return { success: true, status: 'PLACED', exchange_order_id: primaryIdBybitFut, message: messageBybitFut };
+        return { success: true, status: 'PLACED', exchange_order_id: exchangeOrderIdBybitFut, message: messageBybitFut };
       }
     } catch (e) {
       const err = e as Error & { bybitReasonCode?: string };

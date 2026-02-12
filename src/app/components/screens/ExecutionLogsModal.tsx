@@ -40,7 +40,11 @@ export interface ExecutionLogEntry {
   error_code: string | null;
   error_message: string | null;
   exchange_order_id: string | null;
-  precheck_result?: { verify_status?: string } | null;
+  precheck_result?: {
+    verify_status?: string;
+    verify_used?: "orderId" | "orderLinkId";
+    verify_identifier_value?: string;
+  } | null;
   created_at: string;
 }
 
@@ -146,10 +150,16 @@ export function ExecutionLogsModal({
                                 <TooltipTrigger asChild>
                                   <span className="text-xs text-muted-foreground cursor-help underline decoration-dotted">
                                     Verify: {row.precheck_result.verify_status}
+                                    {row.precheck_result.verify_used
+                                      ? ` (${row.precheck_result.verify_used})`
+                                      : ""}
                                   </span>
                                 </TooltipTrigger>
                                 <TooltipContent>
                                   Order placed but not confirmed instantly. Check exchange open orders or history.
+                                  {row.precheck_result.verify_identifier_value
+                                    ? ` ID: ${String(row.precheck_result.verify_identifier_value).length > 12 ? `${String(row.precheck_result.verify_identifier_value).slice(0, 8)}…` : row.precheck_result.verify_identifier_value}`
+                                    : ""}
                                 </TooltipContent>
                               </Tooltip>
                             )}
