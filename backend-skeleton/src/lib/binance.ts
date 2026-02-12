@@ -192,8 +192,10 @@ const RETRY_429_MAX = 2;
 const RETRY_429_BASE_MS = 1000;
 
 /** Timestamp/recvWindow errors: retry once with fresh time offset. */
-function isTimestampOrRecvWindowError(code: number): boolean {
-  return code === -1021 || code === -1022;
+function isTimestampOrRecvWindowError(code: number, msg?: string): boolean {
+  if (code === -1021 || code === -1022) return true;
+  if (msg != null && /timestamp|recvWindow|Timestamp/i.test(msg)) return true;
+  return false;
 }
 
 /**
@@ -415,11 +417,6 @@ export interface BinanceOrderResponse {
   status: string;
   type: string;
   side: string;
-}
-
-/** Detect timestamp/recvWindow error for retry with server time. */
-function isTimestampOrRecvWindowError(code: number, msg: string): boolean {
-  return code === -1021 || /timestamp|recvWindow|Timestamp/i.test(msg);
 }
 
 /**

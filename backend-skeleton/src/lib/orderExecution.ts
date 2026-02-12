@@ -851,7 +851,7 @@ export async function executeOrder(
         }
         let verifyResultBybitFut: VerifyOrderResult | null = null;
         if (!demoMode) {
-          verifyResultBybitFut = await verifyOrderAfterPlace('bybit', 'futures', params.credentials, env, sym, orderIdBybitFut || undefined, orderLinkIdBybitFut);
+          verifyResultBybitFut = await verifyOrderAfterPlace('bybit', 'futures', params.credentials, env, sym, orderIdBybitFut || '', orderLinkIdBybitFut);
         }
         const precheckWithVerifyBybitFut = {
           ...preflight,
