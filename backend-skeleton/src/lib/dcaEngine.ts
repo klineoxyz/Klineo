@@ -14,7 +14,6 @@ import { toExchangeSymbol, roundToStep } from './symbols.js';
 import {
   getTickerPrice as binanceTicker,
   getSpotSymbolFilters,
-  placeSpotOrder as binancePlaceOrder,
   getSpotOpenOrders as binanceGetSpotOpenOrders,
   getSpotOrder as binanceGetSpotOrder,
   cancelSpotOrder as binanceCancelSpotOrder,
@@ -23,12 +22,12 @@ import {
 import {
   getTickerPrice as bybitTicker,
   getSpotSymbolFilters as bybitGetSpotSymbolFilters,
-  placeSpotOrder as bybitPlaceOrder,
   getSpotOpenOrders as bybitGetSpotOpenOrders,
   getSpotOrder as bybitGetSpotOrder,
   cancelSpotOrder as bybitCancelSpotOrder,
   type BybitCredentials,
 } from './bybit.js';
+import { executeOrder } from './orderExecution.js';
 
 const LOCK_TTL_SEC = 60;
 const TICK_INTERVAL_SEC = 15;
@@ -167,10 +166,11 @@ async function getSpotPrice(exchange: string, pair: string, environment: string 
 }
 
 /**
- * Place spot order and record in dca_bot_orders. Idempotent via clientOrderId when supported.
+ * Place spot order via central execution layer (audit + preflight). Records in dca_bot_orders only on PLACED.
  */
 async function placeDcaOrder(
   client: SupabaseClient,
+  userId: string,
   botId: string,
   exchange: string,
   credentials: BinanceCredentials | BybitCredentials,
@@ -181,38 +181,29 @@ async function placeDcaOrder(
     qty: string;
     price?: string;
     clientOrderId: string;
-  }
+  },
+  env: string
 ): Promise<{ exchangeOrderId: string }> {
   const sym = normalizeSymbol(params.pair);
-  let exchangeOrderId: string;
-
-  if (exchange === 'binance') {
-    const creds = credentials as BinanceCredentials;
-    const res = await binancePlaceOrder(creds, {
-      symbol: sym,
-      side: params.side.toUpperCase() as 'BUY' | 'SELL',
-      type: params.type.toUpperCase() as 'MARKET' | 'LIMIT',
-      quantity: params.qty,
-      price: params.price,
-      newClientOrderId: params.clientOrderId,
-      timeInForce: params.type === 'limit' ? 'GTC' : undefined,
-    });
-    exchangeOrderId = String(res.orderId);
-  } else if (exchange === 'bybit') {
-    const creds = credentials as BybitCredentials;
-    const res = await bybitPlaceOrder(creds, {
-      symbol: sym,
-      side: params.side === 'buy' ? 'Buy' : 'Sell',
-      orderType: params.type === 'market' ? 'Market' : 'Limit',
-      qty: params.qty,
-      price: params.price,
-      orderLinkId: params.clientOrderId,
-    });
-    exchangeOrderId = res.orderId ?? res.orderLinkId ?? params.clientOrderId;
-  } else {
-    throw new Error(`Unsupported exchange: ${exchange}`);
+  const creds = credentials as { apiKey: string; apiSecret: string; environment?: string };
+  const result = await executeOrder(client, {
+    userId,
+    source: 'DCA',
+    botId,
+    exchange: exchange as 'binance' | 'bybit',
+    marketType: 'spot',
+    symbol: sym,
+    side: params.side,
+    orderType: params.type,
+    quantity: params.qty,
+    price: params.price ?? null,
+    credentials: { apiKey: creds.apiKey, apiSecret: creds.apiSecret },
+    environment: (env || 'production') as 'production' | 'testnet',
+    clientOrderId: params.clientOrderId,
+  });
+  if (!result.success || !result.exchange_order_id) {
+    throw new Error(result.message ?? result.reason_code ?? 'Order not placed');
   }
-
   await client.from('dca_bot_orders').insert({
     dca_bot_id: botId,
     exchange,
@@ -221,12 +212,11 @@ async function placeDcaOrder(
     type: params.type,
     price: params.price ? parseFloat(params.price) : null,
     qty: parseFloat(params.qty),
-    exchange_order_id: exchangeOrderId,
+    exchange_order_id: result.exchange_order_id,
     client_order_id: params.clientOrderId,
     status: 'submitted',
   });
-
-  return { exchangeOrderId };
+  return { exchangeOrderId: result.exchange_order_id };
 }
 
 /**
@@ -512,7 +502,7 @@ export async function processOneBot(
           const sellQty = roundToStep(positionSize, filters.stepSize);
           if (parseFloat(sellQty) >= filters.minQty) {
             const clientOrderId = `klineo_dca_${bot.id}_flatten_${now.getTime()}`;
-            const { exchangeOrderId } = await placeDcaOrder(client, bot.id, bot.exchange, creds, { pair: bot.pair, side: 'sell', type: 'market', qty: sellQty, clientOrderId });
+            const { exchangeOrderId } = await placeDcaOrder(client, bot.user_id, bot.id, bot.exchange, creds, { pair: bot.pair, side: 'sell', type: 'market', qty: sellQty, clientOrderId }, env);
             await insertDcaOrderIntoUnified(client, bot.user_id, bot.id, sym, 'sell', 'market', parseFloat(sellQty), price, exchangeOrderId);
           }
         } catch (e) {
@@ -555,13 +545,13 @@ export async function processOneBot(
     }
     const clientOrderId = `klineo_dca_${bot.id}_base_${now.getTime()}`;
     try {
-      const { exchangeOrderId } = await placeDcaOrder(client, bot.id, bot.exchange, creds, {
+      const { exchangeOrderId } = await placeDcaOrder(client, bot.user_id, bot.id, bot.exchange, creds, {
         pair: bot.pair,
         side: 'buy',
         type: 'market',
         qty,
         clientOrderId,
-      });
+      }, env);
       await insertDcaOrderIntoUnified(client, bot.user_id, bot.id, sym, 'buy', 'market', parseFloat(qty), price, exchangeOrderId);
       await client.from('dca_bot_state').upsert(
         {
@@ -617,14 +607,14 @@ export async function processOneBot(
     if (notional >= filters.minNotional && price <= levelPrice * 1.001) {
       const clientOrderId = `klineo_dca_${bot.id}_s${level}_${now.getTime()}`;
       try {
-        const { exchangeOrderId } = await placeDcaOrder(client, bot.id, bot.exchange, creds, {
+        const { exchangeOrderId } = await placeDcaOrder(client, bot.user_id, bot.id, bot.exchange, creds, {
           pair: bot.pair,
           side: 'buy',
           type: 'limit',
           qty,
           price: levelPrice.toFixed(2),
           clientOrderId,
-        });
+        }, env);
         await insertDcaOrderIntoUnified(client, bot.user_id, bot.id, sym, 'buy', 'limit', parseFloat(qty), levelPrice, exchangeOrderId);
       } catch {
         /* may already exist or rate limit */
@@ -681,25 +671,25 @@ export async function processOneBot(
             const partQty = roundToStep(positionSize * pct, filters.stepSize);
             if (parseFloat(partQty) < filters.minQty) continue;
             const levelTpPrice = avgEntry * (1 + (level.pct ?? tpPct) / 100);
-            const { exchangeOrderId } = await placeDcaOrder(client, bot.id, bot.exchange, creds, {
+            const { exchangeOrderId } = await placeDcaOrder(client, bot.user_id, bot.id, bot.exchange, creds, {
               pair: bot.pair,
               side: 'sell',
               type: 'limit',
               qty: partQty,
               price: levelTpPrice.toFixed(2),
               clientOrderId: `${clientOrderId}_${i}`,
-            });
+            }, env);
             await insertDcaOrderIntoUnified(client, bot.user_id, bot.id, sym, 'sell', 'limit', parseFloat(partQty), levelTpPrice, exchangeOrderId);
           }
         } else {
-          const { exchangeOrderId } = await placeDcaOrder(client, bot.id, bot.exchange, creds, {
+          const { exchangeOrderId } = await placeDcaOrder(client, bot.user_id, bot.id, bot.exchange, creds, {
             pair: bot.pair,
             side: 'sell',
             type: 'limit',
             qty: sellQty,
             price: tpPriceSingle.toFixed(2),
             clientOrderId,
-          });
+          }, env);
           await insertDcaOrderIntoUnified(client, bot.user_id, bot.id, sym, 'sell', 'limit', parseFloat(sellQty), tpPriceSingle, exchangeOrderId);
         }
       } catch (e) {

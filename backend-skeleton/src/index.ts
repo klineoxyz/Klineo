@@ -25,6 +25,7 @@ import { exchangeSpotRouter } from './routes/exchange-spot.js';
 import { strategiesRouter } from './routes/strategies.js';
 import { strategiesRunnerRouter } from './routes/strategies-runner.js';
 import { futuresRouter } from './routes/futures.js';
+import { tradingRouter } from './routes/trading.js';
 import { purchasesRouter } from './routes/purchases.js';
 import { billingRouter } from './routes/billing.js';
 import { entitlementsRouter } from './routes/entitlements.js';
@@ -90,6 +91,12 @@ if (runnerEnabled) {
 }
 
 logRunnerConfig();
+
+// Live execution: all orders go through central layer + order_execution_audit
+console.log('[Execution] Order layer: unified (DCA, Copy, Terminal). Audit: order_execution_audit. NODE_ENV=%s', process.env.NODE_ENV ?? 'undefined');
+if (process.env.DEMO_MODE) {
+  console.warn('[Execution] DEMO_MODE is set — verify intended behaviour for live trading');
+}
 
 // Support both www and non-www domains for CORS
 const corsOrigins: string[] = [frontendUrl];
@@ -164,6 +171,7 @@ app.use('/api/exchange', exchangeSpotRouter);
 app.use('/api/strategies', strategiesRouter);
 app.use('/api/runner', strategiesRunnerRouter);
 app.use('/api/futures', futuresRouter);
+app.use('/api/trading', tradingRouter);
 app.use('/api/purchases', purchasesRouter);
 app.use('/api/billing', billingRouter);
 app.use('/api/payments/coinpayments', coinpaymentsRouter);

@@ -14,6 +14,8 @@ import { createBinanceFuturesAdapter } from './binance-futures.js';
 import { createBybitFuturesAdapter } from './bybit-futures.js';
 import { runRsiTick, MAX_CONSECUTIVE_FAILURES } from './strategy-engine.js';
 import type { StrategyRunRow, ConnectionRow } from './strategy-engine.js';
+import { executeOrder } from './orderExecution.js';
+import type { IFuturesAdapter } from './futures-adapter-types.js';
 
 const LOCK_TTL_MS = 2 * 60 * 1000; // 2 minutes
 const COOLDOWN_AFTER_RUN_MS = 30 * 1000; // 30s min between runs per strategy
@@ -55,6 +57,44 @@ function signalToTick(s: 'long' | 'short' | 'none'): 'buy' | 'sell' | 'hold' {
   if (s === 'long') return 'buy';
   if (s === 'short') return 'sell';
   return 'hold';
+}
+
+/** Wraps futures adapter so placeOrder goes through central execution layer (audit + preflight). */
+function wrapAdapterWithAudit(
+  client: SupabaseClient,
+  userId: string,
+  exchange: string,
+  credentials: { apiKey: string; apiSecret: string },
+  env: 'production' | 'testnet',
+  real: IFuturesAdapter
+): IFuturesAdapter {
+  return {
+    setLeverage: (s, l) => real.setLeverage(s, l),
+    setMarginMode: (s, m) => real.setMarginMode(s, m),
+    setPositionMode: (m) => real.setPositionMode(m),
+    getAccountSummary: () => real.getAccountSummary(),
+    getOpenPosition: (s) => real.getOpenPosition(s),
+    getOpenOrders: (s) => real.getOpenOrders(s),
+    cancelAll: (s) => real.cancelAll(s),
+    async placeOrder(params) {
+      const result = await executeOrder(client, {
+        userId,
+        source: 'GRID',
+        exchange: exchange as 'binance' | 'bybit',
+        marketType: 'futures',
+        symbol: params.symbol,
+        side: params.side,
+        orderType: params.type,
+        quantity: params.qty,
+        credentials: { apiKey: credentials.apiKey, apiSecret: credentials.apiSecret },
+        environment: env,
+      });
+      if (!result.success || !result.exchange_order_id) {
+        throw new Error(result.message ?? result.reason_code ?? 'Order not placed');
+      }
+      return { orderId: result.exchange_order_id, status: 'NEW' };
+    },
+  };
 }
 
 /**
@@ -148,9 +188,10 @@ export async function runStrategyTick(
 
     const parsed = JSON.parse(decrypted) as { apiKey: string; apiSecret: string };
     const env = (conn.environment || 'production') as 'production' | 'testnet';
-    const adapter = row.exchange === 'bybit'
+    const realAdapter = row.exchange === 'bybit'
       ? createBybitFuturesAdapter({ apiKey: parsed.apiKey, apiSecret: parsed.apiSecret, environment: env })
       : createBinanceFuturesAdapter({ apiKey: parsed.apiKey, apiSecret: parsed.apiSecret, environment: env });
+    const adapter = wrapAdapterWithAudit(client, row.user_id, row.exchange, parsed, env, realAdapter);
 
     const connectionRow: ConnectionRow = {
       id: conn.id,

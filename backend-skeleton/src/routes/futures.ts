@@ -14,6 +14,7 @@ import { decrypt } from '../lib/crypto.js';
 import { isPlatformKillSwitchOn } from '../lib/platformSettings.js';
 import * as binanceFutures from '../lib/binance-futures.js';
 import * as bybitFutures from '../lib/bybit-futures.js';
+import { executeOrder } from '../lib/orderExecution.js';
 
 const ALLOWED_SYMBOLS = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT'];
 
@@ -157,32 +158,50 @@ futuresRouter.post(
 
       const env = (connection.environment || 'production') as 'production' | 'testnet';
       const decryptedJson = await decrypt(encryptedConfigToBase64(connection.encrypted_config_b64));
-      const parsed = JSON.parse(decryptedJson);
+      const parsed = JSON.parse(decryptedJson) as { apiKey: string; apiSecret: string };
 
-      if (connection.exchange === 'bybit') {
-        const creds: bybitFutures.BybitFuturesCredentials = { apiKey: parsed.apiKey, apiSecret: parsed.apiSecret, environment: env };
-        const result = await bybitFutures.placeOrder(creds, {
-          symbol: normalizedSymbol,
-          side: body_.side,
-          qty: qtyStr,
-          type: 'MARKET',
+      const result = await executeOrder(client, {
+        userId: req.user!.id,
+        source: 'TERMINAL',
+        exchange: connection.exchange as 'binance' | 'bybit',
+        marketType: 'futures',
+        symbol: normalizedSymbol,
+        side: body_.side,
+        orderType: 'MARKET',
+        quantity: qtyStr,
+        credentials: { apiKey: parsed.apiKey, apiSecret: parsed.apiSecret },
+        environment: env,
+      });
+
+      if (result.success) {
+        return res.json({
+          success: true,
+          status: 'PLACED' as const,
+          orderId: result.exchange_order_id,
+          exchange_order_id: result.exchange_order_id,
+          message: result.message,
+          requestId,
         });
-        return res.json({ orderId: result.orderId, status: result.status, requestId });
-      } else {
-        const creds: binanceFutures.BinanceFuturesCredentials = { apiKey: parsed.apiKey, apiSecret: parsed.apiSecret, environment: env };
-        const result = await binanceFutures.placeOrder(creds, {
-          symbol: normalizedSymbol,
-          side: body_.side,
-          qty: qtyStr,
-          type: 'MARKET',
-        });
-        return res.json({ orderId: result.orderId, status: result.status, requestId });
       }
+      const statusCode = result.status === 'SKIPPED' ? 400 : 500;
+      return res.status(statusCode).json({
+        success: false,
+        status: result.status,
+        reason_code: result.reason_code,
+        message: result.message,
+        requestId,
+      });
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Unknown error';
       const sanitized = msg.replace(/api[_-]?key/gi, '[REDACTED]').replace(/secret/gi, '[REDACTED]');
       console.error(`[${requestId}] Futures order error:`, sanitized);
-      return res.status(500).json({ error: 'Order failed', message: sanitized, requestId });
+      return res.status(500).json({
+        success: false,
+        status: 'FAILED' as const,
+        reason_code: 'EXCEPTION',
+        message: sanitized,
+        requestId,
+      });
     }
   }
 );

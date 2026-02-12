@@ -18,10 +18,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { decrypt } from './crypto.js';
 import { isPlatformKillSwitchOn } from './platformSettings.js';
-import * as binance from './binance.js';
-import * as bybit from './bybit.js';
-import * as binanceFutures from './binance-futures.js';
-import * as bybitFutures from './bybit-futures.js';
+import { executeOrder } from './orderExecution.js';
 
 export interface CopyEngineConfig {
   /** When true, copy engine is enabled. */
@@ -133,64 +130,24 @@ export async function replicateMasterTrade(
     const scaledQty = Math.max(0, qty * allocationPct);
     const qtyStr = String(scaledQty);
 
-    try {
-      if (market === 'spot') {
-        if (exchange === 'binance') {
-          const creds: binance.BinanceCredentials = {
-            apiKey: decrypted.apiKey,
-            apiSecret: decrypted.apiSecret,
-            environment: env,
-          };
-          await binance.placeSpotOrder(creds, {
-            symbol: symbol,
-            side,
-            type: 'MARKET',
-            quantity: qtyStr,
-          });
-        } else {
-          const creds: bybit.BybitCredentials = {
-            apiKey: decrypted.apiKey,
-            apiSecret: decrypted.apiSecret,
-            environment: env,
-          };
-          await bybit.placeSpotOrder(creds, {
-            symbol,
-            side: side === 'BUY' ? 'Buy' : 'Sell',
-            orderType: 'Market',
-            qty: qtyStr,
-          });
-        }
-      } else {
-        if (exchange === 'binance') {
-          const creds: binanceFutures.BinanceFuturesCredentials = {
-            apiKey: decrypted.apiKey,
-            apiSecret: decrypted.apiSecret,
-            environment: env,
-          };
-          await binanceFutures.placeOrder(creds, {
-            symbol,
-            side,
-            type: 'MARKET',
-            qty: qtyStr,
-          });
-        } else {
-          const creds: bybitFutures.BybitFuturesCredentials = {
-            apiKey: decrypted.apiKey,
-            apiSecret: decrypted.apiSecret,
-            environment: env,
-          };
-          await bybitFutures.placeOrder(creds, {
-            symbol,
-            side,
-            type: 'MARKET',
-            qty: qtyStr,
-          });
-        }
-      }
+    const result = await executeOrder(client, {
+      userId: followerId,
+      source: 'COPY',
+      copySetupId: setup.id,
+      exchange: exchange as 'binance' | 'bybit',
+      marketType: market,
+      symbol,
+      side,
+      orderType: 'market',
+      quantity: qtyStr,
+      credentials: { apiKey: decrypted.apiKey, apiSecret: decrypted.apiSecret },
+      environment: env,
+    });
+    if (result.success) {
       replicated += 1;
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Place order failed';
-      errors.push(`Follower ${followerId}: ${msg}`);
+    } else {
+      const reason = result.message ?? result.reason_code ?? 'Order skipped or failed';
+      errors.push(`Follower ${followerId}: ${reason}`);
     }
   }
 
