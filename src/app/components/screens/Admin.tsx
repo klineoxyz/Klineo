@@ -136,6 +136,7 @@ export function Admin() {
   const [masterTraderReviewMessage, setMasterTraderReviewMessage] = useState("");
   const [masterTraderReviewLoading, setMasterTraderReviewLoading] = useState(false);
   const [masterTraderProofImageError, setMasterTraderProofImageError] = useState(false);
+  const [masterTraderProofSignedUrl, setMasterTraderProofSignedUrl] = useState<string | null>(null);
 
   // Execution Debug (admin support)
   const [executionDebugEmail, setExecutionDebugEmail] = useState("");
@@ -218,10 +219,23 @@ export function Admin() {
     }
   };
 
-  // Reset proof image error when opening the review dialog
+  // Reset proof image error and fetch signed proof URL when opening the review dialog
   useEffect(() => {
-    if (masterTraderReviewApp) setMasterTraderProofImageError(false);
-  }, [masterTraderReviewApp]);
+    if (!masterTraderReviewApp) {
+      setMasterTraderProofImageError(false);
+      setMasterTraderProofSignedUrl(null);
+      return;
+    }
+    setMasterTraderProofImageError(false);
+    const rawUrl = masterTraderReviewApp.proofUrl ?? (masterTraderReviewApp.formData as any)?.proofUrl ?? (masterTraderReviewApp.formData as any)?.tradingProofUrl;
+    if (rawUrl && masterTraderReviewApp.id) {
+      api.get<{ url: string }>(`/api/admin/master-trader-applications/${masterTraderReviewApp.id}/proof-url`)
+        .then((data) => { setMasterTraderProofSignedUrl(data.url); })
+        .catch(() => { setMasterTraderProofSignedUrl(null); });
+    } else {
+      setMasterTraderProofSignedUrl(null);
+    }
+  }, [masterTraderReviewApp?.id, masterTraderReviewApp?.proofUrl]);
 
   const handleMasterTraderReview = async () => {
     if (!masterTraderReviewApp || masterTraderReviewStatus === "view") return;
@@ -1894,22 +1908,23 @@ export function Admin() {
                       <dd>
                         {(() => {
                           const displayProofUrl = (masterTraderReviewApp.proofUrl && String(masterTraderReviewApp.proofUrl).trim()) || v(get("proofUrl")) || v(get("tradingProofUrl"));
-                          if (!displayProofUrl) {
+                          const imageUrl = masterTraderProofSignedUrl || displayProofUrl;
+                          if (!displayProofUrl && !masterTraderProofSignedUrl) {
                             return <span className="text-xs text-muted-foreground">No screenshot uploaded</span>;
                           }
                           return (
                             <div className="space-y-2">
-                              <a href={displayProofUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline inline-block">Open in new tab</a>
+                              <a href={imageUrl || displayProofUrl || "#"} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline inline-block">Open in new tab</a>
                               {masterTraderProofImageError ? (
                                 <p className="text-xs text-amber-600 dark:text-amber-500">Image could not be loaded. Use the link above to open the screenshot in a new tab.</p>
-                              ) : (
+                              ) : imageUrl ? (
                                 <img
-                                  src={displayProofUrl}
+                                  src={imageUrl}
                                   alt="Trading history screenshot submitted by applicant"
                                   className="max-w-full max-h-72 object-contain rounded border border-border bg-background block"
                                   onError={() => setMasterTraderProofImageError(true)}
                                 />
-                              )}
+                              ) : null}
                             </div>
                           );
                         })()}
@@ -2908,7 +2923,7 @@ export function Admin() {
             <p className="text-sm text-muted-foreground mb-4">
               Run smoke tests to verify core flows (auth, API, entitlements, exchange connectivity when enabled). Use before/after deploy.
             </p>
-            <SmokeTest />
+            <SmokeTest embedInAdmin />
           </Card>
         </TabsContent>
       </Tabs>

@@ -17,9 +17,10 @@ type EntitlementState = {
 
 type MlmEvent = { type: string; gross: number; distributed_total: number; platform_total: number; marketing_total: number; created_at: string };
 
-export function SmokeTest() {
+export function SmokeTest(props?: { embedInAdmin?: boolean }) {
   const { isAdmin } = useAuth();
   const isProduction = import.meta.env.PROD;
+  const embedInAdmin = props?.embedInAdmin === true;
 
   const [results, setResults] = useState<SmokeTestResult[]>([]);
   const [isRunning, setIsRunning] = useState(false);
@@ -269,7 +270,8 @@ export function SmokeTest() {
 
   const overallStatus = getOverallStatus();
 
-  if (isProduction && (!isAdmin || import.meta.env.VITE_ENABLE_SMOKE_TEST_PAGE !== 'true')) return null;
+  // In production, hide unless admin and env enabled — but when embedded in Admin tab, always show so Run button is visible
+  if (!embedInAdmin && isProduction && (!isAdmin || import.meta.env.VITE_ENABLE_SMOKE_TEST_PAGE !== 'true')) return null;
 
   return (
     <div className="p-6 space-y-6">

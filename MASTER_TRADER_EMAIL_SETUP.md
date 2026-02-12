@@ -94,6 +94,7 @@ If no email arrives:
 - Check **Railway** logs for the backend; you may see `[email] RESEND_API_KEY not set` or a Resend error.
 - In **Resend** dashboard, check **Logs** or **Emails** for failed sends or bounces.
 - Confirm the recipient address is correct and that Resend is not blocking the “from” domain.
+- **No email when form is submitted:** Check your **backend logs** (Railway logs or local terminal). If you see `[email] RESEND_API_KEY is not set` on startup or `[Master Trader] Email copy not sent` after a submission, add `RESEND_API_KEY` to your backend environment (Railway Variables or `backend-skeleton/.env`).
 
 ---
 

@@ -1297,6 +1297,46 @@ adminRouter.get('/master-trader-applications', async (req, res) => {
   }
 });
 
+const MASTER_TRADER_PROOF_BUCKET = 'master-trader-proofs';
+
+/**
+ * GET /api/admin/master-trader-applications/:id/proof-url
+ * Returns a signed URL for the trading proof screenshot (so the image loads even if bucket is private or public URL fails).
+ */
+adminRouter.get('/master-trader-applications/:id/proof-url',
+  validate([uuidParam('id')]),
+  async (req, res) => {
+    const client = getSupabase();
+    if (!client) return res.status(503).json({ error: 'Database unavailable' });
+    try {
+      const { id } = req.params;
+      const { data: row, error } = await client
+        .from('master_trader_applications')
+        .select('proof_url')
+        .eq('id', id)
+        .single();
+      if (error || !row) return res.status(404).json({ error: 'Application not found' });
+      const proofUrl = (row as { proof_url: string | null }).proof_url;
+      if (!proofUrl || typeof proofUrl !== 'string') return res.status(404).json({ error: 'No proof screenshot' });
+
+      // Try to get a signed URL from the storage path (works for private buckets and avoids CORS/referrer issues)
+      const match = proofUrl.match(/\/object\/public\/master-trader-proofs\/(.+)$/);
+      if (match && match[1]) {
+        const objectPath = decodeURIComponent(match[1]);
+        const { data: signed, error: signErr } = await client.storage
+          .from(MASTER_TRADER_PROOF_BUCKET)
+          .createSignedUrl(objectPath, 3600); // 1 hour
+        if (!signErr && signed?.signedUrl) return res.json({ url: signed.signedUrl });
+      }
+      // Fallback: return the stored public URL
+      res.json({ url: proofUrl });
+    } catch (err) {
+      console.error('Master trader proof URL error:', err);
+      res.status(500).json({ error: 'Failed to get proof URL' });
+    }
+  }
+);
+
 /**
  * PATCH /api/admin/master-trader-applications/:id
  * Approve or reject application. Body: { status: 'approved' | 'rejected', message?: string }

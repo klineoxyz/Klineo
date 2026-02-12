@@ -179,33 +179,43 @@ masterTraderApplicationsRouter.post(
 
       const inserted = row as { id: string; status: string; created_at: string };
       const copyTo = process.env.MASTER_TRADER_COPY_TO_EMAIL || 'klineoxyz@gmail.com';
-      sendMasterTraderApplicationCopy({
-        to: copyTo,
-        formData: {
-          fullName,
-          email,
-          country,
-          telegram: telegram || null,
-          primaryExchange,
-          yearsExperience: Number(yearsExperience),
-          tradingStyle,
-          preferredMarkets,
-          avgMonthlyReturn: avgMonthlyReturn != null ? String(avgMonthlyReturn) : null,
-          strategyDescription,
-          whyMasterTrader,
-          profileUrl: profileUrl || null,
-        },
-        proofUrl,
-        applicationId: inserted.id,
-      }).then((r) => {
-        if (!r.ok) console.warn('[Master Trader] Email copy not sent:', r.error);
-      });
+      let emailSent = false;
+      try {
+        const result = await sendMasterTraderApplicationCopy({
+          to: copyTo,
+          formData: {
+            fullName,
+            email,
+            country,
+            telegram: telegram || null,
+            primaryExchange,
+            yearsExperience: Number(yearsExperience),
+            tradingStyle,
+            preferredMarkets,
+            avgMonthlyReturn: avgMonthlyReturn != null ? String(avgMonthlyReturn) : null,
+            strategyDescription,
+            whyMasterTrader,
+            profileUrl: profileUrl || null,
+          },
+          proofUrl,
+          applicationId: inserted.id,
+        });
+        emailSent = result.ok;
+        if (!result.ok) {
+          console.error('[Master Trader] Email copy not sent:', result.error, '- Set RESEND_API_KEY and optionally EMAIL_FROM, MASTER_TRADER_COPY_TO_EMAIL in backend env.');
+        } else {
+          console.log('[Master Trader] Application copy email sent to', copyTo);
+        }
+      } catch (emailErr) {
+        console.error('[Master Trader] Email send failed:', emailErr);
+      }
 
       res.status(201).json({
         id: inserted.id,
         status: inserted.status,
         createdAt: inserted.created_at,
         message: 'Application submitted. We will review within 2–5 business days.',
+        emailSent,
       });
     } catch (err) {
       console.error('Master trader application error:', err);
