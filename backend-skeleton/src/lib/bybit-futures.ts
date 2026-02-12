@@ -37,17 +37,6 @@ function sign(plain: string, secret: string): string {
 
 const RECV_WINDOW = 10000;
 
-/** Bybit server time (public). Same as spot; used for timestamp retry. */
-async function getServerTime(env: BybitFuturesEnvironment): Promise<number> {
-  const base = getBaseUrl(env);
-  const res = await fetch(`${base}/v5/market/time`, { signal: AbortSignal.timeout(5000) });
-  const data = (await res.json()) as { retCode?: number; result?: { timeSecond?: string }; time?: number };
-  if (data.retCode !== 0 && data.retCode !== undefined) throw new Error(`Bybit time: ${data.retCode}`);
-  const ms = data.time ?? (data.result?.timeSecond ? parseInt(data.result.timeSecond, 10) * 1000 : NaN);
-  if (Number.isNaN(ms) || ms <= 0) throw new Error('Invalid Bybit server time');
-  return ms;
-}
-
 function isBybitTimestampOrSignError(retCode: number, retMsg: string): boolean {
   const msg = (retMsg || '').toLowerCase();
   if (retCode === 10004) return true;
@@ -63,8 +52,11 @@ async function signedRequest<T>(
   body?: object,
   timestampOverrideMs?: number
 ): Promise<T> {
+  const { getExchangeTimeOffset } = await import('./timeSync.js');
   const base = getBaseUrl(creds.environment);
-  const timestamp = (timestampOverrideMs ?? Date.now()).toString();
+  const now = Date.now();
+  const offsetMs = timestampOverrideMs != null ? 0 : await getExchangeTimeOffset('bybit', creds.environment, 'futures');
+  const timestamp = (timestampOverrideMs ?? Math.floor(now + offsetMs)).toString();
   const queryString = new URLSearchParams(queryParams).toString();
   const signPlain = method === 'GET'
     ? timestamp + creds.apiKey + RECV_WINDOW + queryString
@@ -103,13 +95,14 @@ async function signedRequestWithRetry<T>(
   queryParams: Record<string, string> = {},
   body?: object
 ): Promise<T> {
+  const { invalidateTimeOffsetCache } = await import('./timeSync.js');
   try {
     return await signedRequest<T>(method, endpoint, creds, queryParams, body, undefined);
   } catch (e) {
     const err = e as Error & { retCode?: number; retMsg?: string };
     if (err.retCode != null && isBybitTimestampOrSignError(err.retCode, err.retMsg ?? '')) {
-      const serverTime = await getServerTime(creds.environment);
-      return await signedRequest<T>(method, endpoint, creds, queryParams, body, serverTime);
+      invalidateTimeOffsetCache('bybit', creds.environment, 'futures');
+      return await signedRequest<T>(method, endpoint, creds, queryParams, body, undefined);
     }
     throw e;
   }
@@ -275,6 +268,28 @@ export async function getOpenOrders(
     price: o.price,
     stopPrice: o.stopPrice,
   }));
+}
+
+/** Query single order by orderId. GET /v5/order/realtime with orderId. */
+export async function getOrder(
+  creds: BybitFuturesCredentials,
+  symbol: string,
+  orderId: string
+): Promise<{ orderId: string; status: string } | null> {
+  const sym = symbol.replace('/', '').toUpperCase();
+  try {
+    const result = await signedRequest<{ list?: Array<{ orderId?: string; orderStatus?: string }> }>(
+      'GET',
+      '/v5/order/realtime',
+      creds,
+      { category: CATEGORY, symbol: sym, orderId }
+    );
+    const list = result?.list ?? [];
+    const o = list[0];
+    return o?.orderId != null ? { orderId: o.orderId, status: o.orderStatus ?? '' } : null;
+  } catch {
+    return null;
+  }
 }
 
 export async function cancelAll(

@@ -36,11 +36,15 @@ function sign(queryString: string, secret: string): string {
   return createHmac('sha256', secret).update(queryString).digest('hex');
 }
 
-function buildSignedQuery(params: Record<string, string | number | undefined>, secret: string): string {
-  const timestamp = Date.now();
+function buildSignedQuery(
+  params: Record<string, string | number | undefined>,
+  secret: string,
+  timestampOverride?: number
+): string {
+  const timestamp = timestampOverride ?? Date.now();
   const recvWindow = 10000; // 10s for futures (allow some drift)
   const queryParams = new URLSearchParams();
-  queryParams.append('timestamp', String(timestamp));
+  queryParams.append('timestamp', String(Math.floor(timestamp)));
   queryParams.append('recvWindow', String(recvWindow));
   for (const [k, v] of Object.entries(params)) {
     if (v !== undefined && v !== null) queryParams.append(k, String(v));
@@ -53,18 +57,27 @@ function buildSignedQuery(params: Record<string, string | number | undefined>, s
 const RETRY_429_MAX = 2;
 const RETRY_429_BASE_MS = 1000;
 
+function isTimestampOrRecvWindowError(code: number): boolean {
+  return code === -1021 || code === -1022;
+}
+
 async function signedRequest<T>(
   method: 'GET' | 'POST' | 'DELETE',
   path: string,
   creds: BinanceFuturesCredentials,
-  params: Record<string, string | number | undefined> = {}
+  params: Record<string, string | number | undefined> = {},
+  timestampOverride?: number
 ): Promise<T> {
+  const { getExchangeTimestampMs, invalidateTimeOffsetCache } = await import('./timeSync.js');
   const base = getBaseUrl(creds.environment);
   let lastRawText = '';
   let lastRes: Response | null = null;
-
+  let timestamp = timestampOverride ?? (await getExchangeTimestampMs('binance', creds.environment, 'futures'));
+  const maxTimestampRetries = 2;
+  tsLoop: for (let tsAttempt = 0; tsAttempt < maxTimestampRetries; tsAttempt++) {
+    if (tsAttempt > 0) timestamp = await getExchangeTimestampMs('binance', creds.environment, 'futures');
   for (let attempt = 0; attempt <= RETRY_429_MAX; attempt++) {
-    const query = buildSignedQuery(params, creds.apiSecret);
+    const query = buildSignedQuery(params, creds.apiSecret, Math.floor(timestamp));
     const url = `${base}${path}?${query}`;
     const res = await binanceFetch(url, {
       method,
@@ -85,8 +98,12 @@ async function signedRequest<T>(
       let errMsg: string;
       try {
         const data = JSON.parse(rawText) as { code?: number; msg?: string };
-        const msg = data.msg ? String(data.msg) : res.statusText;
         const code = data.code != null ? data.code : res.status;
+        if (isTimestampOrRecvWindowError(code) && tsAttempt < maxTimestampRetries - 1) {
+          invalidateTimeOffsetCache('binance', creds.environment, 'futures');
+          continue tsLoop;
+        }
+        const msg = data.msg ? String(data.msg) : res.statusText;
         const isRestricted = res.status === 451 || /restricted location|eligibility|service unavailable.*restricted/i.test(msg);
         errMsg = isRestricted
           ? 'Your server IP (Railway) is in a region Binance restricts. Set BINANCE_HTTPS_PROXY in Railway Variables to an HTTP(S) proxy in an allowed region. See TROUBLESHOOT_BINANCE_RESTRICTED.md.'
@@ -110,11 +127,16 @@ async function signedRequest<T>(
       throw new Error(`Binance Futures HTTP ${res.status}: Invalid response body`);
     }
     if (data.code != null && data.code !== 0) {
+      if (isTimestampOrRecvWindowError(data.code) && tsAttempt < maxTimestampRetries - 1) {
+        invalidateTimeOffsetCache('binance', creds.environment, 'futures');
+        continue tsLoop;
+      }
       let msg = data.msg || res.statusText;
       if (data.code === -1021) msg += ' Sync server clock or use Binance server time.';
       throw new Error(`Binance Futures (${data.code}): ${msg}`);
     }
     return data as T;
+  }
   }
   if (lastRes && !lastRes.ok) {
     try {
@@ -231,6 +253,22 @@ export async function getOpenPosition(
     unrealizedProfit: pos.unRealizedProfit,
     leverage: pos.leverage,
   };
+}
+
+/** Query single order by orderId. GET /fapi/v1/order */
+export async function getOrder(
+  creds: BinanceFuturesCredentials,
+  symbol: string,
+  orderId: string
+): Promise<{ orderId: string; status: string } | null> {
+  const sym = symbol.replace('/', '').toUpperCase();
+  try {
+    const o = await signedRequest<any>('GET', '/fapi/v1/order', creds, { symbol: sym, orderId });
+    if (!o || o.orderId == null) return null;
+    return { orderId: String(o.orderId), status: o.status ?? '' };
+  } catch {
+    return null;
+  }
 }
 
 export async function getOpenOrders(

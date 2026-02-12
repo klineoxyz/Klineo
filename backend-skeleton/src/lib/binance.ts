@@ -191,8 +191,13 @@ function buildSignedQuery(
 const RETRY_429_MAX = 2;
 const RETRY_429_BASE_MS = 1000;
 
+/** Timestamp/recvWindow errors: retry once with fresh time offset. */
+function isTimestampOrRecvWindowError(code: number): boolean {
+  return code === -1021 || code === -1022;
+}
+
 /**
- * Make signed request to Binance API. Retries on 429 (rate limit) with backoff per docs.
+ * Make signed request to Binance API. Uses cached time offset; retries on 429; on -1021/-1022 invalidates cache and retries once.
  */
 async function signedRequest<T>(
   method: 'GET' | 'POST',
@@ -200,15 +205,19 @@ async function signedRequest<T>(
   credentials: BinanceCredentials,
   params: Record<string, string | number | undefined> = {}
 ): Promise<T> {
+  const { getExchangeTimestampMs, invalidateTimeOffsetCache } = await import('./timeSync.js');
   const baseUrl = getBaseUrl(credentials.environment);
   let lastRawText = '';
   let lastResponse: Response | null = null;
+  let timestamp = await getExchangeTimestampMs('binance', credentials.environment, 'spot');
+  const maxTimestampRetries = 2;
+  tsLoop: for (let tsAttempt = 0; tsAttempt < maxTimestampRetries; tsAttempt++) {
+    if (tsAttempt > 0) timestamp = await getExchangeTimestampMs('binance', credentials.environment, 'spot');
+    for (let attempt = 0; attempt <= RETRY_429_MAX; attempt++) {
+      const queryString = buildSignedQuery(params, credentials.apiSecret, Math.floor(timestamp));
+      const url = `${baseUrl}${endpoint}?${queryString}`;
 
-  for (let attempt = 0; attempt <= RETRY_429_MAX; attempt++) {
-    const queryString = buildSignedQuery(params, credentials.apiSecret, undefined);
-    const url = `${baseUrl}${endpoint}?${queryString}`;
-
-    const response = await binanceFetch(url, {
+      const response = await binanceFetch(url, {
       method,
       headers: {
         'X-MBX-APIKEY': credentials.apiKey,
@@ -231,6 +240,10 @@ async function signedRequest<T>(
       try {
         const data = JSON.parse(rawText) as BinanceError;
         const code = typeof data.code === 'number' ? data.code : response.status;
+        if (isTimestampOrRecvWindowError(code) && tsAttempt < maxTimestampRetries - 1) {
+          invalidateTimeOffsetCache('binance', credentials.environment, 'spot');
+          continue tsLoop;
+        }
         const msg = data.msg ? String(data.msg) : response.statusText;
         const errType = classifyBinanceError(code, msg, response.status);
         const userMsg = getBinanceUserMessage(code, msg, errType);
@@ -252,6 +265,7 @@ async function signedRequest<T>(
       throw new Error(`Binance API error (${response.status}): Invalid response body`);
     }
     return data;
+  }
   }
 
   if (lastResponse && !lastResponse.ok) {

@@ -47,15 +47,45 @@ function sign(plain: string, secret: string): string {
 
 const RECV_WINDOW = 5000;
 
-/** Bybit server time (public). GET /v5/market/time. Returns ms. */
+/**
+ * Parse Bybit /v5/market/time response to milliseconds.
+ * Supports: result.timeNano (nanos), result.timeSecond (seconds), top-level time (ms or seconds).
+ * Returns milliseconds as number. Safety: if value < 1e12 treat as seconds and convert.
+ */
+export function parseBybitServerTimeMs(data: {
+  time?: number;
+  result?: { timeSecond?: string; timeNano?: string };
+}): number {
+  const r = data.result;
+  let ms: number;
+  if (r?.timeNano != null && r.timeNano !== '') {
+    const nano = parseInt(r.timeNano, 10);
+    ms = Number.isFinite(nano) ? nano / 1e6 : NaN;
+  } else if (r?.timeSecond != null && r.timeSecond !== '') {
+    const sec = parseInt(r.timeSecond, 10);
+    ms = Number.isFinite(sec) ? sec * 1000 : NaN;
+  } else if (data.time != null && typeof data.time === 'number') {
+    ms = data.time;
+  } else {
+    ms = NaN;
+  }
+  if (Number.isNaN(ms) || ms <= 0) return NaN;
+  if (ms < 1e12) ms *= 1000;
+  return Math.floor(ms);
+}
+
+/**
+ * Bybit server time (public). GET /v5/market/time.
+ * Returns milliseconds. Shared by spot and futures; use for signed request timestamp.
+ */
 export async function getServerTime(environment: BybitEnvironment): Promise<number> {
   const baseUrl = getBaseUrl(environment);
   const res = await fetch(`${baseUrl}/v5/market/time`, { signal: AbortSignal.timeout(5000) });
-  const data = (await res.json()) as { retCode?: number; result?: { timeSecond?: string }; time?: number };
+  const data = (await res.json()) as { retCode?: number; result?: { timeSecond?: string; timeNano?: string }; time?: number };
   if (data.retCode !== 0 && data.retCode !== undefined) {
     throw new Error(`Bybit time: ${data.retCode}`);
   }
-  const ms = data.time ?? (data.result?.timeSecond ? parseInt(data.result.timeSecond, 10) * 1000 : NaN);
+  const ms = parseBybitServerTimeMs(data);
   if (Number.isNaN(ms) || ms <= 0) throw new Error('Invalid Bybit server time');
   return ms;
 }
@@ -100,8 +130,11 @@ async function signedRequest<T>(
   body?: object,
   timestampOverrideMs?: number
 ): Promise<T> {
+  const { getExchangeTimeOffset } = await import('./timeSync.js');
   const baseUrl = getBaseUrl(credentials.environment);
-  const timestamp = (timestampOverrideMs ?? Date.now()).toString();
+  const now = Date.now();
+  const offsetMs = timestampOverrideMs != null ? 0 : await getExchangeTimeOffset('bybit', credentials.environment, 'spot');
+  const timestamp = (timestampOverrideMs ?? Math.floor(now + offsetMs)).toString();
   let queryString = new URLSearchParams(queryParams).toString();
   let signPlain: string;
   if (method === 'GET') {
@@ -149,7 +182,7 @@ async function signedRequest<T>(
   return data.result as T;
 }
 
-/** One signed request with single retry on timestamp/sign error using server time. */
+/** One signed request with single retry on timestamp/sign error (invalidate cache and retry). */
 async function signedRequestWithRetry<T>(
   method: 'GET' | 'POST',
   endpoint: string,
@@ -157,13 +190,14 @@ async function signedRequestWithRetry<T>(
   queryParams: Record<string, string> = {},
   body?: object
 ): Promise<T> {
+  const { invalidateTimeOffsetCache } = await import('./timeSync.js');
   try {
     return await signedRequest<T>(method, endpoint, credentials, queryParams, body, undefined);
   } catch (e) {
     const err = e as Error & { retCode?: number; retMsg?: string };
     if (err.retCode != null && isBybitTimestampOrSignError(err.retCode, err.retMsg ?? '')) {
-      const serverTime = await getServerTime(credentials.environment);
-      return await signedRequest<T>(method, endpoint, credentials, queryParams, body, serverTime);
+      invalidateTimeOffsetCache('bybit', credentials.environment, 'spot');
+      return await signedRequest<T>(method, endpoint, credentials, queryParams, body, undefined);
     }
     throw e;
   }
