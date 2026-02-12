@@ -1,6 +1,11 @@
 /**
  * Runner config: env validation and safe boot logging.
  * Never log or return RUNNER_CRON_SECRET.
+ *
+ * Production / live: set ENABLE_STRATEGY_RUNNER=true so that:
+ * - DCA bots receive ticks (processRunningDcaBots runs on an interval).
+ * - Strategy Runner processes due strategies.
+ * If this is false, DCA bots will show "Running" but Last tick / DCA Progress stay empty.
  */
 
 import { RISK_CONFIG } from './strategyRisk.js';

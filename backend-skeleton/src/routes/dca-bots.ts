@@ -173,9 +173,14 @@ dcaBotsRouter.put(
         }
       }
 
+      const now = new Date().toISOString();
+      const payload: Record<string, string> = { status, updated_at: now };
+      if (status === 'running') {
+        payload.next_tick_at = now;
+      }
       const { data, error } = await client
         .from('dca_bots')
-        .update({ status, updated_at: new Date().toISOString() })
+        .update(payload)
         .eq('id', id)
         .eq('user_id', userId)
         .select()

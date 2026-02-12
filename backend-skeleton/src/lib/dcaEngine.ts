@@ -82,9 +82,9 @@ function normalizeSymbol(pair: string): string {
 }
 
 /**
- * Load exchange connection for user_id + exchange (first active and successfully tested).
- * Only returns connections that have been successfully tested (last_test_status = 'ok')
- * so Spot DCA executes only on correctly connected APIs.
+ * Load exchange connection for user_id + exchange (first active, not disabled).
+ * Uses connections where last_test_status is 'ok' OR null (e.g. newly connected, not yet tested).
+ * Skips only when last_test_status = 'fail' so DCA runs for all users who have connected API.
  */
 async function loadConnection(
   client: SupabaseClient,
@@ -96,7 +96,7 @@ async function loadConnection(
     .select('encrypted_config_b64, environment')
     .eq('user_id', userId)
     .eq('exchange', exchange)
-    .eq('last_test_status', 'ok')
+    .or('last_test_status.eq.ok,last_test_status.is.null')
     .is('disabled_at', null)
     .order('created_at', { ascending: false })
     .limit(1)

@@ -45,6 +45,7 @@ The **Spot DCA Grid** execution engine runs only for bots with `market='spot'` a
 
 ## Env
 
+- **ENABLE_STRATEGY_RUNNER**: Must be `true` for DCA ticks to run. The in-process scheduler runs `processRunningDcaBots` on the same interval as the strategy runner. If this is `false`, DCA bots will show "Running" but **Last tick**, **DCA Progress** and PnL will stay empty. Set `ENABLE_STRATEGY_RUNNER=true` in production/live.
 - **DCA_ENGINE_SECRET** (optional): Protects `POST /api/dca-bots/engine/tick`. Use a long random string. If not set, the endpoint always returns 401 (in-process scheduler does not use this).
 
 ## Behaviour

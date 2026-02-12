@@ -135,12 +135,14 @@ export function Admin() {
   const [masterTraderReviewMessage, setMasterTraderReviewMessage] = useState("");
   const [masterTraderReviewLoading, setMasterTraderReviewLoading] = useState(false);
 
-  // Load stats on mount
+  // Load stats on mount (live data from API)
   useEffect(() => {
-    loadStats();
+    loadStats(true);
   }, []);
 
-  const loadStats = async () => {
+  const [statsRefreshing, setStatsRefreshing] = useState(false);
+  const loadStats = async (isInitial = false) => {
+    if (!isInitial) setStatsRefreshing(true);
     try {
       const data = await api.get('/api/admin/stats');
       setStats(data as any);
@@ -148,7 +150,8 @@ export function Admin() {
       console.error('Failed to load stats:', err);
       toast.error('Failed to load dashboard stats');
     } finally {
-      setLoading(false);
+      if (isInitial) setLoading(false);
+      else setStatsRefreshing(false);
     }
   };
 
@@ -711,15 +714,21 @@ export function Admin() {
 
   return (
     <div className="p-6 space-y-6">
-      <div className="flex items-center gap-3">
-        <Shield className="size-8 text-primary" />
-        <div>
-          <h1 className="text-2xl font-semibold mb-1">Admin Panel</h1>
-          <p className="text-sm text-muted-foreground">Platform operations and management</p>
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <Shield className="size-8 text-primary" />
+          <div>
+            <h1 className="text-2xl font-semibold mb-1">Admin Panel</h1>
+            <p className="text-sm text-muted-foreground">Platform operations and management</p>
+          </div>
         </div>
+        <Button variant="outline" size="sm" onClick={() => loadStats(false)} disabled={statsRefreshing}>
+          <RefreshCw className={`size-4 mr-1 ${statsRefreshing ? "animate-spin" : ""}`} />
+          Refresh stats
+        </Button>
       </div>
 
-      {/* Quick Stats */}
+      {/* Quick Stats — live from GET /api/admin/stats */}
       <div className="grid grid-cols-5 gap-4">
         <Card className="p-4 space-y-2">
           <div className="text-xs text-muted-foreground uppercase tracking-wide">Total Users</div>
