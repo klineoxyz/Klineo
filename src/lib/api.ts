@@ -323,6 +323,23 @@ export const exchangeConnections = {
   },
 };
 
+/** Trading: execution logs, test order, permissions check. */
+export interface CheckPermissionsResponse {
+  ok: boolean;
+  reason_code?: string;
+  message: string;
+}
+
+export const trading = {
+  /** Check trading permissions for connected exchange + market type. Returns { ok, reason_code?, message }. */
+  checkPermissions: async (
+    exchange: 'binance' | 'bybit',
+    marketType: 'spot' | 'futures'
+  ): Promise<CheckPermissionsResponse> => {
+    return api.post('/api/trading/check-permissions', { exchange, marketType });
+  },
+};
+
 // Candles / klines from connected exchange (Binance or Bybit Futures) — for Strategy Backtest and charts
 export interface KlineCandle {
   time: number;

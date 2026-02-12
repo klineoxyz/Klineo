@@ -47,15 +47,61 @@ function sign(plain: string, secret: string): string {
 
 const RECV_WINDOW = 5000;
 
+/** Bybit server time (public). GET /v5/market/time. Returns ms. */
+export async function getServerTime(environment: BybitEnvironment): Promise<number> {
+  const baseUrl = getBaseUrl(environment);
+  const res = await fetch(`${baseUrl}/v5/market/time`, { signal: AbortSignal.timeout(5000) });
+  const data = (await res.json()) as { retCode?: number; result?: { timeSecond?: string }; time?: number };
+  if (data.retCode !== 0 && data.retCode !== undefined) {
+    throw new Error(`Bybit time: ${data.retCode}`);
+  }
+  const ms = data.time ?? (data.result?.timeSecond ? parseInt(data.result.timeSecond, 10) * 1000 : NaN);
+  if (Number.isNaN(ms) || ms <= 0) throw new Error('Invalid Bybit server time');
+  return ms;
+}
+
+/** True if error is likely timestamp/recvWindow/signature (retry with server time). */
+function isBybitTimestampOrSignError(retCode: number, retMsg: string): boolean {
+  const msg = (retMsg || '').toLowerCase();
+  if (retCode === 10004) return true; // Invalid sign (often timestamp drift)
+  if (retCode === 10001 && /time|timestamp|recv|expired/i.test(msg)) return true;
+  return /timestamp|recv.?window|request.?expired|sign.*invalid/i.test(msg);
+}
+
+/** Map Bybit retCode to audit reason_code (for FAILED rows). */
+export function mapBybitRetCodeToReasonCode(retCode?: number, retMsg?: string): string {
+  const msg = (retMsg || '').toLowerCase();
+  switch (retCode) {
+    case 10001:
+      return /time|timestamp|recv/i.test(msg) ? 'TIMESTAMP_DESYNC' : 'REQUEST_ERROR';
+    case 10003:
+    case 10004:
+    case 10007:
+      return retCode === 10004 ? 'INVALID_SIGNATURE' : 'INVALID_KEY';
+    case 10005:
+      return 'PERMISSION_DENIED';
+    case 10010:
+      return 'IP_WHITELIST_BLOCK';
+    default:
+      break;
+  }
+  if (/insufficient|balance|margin/i.test(msg)) return 'INSUFFICIENT_BALANCE';
+  if (/symbol|tradable|not.*support/i.test(msg)) return 'SYMBOL_NOT_TRADABLE';
+  if (/rate|limit|429/i.test(msg)) return 'RATE_LIMIT';
+  if (/permission|read.?only|trade/i.test(msg)) return 'PERMISSION_DENIED';
+  return 'EXCHANGE_ERROR';
+}
+
 async function signedRequest<T>(
   method: 'GET' | 'POST',
   endpoint: string,
   credentials: BybitCredentials,
   queryParams: Record<string, string> = {},
-  body?: object
+  body?: object,
+  timestampOverrideMs?: number
 ): Promise<T> {
   const baseUrl = getBaseUrl(credentials.environment);
-  const timestamp = Date.now().toString();
+  const timestamp = (timestampOverrideMs ?? Date.now()).toString();
   let queryString = new URLSearchParams(queryParams).toString();
   let signPlain: string;
   if (method === 'GET') {
@@ -87,14 +133,40 @@ async function signedRequest<T>(
 
   if (data.retCode !== 0 && data.retCode !== undefined) {
     const human = mapBybitErrorToHuman(data.retCode, data.retMsg);
-    throw new Error(human);
+    const err = new Error(human) as Error & { retCode?: number; retMsg?: string; bybitReasonCode?: string };
+    err.retCode = data.retCode;
+    err.retMsg = data.retMsg;
+    err.bybitReasonCode = mapBybitRetCodeToReasonCode(data.retCode, data.retMsg ?? '');
+    throw err;
   }
   if (!response.ok) {
     const human = mapBybitErrorToHuman(undefined, data.retMsg || `HTTP ${response.status}`);
-    throw new Error(human);
+    const err = new Error(human) as Error & { retCode?: number; retMsg?: string; bybitReasonCode?: string };
+    err.bybitReasonCode = mapBybitRetCodeToReasonCode(undefined, human);
+    throw err;
   }
 
   return data.result as T;
+}
+
+/** One signed request with single retry on timestamp/sign error using server time. */
+async function signedRequestWithRetry<T>(
+  method: 'GET' | 'POST',
+  endpoint: string,
+  credentials: BybitCredentials,
+  queryParams: Record<string, string> = {},
+  body?: object
+): Promise<T> {
+  try {
+    return await signedRequest<T>(method, endpoint, credentials, queryParams, body, undefined);
+  } catch (e) {
+    const err = e as Error & { retCode?: number; retMsg?: string };
+    if (err.retCode != null && isBybitTimestampOrSignError(err.retCode, err.retMsg ?? '')) {
+      const serverTime = await getServerTime(credentials.environment);
+      return await signedRequest<T>(method, endpoint, credentials, queryParams, body, serverTime);
+    }
+    throw e;
+  }
 }
 
 /** Map Bybit API errors to human-readable fix instructions */
@@ -283,7 +355,7 @@ export async function placeSpotOrder(
   if (params.price != null) body.price = params.price;
   if (params.orderLinkId != null) body.orderLinkId = params.orderLinkId;
 
-  return signedRequest<BybitOrderResponse>('POST', '/v5/order/create', credentials, {}, body);
+  return signedRequestWithRetry<BybitOrderResponse>('POST', '/v5/order/create', credentials, {}, body);
 }
 
 /** Bybit spot order (single order response). */

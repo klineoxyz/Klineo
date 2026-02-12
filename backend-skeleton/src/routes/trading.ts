@@ -11,6 +11,7 @@ import { body } from 'express-validator';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { decrypt } from '../lib/crypto.js';
 import { executeOrder } from '../lib/orderExecution.js';
+import { checkPermissions } from '../lib/permissionsCheck.js';
 
 let supabase: SupabaseClient | null = null;
 
@@ -180,6 +181,66 @@ tradingRouter.post(
       return res.status(500).json({
         success: false,
         status: 'FAILED',
+        reason_code: 'EXCEPTION',
+        message: sanitized,
+      });
+    }
+  }
+);
+
+/**
+ * POST /api/trading/check-permissions
+ * Body: { exchange, marketType }
+ * Tests lightweight signed endpoint for trading permission. Returns { ok, reason_code?, message }.
+ */
+tradingRouter.post(
+  '/check-permissions',
+  validate([
+    body('exchange').isIn(['binance', 'bybit']).withMessage('exchange must be binance or bybit'),
+    body('marketType').isIn(['spot', 'futures']).withMessage('marketType must be spot or futures'),
+  ]),
+  async (req: AuthenticatedRequest, res) => {
+    const client = getSupabase();
+    if (!client) return res.status(503).json({ error: 'Database unavailable' });
+    const userId = req.user!.id;
+    const { exchange, marketType } = req.body as { exchange: string; marketType: string };
+
+    try {
+      let query = client
+        .from('user_exchange_connections')
+        .select('id, exchange, environment, encrypted_config_b64')
+        .eq('user_id', userId)
+        .eq('exchange', exchange)
+        .is('disabled_at', null)
+        .order('created_at', { ascending: false })
+        .limit(1);
+      const { data: connection, error: connErr } = await query.maybeSingle();
+
+      if (connErr || !connection?.encrypted_config_b64) {
+        return res.status(404).json({
+          ok: false,
+          reason_code: 'CONNECTION_NOT_FOUND',
+          message: `No ${exchange} connection found. Connect an API key first.`,
+        });
+      }
+
+      const raw = await decrypt(encryptedConfigToBase64(connection.encrypted_config_b64));
+      const parsed = JSON.parse(raw) as { apiKey: string; apiSecret: string };
+      const env = (connection.environment || 'production') as 'production' | 'testnet';
+
+      const result = await checkPermissions(
+        exchange as 'binance' | 'bybit',
+        marketType as 'spot' | 'futures',
+        { apiKey: parsed.apiKey, apiSecret: parsed.apiSecret },
+        env
+      );
+
+      return res.json(result);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Unknown error';
+      const sanitized = msg.replace(/api[_-]?key/gi, '[REDACTED]').replace(/secret/gi, '[REDACTED]');
+      return res.status(500).json({
+        ok: false,
         reason_code: 'EXCEPTION',
         message: sanitized,
       });

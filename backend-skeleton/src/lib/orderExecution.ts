@@ -16,6 +16,11 @@ export type OrderSource = 'DCA' | 'GRID' | 'COPY' | 'TERMINAL';
 export type MarketType = 'spot' | 'futures';
 export type AuditStatus = 'PLACED' | 'SKIPPED' | 'FAILED';
 
+/** Default fee buffer for spot balance check (e.g. 0.002 = 0.2%). Env FEE_BUFFER_PERCENT overrides. */
+const DEFAULT_FEE_BUFFER_PERCENT = 0.2;
+/** Default leverage for futures required-margin estimate when not provided. */
+const DEFAULT_FUTURES_LEVERAGE = 10;
+
 export interface PreflightResult {
   allowed: boolean;
   reason_code: string;
@@ -23,6 +28,7 @@ export interface PreflightResult {
   minNotional?: number;
   availableBalance?: number;
   requiredBalance?: number;
+  feeBufferUsed?: number;
   filters?: { minQty: number; stepSize: number; minNotional: number; maxQty?: number };
 }
 
@@ -55,6 +61,75 @@ export interface ExecuteOrderResult {
 }
 
 const SYM = (s: string) => (s || '').replace('/', '').toUpperCase();
+
+/** Parse symbol like BTCUSDT into base and quote assets. */
+function parseBaseQuote(symbol: string): { base: string; quote: string } {
+  const s = SYM(symbol);
+  const knownQuotes = ['USDT', 'BUSD', 'USD', 'BTC', 'ETH'];
+  for (const q of knownQuotes) {
+    if (s.endsWith(q)) return { base: s.slice(0, -q.length), quote: q };
+  }
+  return { base: s.slice(0, -4), quote: 'USDT' };
+}
+
+function getFeeBufferPercent(): number {
+  const v = process.env.FEE_BUFFER_PERCENT;
+  if (v == null || v === '') return DEFAULT_FEE_BUFFER_PERCENT;
+  const n = parseFloat(v);
+  return Number.isFinite(n) && n >= 0 ? n : DEFAULT_FEE_BUFFER_PERCENT;
+}
+
+/** Spot: get free balance for base and quote. Used for preflight only; no secrets in return. */
+async function getSpotBalanceBinance(
+  credentials: { apiKey: string; apiSecret: string },
+  symbol: string,
+  environment: 'production' | 'testnet'
+): Promise<{ baseFree: number; quoteFree: number }> {
+  const creds: binance.BinanceCredentials = { apiKey: credentials.apiKey, apiSecret: credentials.apiSecret, environment };
+  const account = await binance.getAccountInfo(creds);
+  const { base, quote } = parseBaseQuote(symbol);
+  const b = account.balances?.find((x) => x.asset === base);
+  const q = account.balances?.find((x) => x.asset === quote);
+  const baseFree = b ? parseFloat(b.free) + parseFloat(b.locked) : 0;
+  const quoteFree = q ? parseFloat(q.free) + parseFloat(q.locked) : 0;
+  return { baseFree, quoteFree };
+}
+
+/** Spot: get free balance for base and quote. */
+async function getSpotBalanceBybit(
+  credentials: { apiKey: string; apiSecret: string },
+  symbol: string,
+  environment: 'production' | 'testnet'
+): Promise<{ baseFree: number; quoteFree: number }> {
+  const creds: bybit.BybitCredentials = { apiKey: credentials.apiKey, apiSecret: credentials.apiSecret, environment };
+  const { balances } = await bybit.getWalletBalance(creds);
+  const { base, quote } = parseBaseQuote(symbol);
+  const b = balances.find((x) => x.asset === base);
+  const q = balances.find((x) => x.asset === quote);
+  const baseFree = b ? parseFloat(b.free) + parseFloat(b.locked) : 0;
+  const quoteFree = q ? parseFloat(q.free) + parseFloat(q.locked) : 0;
+  return { baseFree, quoteFree };
+}
+
+/** Futures: get available balance in USDT. */
+async function getFuturesBalanceBinance(
+  credentials: { apiKey: string; apiSecret: string },
+  environment: 'production' | 'testnet'
+): Promise<number> {
+  const creds: binanceFutures.BinanceFuturesCredentials = { apiKey: credentials.apiKey, apiSecret: credentials.apiSecret, environment };
+  const summary = await binanceFutures.getAccountSummary(creds);
+  return parseFloat(summary.availableBalanceUsdt ?? '0');
+}
+
+/** Futures: get available balance in USDT. */
+async function getFuturesBalanceBybit(
+  credentials: { apiKey: string; apiSecret: string },
+  environment: 'production' | 'testnet'
+): Promise<number> {
+  const creds: bybitFutures.BybitFuturesCredentials = { apiKey: credentials.apiKey, apiSecret: credentials.apiSecret, environment };
+  const summary = await bybitFutures.getAccountSummary(creds);
+  return parseFloat(summary.availableBalanceUsdt ?? '0');
+}
 
 function sanitizeForAudit(obj: unknown): unknown {
   if (obj == null) return null;
@@ -281,6 +356,68 @@ export async function executeOrder(
         message: preflight.human_message,
       };
     }
+    const qtyNum = parseFloat(qty);
+    const notional = qtyNum * priceForNotional;
+    const feePct = getFeeBufferPercent();
+    const feeMultiplier = 1 + feePct / 100;
+    let requiredBalance: number;
+    let availableBalance: number;
+    try {
+      if (params.exchange === 'binance') {
+        const { baseFree, quoteFree } = await getSpotBalanceBinance(params.credentials, sym, env);
+        if (side === 'BUY') {
+          requiredBalance = (params.requestedQuote ?? notional) * feeMultiplier;
+          availableBalance = quoteFree;
+        } else {
+          requiredBalance = qtyNum * feeMultiplier;
+          availableBalance = baseFree;
+        }
+      } else {
+        const { baseFree, quoteFree } = await getSpotBalanceBybit(params.credentials, sym, env);
+        if (side === 'BUY') {
+          requiredBalance = (params.requestedQuote ?? notional) * feeMultiplier;
+          availableBalance = quoteFree;
+        } else {
+          requiredBalance = qtyNum * feeMultiplier;
+          availableBalance = baseFree;
+        }
+      }
+    } catch (balanceErr) {
+      const msg = balanceErr instanceof Error ? balanceErr.message : 'Balance fetch failed';
+      const sanitized = msg.replace(/api[_-]?key/gi, '[REDACTED]').replace(/secret/gi, '[REDACTED]');
+      await writeAudit(client, {
+        ...auditRow,
+        status: 'FAILED',
+        error_code: 'BALANCE_FETCH_FAILED',
+        error_message: sanitized,
+        precheck_result: { ...preflight, balanceError: 'fetch_failed' },
+      });
+      return { success: false, status: 'FAILED', reason_code: 'BALANCE_FETCH_FAILED', message: sanitized };
+    }
+    if (availableBalance < requiredBalance) {
+      const precheckWithBalance = {
+        ...preflight,
+        availableBalance,
+        requiredBalance,
+        feeBufferUsed: feePct,
+      };
+      await writeAudit(client, {
+        ...auditRow,
+        status: 'SKIPPED',
+        error_code: 'INSUFFICIENT_BALANCE',
+        error_message: `Available ${availableBalance.toFixed(4)} < required ${requiredBalance.toFixed(4)} (incl. ${feePct}% fee buffer)`,
+        available_balance: availableBalance,
+        required_balance: requiredBalance,
+        precheck_result: precheckWithBalance,
+        min_notional: preflight.minNotional ?? null,
+      });
+      return {
+        success: false,
+        status: 'SKIPPED',
+        reason_code: 'INSUFFICIENT_BALANCE',
+        message: `Insufficient balance. Available: ${availableBalance.toFixed(4)}, required: ${requiredBalance.toFixed(4)} (incl. ${feePct}% fee buffer).`,
+      };
+    }
     try {
       if (params.exchange === 'binance') {
         const creds: binance.BinanceCredentials = {
@@ -314,6 +451,9 @@ export async function executeOrder(
           exchange_response: res,
           status: 'PLACED',
           min_notional: preflight.minNotional ?? null,
+          available_balance: availableBalance,
+          required_balance: requiredBalance,
+          precheck_result: { ...preflight, feeBufferUsed: feePct },
         });
         return { success: true, status: 'PLACED', exchange_order_id: orderId, message: 'Order placed' };
       } else {
@@ -347,19 +487,24 @@ export async function executeOrder(
           exchange_response: res,
           status: 'PLACED',
           min_notional: preflight.minNotional ?? null,
+          available_balance: availableBalance,
+          required_balance: requiredBalance,
+          precheck_result: { ...preflight, feeBufferUsed: feePct },
         });
         return { success: true, status: 'PLACED', exchange_order_id: orderId, message: 'Order placed' };
       }
     } catch (e) {
-      const errMsg = e instanceof Error ? e.message : 'Place order failed';
+      const err = e as Error & { bybitReasonCode?: string; retCode?: number };
+      const errMsg = err.message || 'Place order failed';
       const sanitized = errMsg.replace(/api[_-]?key/gi, '[REDACTED]').replace(/secret/gi, '[REDACTED]');
+      const reasonCode = err.bybitReasonCode ?? 'EXCHANGE_ERROR';
       await writeAudit(client, {
         ...auditRow,
         status: 'FAILED',
-        error_code: 'EXCHANGE_ERROR',
+        error_code: reasonCode,
         error_message: sanitized,
       });
-      return { success: false, status: 'FAILED', reason_code: 'EXCHANGE_ERROR', message: sanitized };
+      return { success: false, status: 'FAILED', reason_code: reasonCode, message: sanitized };
     }
   } else {
     const preflight = await preflightFutures(params.exchange, sym, qty);
@@ -372,6 +517,64 @@ export async function executeOrder(
         precheck_result: preflight,
       });
       return { success: false, status: 'SKIPPED', reason_code: preflight.reason_code, message: preflight.human_message };
+    }
+    const qtyNumF = parseFloat(qty);
+    const leverage = params.leverage ?? DEFAULT_FUTURES_LEVERAGE;
+    let markPrice: number;
+    try {
+      if (params.exchange === 'binance') {
+        markPrice = await binanceFutures.getMarkPrice(env, sym);
+      } else {
+        markPrice = await bybitFutures.getMarkPrice(env, sym);
+      }
+    } catch (markErr) {
+      const msg = markErr instanceof Error ? markErr.message : 'Mark price fetch failed';
+      await writeAudit(client, {
+        ...auditRow,
+        status: 'FAILED',
+        error_code: 'TICKER_FAILED',
+        error_message: msg,
+        precheck_result: { ...preflight, markPriceError: 'fetch_failed' },
+      });
+      return { success: false, status: 'FAILED', reason_code: 'TICKER_FAILED', message: msg };
+    }
+    const requiredMargin = (qtyNumF * markPrice) / (leverage >= 1 ? leverage : DEFAULT_FUTURES_LEVERAGE);
+    let availableMargin: number;
+    try {
+      if (params.exchange === 'binance') {
+        availableMargin = await getFuturesBalanceBinance(params.credentials, env);
+      } else {
+        availableMargin = await getFuturesBalanceBybit(params.credentials, env);
+      }
+    } catch (balanceErr) {
+      const msg = balanceErr instanceof Error ? balanceErr.message : 'Balance fetch failed';
+      const sanitized = msg.replace(/api[_-]?key/gi, '[REDACTED]').replace(/secret/gi, '[REDACTED]');
+      await writeAudit(client, {
+        ...auditRow,
+        status: 'FAILED',
+        error_code: 'BALANCE_FETCH_FAILED',
+        error_message: sanitized,
+        precheck_result: { ...preflight, balanceError: 'fetch_failed' },
+      });
+      return { success: false, status: 'FAILED', reason_code: 'BALANCE_FETCH_FAILED', message: sanitized };
+    }
+    if (availableMargin < requiredMargin) {
+      const precheckWithBalance = { ...preflight, availableBalance: availableMargin, requiredBalance: requiredMargin };
+      await writeAudit(client, {
+        ...auditRow,
+        status: 'SKIPPED',
+        error_code: 'INSUFFICIENT_BALANCE',
+        error_message: `Available margin ${availableMargin.toFixed(2)} USDT < required ~${requiredMargin.toFixed(2)} USDT (qty×markPrice/leverage)`,
+        available_balance: availableMargin,
+        required_balance: requiredMargin,
+        precheck_result: precheckWithBalance,
+      });
+      return {
+        success: false,
+        status: 'SKIPPED',
+        reason_code: 'INSUFFICIENT_BALANCE',
+        message: `Insufficient margin. Available: ${availableMargin.toFixed(2)} USDT, required ~${requiredMargin.toFixed(2)} USDT.`,
+      };
     }
     try {
       if (params.exchange === 'binance') {
@@ -386,7 +589,15 @@ export async function executeOrder(
           await writeAudit(client, { ...auditRow, status: 'FAILED', error_code: 'NO_ORDER_ID', error_message: 'Exchange did not return orderId', exchange_response: res });
           return { success: false, status: 'FAILED', reason_code: 'NO_ORDER_ID', message: 'Exchange did not return orderId' };
         }
-        await writeAudit(client, { ...auditRow, exchange_order_id: orderId, exchange_response: res, status: 'PLACED' });
+        await writeAudit(client, {
+          ...auditRow,
+          exchange_order_id: orderId,
+          exchange_response: res,
+          status: 'PLACED',
+          available_balance: availableMargin,
+          required_balance: requiredMargin,
+          precheck_result: { ...preflight, availableBalance: availableMargin, requiredBalance: requiredMargin },
+        });
         return { success: true, status: 'PLACED', exchange_order_id: orderId, message: 'Order placed' };
       } else {
         const creds: bybitFutures.BybitFuturesCredentials = {
@@ -400,14 +611,24 @@ export async function executeOrder(
           await writeAudit(client, { ...auditRow, status: 'FAILED', error_code: 'NO_ORDER_ID', error_message: 'Exchange did not return orderId', exchange_response: res });
           return { success: false, status: 'FAILED', reason_code: 'NO_ORDER_ID', message: 'Exchange did not return orderId' };
         }
-        await writeAudit(client, { ...auditRow, exchange_order_id: orderId, exchange_response: res, status: 'PLACED' });
+        await writeAudit(client, {
+          ...auditRow,
+          exchange_order_id: orderId,
+          exchange_response: res,
+          status: 'PLACED',
+          available_balance: availableMargin,
+          required_balance: requiredMargin,
+          precheck_result: { ...preflight, availableBalance: availableMargin, requiredBalance: requiredMargin },
+        });
         return { success: true, status: 'PLACED', exchange_order_id: orderId, message: 'Order placed' };
       }
     } catch (e) {
-      const errMsg = e instanceof Error ? e.message : 'Place order failed';
+      const err = e as Error & { bybitReasonCode?: string };
+      const errMsg = err.message || 'Place order failed';
       const sanitized = errMsg.replace(/api[_-]?key/gi, '[REDACTED]').replace(/secret/gi, '[REDACTED]');
-      await writeAudit(client, { ...auditRow, status: 'FAILED', error_code: 'EXCHANGE_ERROR', error_message: sanitized });
-      return { success: false, status: 'FAILED', reason_code: 'EXCHANGE_ERROR', message: sanitized };
+      const reasonCode = err.bybitReasonCode ?? 'EXCHANGE_ERROR';
+      await writeAudit(client, { ...auditRow, status: 'FAILED', error_code: reasonCode, error_message: sanitized });
+      return { success: false, status: 'FAILED', reason_code: reasonCode, message: sanitized };
     }
   }
 }

@@ -5,6 +5,7 @@
  */
 
 import { createHmac } from 'crypto';
+import { mapBybitRetCodeToReasonCode } from './bybit.js';
 import type {
   MarginMode,
   PositionMode,
@@ -36,15 +37,34 @@ function sign(plain: string, secret: string): string {
 
 const RECV_WINDOW = 10000;
 
+/** Bybit server time (public). Same as spot; used for timestamp retry. */
+async function getServerTime(env: BybitFuturesEnvironment): Promise<number> {
+  const base = getBaseUrl(env);
+  const res = await fetch(`${base}/v5/market/time`, { signal: AbortSignal.timeout(5000) });
+  const data = (await res.json()) as { retCode?: number; result?: { timeSecond?: string }; time?: number };
+  if (data.retCode !== 0 && data.retCode !== undefined) throw new Error(`Bybit time: ${data.retCode}`);
+  const ms = data.time ?? (data.result?.timeSecond ? parseInt(data.result.timeSecond, 10) * 1000 : NaN);
+  if (Number.isNaN(ms) || ms <= 0) throw new Error('Invalid Bybit server time');
+  return ms;
+}
+
+function isBybitTimestampOrSignError(retCode: number, retMsg: string): boolean {
+  const msg = (retMsg || '').toLowerCase();
+  if (retCode === 10004) return true;
+  if (retCode === 10001 && /time|timestamp|recv|expired/i.test(msg)) return true;
+  return /timestamp|recv.?window|request.?expired|sign.*invalid/i.test(msg);
+}
+
 async function signedRequest<T>(
   method: 'GET' | 'POST',
   endpoint: string,
   creds: BybitFuturesCredentials,
   queryParams: Record<string, string> = {},
-  body?: object
+  body?: object,
+  timestampOverrideMs?: number
 ): Promise<T> {
   const base = getBaseUrl(creds.environment);
-  const timestamp = Date.now().toString();
+  const timestamp = (timestampOverrideMs ?? Date.now()).toString();
   const queryString = new URLSearchParams(queryParams).toString();
   const signPlain = method === 'GET'
     ? timestamp + creds.apiKey + RECV_WINDOW + queryString
@@ -66,10 +86,33 @@ async function signedRequest<T>(
   const res = await fetch(url, opts);
   const data = await res.json() as { retCode?: number; retMsg?: string; result?: T };
   if (data.retCode != null && data.retCode !== 0) {
-    throw new Error(`Bybit Futures (${data.retCode}): ${data.retMsg || res.statusText}`);
+    const err = new Error(`Bybit Futures (${data.retCode}): ${data.retMsg || res.statusText}`) as Error & { retCode?: number; retMsg?: string; bybitReasonCode?: string };
+    err.retCode = data.retCode;
+    err.retMsg = data.retMsg;
+    err.bybitReasonCode = mapBybitRetCodeToReasonCode(data.retCode, data.retMsg ?? '');
+    throw err;
   }
   if (!res.ok) throw new Error(`Bybit Futures HTTP ${res.status}: ${data.retMsg || res.statusText}`);
   return data.result as T;
+}
+
+async function signedRequestWithRetry<T>(
+  method: 'GET' | 'POST',
+  endpoint: string,
+  creds: BybitFuturesCredentials,
+  queryParams: Record<string, string> = {},
+  body?: object
+): Promise<T> {
+  try {
+    return await signedRequest<T>(method, endpoint, creds, queryParams, body, undefined);
+  } catch (e) {
+    const err = e as Error & { retCode?: number; retMsg?: string };
+    if (err.retCode != null && isBybitTimestampOrSignError(err.retCode, err.retMsg ?? '')) {
+      const serverTime = await getServerTime(creds.environment);
+      return await signedRequest<T>(method, endpoint, creds, queryParams, body, serverTime);
+    }
+    throw e;
+  }
 }
 
 const CATEGORY = 'linear';
@@ -163,7 +206,7 @@ export async function placeOrder(
   if (params.positionSide && params.positionSide !== 'BOTH') {
     body.positionIdx = params.positionSide === 'LONG' ? '1' : '2';
   }
-  const result = await signedRequest<{ orderId?: string; orderStatus?: string }>(
+  const result = await signedRequestWithRetry<{ orderId?: string; orderStatus?: string }>(
     'POST',
     '/v5/order/create',
     creds,

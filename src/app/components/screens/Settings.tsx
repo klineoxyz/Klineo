@@ -10,7 +10,7 @@ import { Alert, AlertDescription } from "@/app/components/ui/alert";
 import { AlertTriangle, Key, Shield, Wifi, Trash2, CheckCircle2, XCircle, Loader2, Plus, KeyRound, RefreshCw, Upload } from "lucide-react";
 import { useAuth } from "@/app/contexts/AuthContext";
 import { useDemo } from "@/app/contexts/DemoContext";
-import { api, exchangeConnections, getApiErrorMessage, isBackendUnreachableError, sanitizeExchangeError, type ExchangeConnection } from "@/lib/api";
+import { api, exchangeConnections, trading, getApiErrorMessage, isBackendUnreachableError, sanitizeExchangeError, type ExchangeConnection } from "@/lib/api";
 import { supabase } from "@/lib/supabase";
 import { toast } from "@/app/lib/toast";
 import { Badge } from "@/app/components/ui/badge";
@@ -79,6 +79,7 @@ export function Settings({ onNavigate }: SettingsProps) {
   const [updateCredsForm, setUpdateCredsForm] = useState({ apiKey: "", apiSecret: "", environment: "production" as "production" | "testnet" });
   const [updateCredsLoading, setUpdateCredsLoading] = useState(false);
   const [manageFuturesConn, setManageFuturesConn] = useState<ExchangeConnection | null>(null);
+  const [permissionCheckLoading, setPermissionCheckLoading] = useState<string | null>(null);
 
   // Referral code (required to use platform / buy packages)
   const [hasReferral, setHasReferral] = useState(false);
@@ -494,6 +495,24 @@ export function Settings({ onNavigate }: SettingsProps) {
       toast.error('Futures test failed', { description: sanitizeExchangeError(err?.message) });
     } finally {
       setFuturesTestId(null);
+    }
+  };
+
+  const handleCheckPermissions = async (conn: ExchangeConnection, marketType: 'spot' | 'futures') => {
+    const key = `${conn.id}_${marketType}`;
+    setPermissionCheckLoading(key);
+    try {
+      const result = await trading.checkPermissions(conn.exchange as 'binance' | 'bybit', marketType);
+      if (result.ok) {
+        toast.success(`Permissions OK (${marketType})`, { description: result.message });
+      } else {
+        toast.error(result.reason_code ?? 'Permission check failed', { description: result.message });
+      }
+    } catch (err: any) {
+      const msg = getApiErrorMessage(err);
+      toast.error('Permission check failed', { description: sanitizeExchangeError(msg) });
+    } finally {
+      setPermissionCheckLoading(null);
     }
   };
 
@@ -1239,6 +1258,30 @@ export function Settings({ onNavigate }: SettingsProps) {
                           "Test Spot"
                         )}
                       </Button>
+                      {(conn.exchange === "binance" || conn.exchange === "bybit") && (
+                        <>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleCheckPermissions(conn, 'spot')}
+                            disabled={permissionCheckLoading === `${conn.id}_spot`}
+                            title="Check that this key can trade Spot (read-only, IP, etc.)."
+                          >
+                            {permissionCheckLoading === `${conn.id}_spot` ? <Loader2 className="size-4 animate-spin" /> : <Shield className="size-3.5" />}
+                            {" Check permissions (Spot)"}
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleCheckPermissions(conn, 'futures')}
+                            disabled={permissionCheckLoading === `${conn.id}_futures`}
+                            title="Check that this key can access Futures (if enabled)."
+                          >
+                            {permissionCheckLoading === `${conn.id}_futures` ? <Loader2 className="size-4 animate-spin" /> : <Shield className="size-3.5" />}
+                            {" Check permissions (Futures)"}
+                          </Button>
+                        </>
+                      )}
                       {(conn.exchange === "binance" || conn.exchange === "bybit") && (
                         <>
                           <Button
