@@ -13,8 +13,9 @@ import { ConfirmationDialog } from "@/app/components/ui/confirmation-dialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/app/components/ui/dialog";
 import { toast } from "@/app/lib/toast";
 import { copyToClipboard } from "@/app/lib/clipboard";
-import { Search, Shield, ChevronLeft, ChevronRight, Download, Filter, Settings2, Percent, Calendar, Save, Copy, Link2, Trash2, RefreshCw, Ticket, Banknote, CheckCircle } from "lucide-react";
+import { Search, Shield, ChevronLeft, ChevronRight, Download, Filter, Settings2, Percent, Calendar, Save, Copy, Link2, Trash2, RefreshCw, Ticket, Banknote, CheckCircle, Zap, Bug } from "lucide-react";
 import { AdminFinancialRatios } from "@/app/components/screens/AdminFinancialRatios";
+import { SmokeTest } from "@/app/components/screens/SmokeTest";
 
 /** Download array of objects as CSV (client-side). */
 function downloadCSV(rows: Record<string, unknown>[], columns: { key: string; header: string }[], filename: string) {
@@ -134,6 +135,17 @@ export function Admin() {
   const [masterTraderReviewStatus, setMasterTraderReviewStatus] = useState<"view" | "approved" | "rejected">("view");
   const [masterTraderReviewMessage, setMasterTraderReviewMessage] = useState("");
   const [masterTraderReviewLoading, setMasterTraderReviewLoading] = useState(false);
+
+  // Execution Debug (admin support)
+  const [executionDebugEmail, setExecutionDebugEmail] = useState("");
+  const [executionDebugExchange, setExecutionDebugExchange] = useState<string>("");
+  const [executionDebugSource, setExecutionDebugSource] = useState<string>("");
+  const [executionDebugStatus, setExecutionDebugStatus] = useState<string>("");
+  const [executionDebugRows, setExecutionDebugRows] = useState<any[]>([]);
+  const [executionDebugCounts, setExecutionDebugCounts] = useState<Record<string, number>>({});
+  const [executionDebugUserEmail, setExecutionDebugUserEmail] = useState<string | null>(null);
+  const [executionDebugLoading, setExecutionDebugLoading] = useState(false);
+  const [executionDebugExportLoading, setExecutionDebugExportLoading] = useState(false);
 
   // Load stats on mount (live data from API)
   useEffect(() => {
@@ -395,6 +407,76 @@ export function Admin() {
       toast.error('Failed to load audit logs');
     } finally {
       setAuditLogsLoading(false);
+    }
+  };
+
+  const loadExecutionDebug = async () => {
+    const email = executionDebugEmail.trim();
+    if (!email || email.length < 2) {
+      toast.error("Enter user email (min 2 characters)");
+      return;
+    }
+    setExecutionDebugLoading(true);
+    try {
+      const params = new URLSearchParams();
+      params.set("email", email);
+      params.set("limit", "50");
+      if (executionDebugExchange) params.set("exchange", executionDebugExchange);
+      if (executionDebugSource) params.set("source", executionDebugSource);
+      if (executionDebugStatus) params.set("status", executionDebugStatus);
+      const data = await api.get(`/api/admin/execution-debug?${params.toString()}`);
+      setExecutionDebugRows((data as any).rows || []);
+      setExecutionDebugCounts((data as any).errorCodeCounts || {});
+      setExecutionDebugUserEmail((data as any).userEmail ?? null);
+    } catch (err: any) {
+      console.error("Execution debug failed:", err);
+      toast.error(err?.message || "Failed to load execution debug");
+      setExecutionDebugRows([]);
+      setExecutionDebugCounts({});
+      setExecutionDebugUserEmail(null);
+    } finally {
+      setExecutionDebugLoading(false);
+    }
+  };
+
+  const doExecutionDebugExport = async () => {
+    const email = executionDebugEmail.trim() || executionDebugUserEmail;
+    if (!email || email.length < 2) {
+      toast.error("Enter user email or run a search first");
+      return;
+    }
+    setExecutionDebugExportLoading(true);
+    try {
+      const params = new URLSearchParams();
+      params.set("email", email);
+      params.set("limit", "500");
+      if (executionDebugExchange) params.set("exchange", executionDebugExchange);
+      if (executionDebugSource) params.set("source", executionDebugSource);
+      if (executionDebugStatus) params.set("status", executionDebugStatus);
+      const data = await api.get(`/api/admin/execution-debug/export?${params.toString()}`);
+      const rows = (data as any).rows || [];
+      const columns = [
+        { key: "created_at", header: "Created At" },
+        { key: "userEmail", header: "User Email" },
+        { key: "exchange", header: "Exchange" },
+        { key: "market_type", header: "Market" },
+        { key: "symbol", header: "Symbol" },
+        { key: "side", header: "Side" },
+        { key: "source", header: "Source" },
+        { key: "status", header: "Status" },
+        { key: "verify_status", header: "Verify Status" },
+        { key: "verify_used", header: "Verify Used" },
+        { key: "error_code", header: "Error Code" },
+        { key: "error_message", header: "Error Message" },
+        { key: "exchange_order_id", header: "Exchange Order ID" },
+      ];
+      downloadCSV(rows, columns, `execution-audit-${email.replace(/[^a-z0-9]/gi, "-").slice(0, 40)}.csv`);
+      toast.success(`Exported ${rows.length} rows`);
+    } catch (err: any) {
+      console.error("Export failed:", err);
+      toast.error(err?.message || "Failed to export CSV");
+    } finally {
+      setExecutionDebugExportLoading(false);
     }
   };
 
@@ -784,6 +866,14 @@ export function Admin() {
           <TabsTrigger value="financial-ratios">Financial Ratios</TabsTrigger>
           <TabsTrigger value="runner">Runner</TabsTrigger>
           <TabsTrigger value="audit">Audit Logs</TabsTrigger>
+          <TabsTrigger value="execution-debug">
+            <Bug className="size-4 mr-1.5" />
+            Execution Debug
+          </TabsTrigger>
+          <TabsTrigger value="smoke">
+            <Zap className="size-4 mr-1.5" />
+            Smoke Test
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="users" className="space-y-4" onFocus={() => loadUsers(1, usersSearch)}>
@@ -2661,6 +2751,144 @@ export function Admin() {
                 </TableBody>
               </Table>
             )}
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="execution-debug" className="space-y-4">
+          <Card className="p-4">
+            <div className="flex flex-wrap items-end gap-3">
+              <div className="flex-1 min-w-[200px]">
+                <Label className="text-xs text-muted-foreground">User email</Label>
+                <Input
+                  placeholder="user@example.com"
+                  value={executionDebugEmail}
+                  onChange={(e) => setExecutionDebugEmail(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && loadExecutionDebug()}
+                />
+              </div>
+              <Select value={executionDebugExchange || "all"} onValueChange={(v) => setExecutionDebugExchange(v === "all" ? "" : v)}>
+                <SelectTrigger className="w-[120px]">
+                  <SelectValue placeholder="Exchange" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All exchanges</SelectItem>
+                  <SelectItem value="binance">Binance</SelectItem>
+                  <SelectItem value="bybit">Bybit</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={executionDebugSource || "all"} onValueChange={(v) => setExecutionDebugSource(v === "all" ? "" : v)}>
+                <SelectTrigger className="w-[120px]">
+                  <SelectValue placeholder="Source" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All sources</SelectItem>
+                  <SelectItem value="DCA">DCA</SelectItem>
+                  <SelectItem value="GRID">Grid</SelectItem>
+                  <SelectItem value="COPY">Copy</SelectItem>
+                  <SelectItem value="TERMINAL">Terminal</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={executionDebugStatus || "all"} onValueChange={(v) => setExecutionDebugStatus(v === "all" ? "" : v)}>
+                <SelectTrigger className="w-[120px]">
+                  <SelectValue placeholder="Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All statuses</SelectItem>
+                  <SelectItem value="PLACED">PLACED</SelectItem>
+                  <SelectItem value="SKIPPED">SKIPPED</SelectItem>
+                  <SelectItem value="FAILED">FAILED</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button onClick={loadExecutionDebug} disabled={executionDebugLoading}>
+                {executionDebugLoading ? "Loading…" : "Search"}
+              </Button>
+              <Button variant="outline" onClick={doExecutionDebugExport} disabled={executionDebugExportLoading || executionDebugRows.length === 0}>
+                <Download className="size-4 mr-2" />
+                {executionDebugExportLoading ? "Exporting…" : "Download CSV"}
+              </Button>
+            </div>
+          </Card>
+          {Object.keys(executionDebugCounts).length > 0 && (
+            <Card className="p-4">
+              <h4 className="text-sm font-medium mb-2">Error / status breakdown (last 50)</h4>
+              <div className="flex flex-wrap gap-2">
+                {Object.entries(executionDebugCounts)
+                  .sort((a, b) => b[1] - a[1])
+                  .map(([code, count]) => (
+                    <Badge key={code} variant={code === "PLACED" ? "default" : code === "FAILED" ? "destructive" : "secondary"}>
+                      {code}: {count}
+                    </Badge>
+                  ))}
+              </div>
+            </Card>
+          )}
+          <Card>
+            {executionDebugUserEmail && (
+              <p className="text-sm text-muted-foreground p-2 border-b">
+                Showing audit for: <strong>{executionDebugUserEmail}</strong> (last 50)
+              </p>
+            )}
+            {executionDebugLoading ? (
+              <div className="p-8 text-center text-muted-foreground">Loading…</div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-[140px]">Time</TableHead>
+                    <TableHead>Exchange</TableHead>
+                    <TableHead>Market</TableHead>
+                    <TableHead>Symbol</TableHead>
+                    <TableHead>Side</TableHead>
+                    <TableHead>Source</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Verify</TableHead>
+                    <TableHead>Verify used</TableHead>
+                    <TableHead>Error code</TableHead>
+                    <TableHead className="max-w-[180px]">Message</TableHead>
+                    <TableHead className="font-mono text-xs">Order ID</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {executionDebugRows.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={12} className="text-center text-muted-foreground py-8">
+                        Enter user email and click Search to load last 50 audit rows.
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    executionDebugRows.map((row: any, i: number) => (
+                      <TableRow key={row.id || i}>
+                        <TableCell className="text-xs whitespace-nowrap">
+                          {row.created_at ? new Date(row.created_at).toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" }) : "—"}
+                        </TableCell>
+                        <TableCell className="text-sm">{row.exchange ?? "—"}</TableCell>
+                        <TableCell className="text-sm">{row.market_type ?? "—"}</TableCell>
+                        <TableCell className="font-mono text-sm">{row.symbol ?? "—"}</TableCell>
+                        <TableCell className="text-sm">{row.side ?? "—"}</TableCell>
+                        <TableCell className="text-sm">{row.source ?? "—"}</TableCell>
+                        <TableCell>
+                          <Badge variant={row.status === "PLACED" ? "default" : row.status === "FAILED" ? "destructive" : "secondary"}>{row.status}</Badge>
+                        </TableCell>
+                        <TableCell className="text-xs">{row.verify_status ?? "—"}</TableCell>
+                        <TableCell className="text-xs">{row.verify_used ?? "—"}</TableCell>
+                        <TableCell className="text-xs text-muted-foreground">{row.error_code ?? "—"}</TableCell>
+                        <TableCell className="text-xs text-muted-foreground max-w-[180px] truncate" title={row.error_message ?? undefined}>{row.error_message ?? "—"}</TableCell>
+                        <TableCell className="font-mono text-xs max-w-[100px] truncate" title={row.exchange_order_id ?? undefined}>{row.exchange_order_id ?? "—"}</TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            )}
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="smoke" className="space-y-4">
+          <Card className="p-4">
+            <p className="text-sm text-muted-foreground mb-4">
+              Run smoke tests to verify core flows (auth, API, entitlements, exchange connectivity when enabled). Use before/after deploy.
+            </p>
+            <SmokeTest />
           </Card>
         </TabsContent>
       </Tabs>

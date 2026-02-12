@@ -1876,3 +1876,140 @@ adminRouter.post('/payments/intents/:id/reject',
     res.json(updated);
   }
 );
+
+/**
+ * GET /api/admin/execution-debug
+ * Admin-only: search order_execution_audit by user email, with filters. Returns last 50 rows + error_code counts.
+ * Query: email (required), exchange?, source?, status?, limit? (default 50, max 100)
+ */
+adminRouter.get('/execution-debug', async (req, res) => {
+  const client = getSupabase();
+  if (!client) return res.status(503).json({ error: 'Database unavailable' });
+  const email = (req.query.email as string)?.trim();
+  if (!email || email.length < 2) {
+    return res.status(400).json({ error: 'email is required (min 2 characters)' });
+  }
+  try {
+    const { data: profiles } = await client
+      .from('user_profiles')
+      .select('id, email')
+      .ilike('email', `%${email.replace(/[%_\\]/g, '')}%`)
+      .limit(5);
+    if (!profiles?.length) {
+      return res.json({ rows: [], errorCodeCounts: {}, userEmail: null });
+    }
+    const userId = (profiles as { id: string }[])[0].id;
+    const userEmail = (profiles as { email?: string }[])[0].email ?? email;
+    const exchange = (req.query.exchange as string)?.trim();
+    const source = (req.query.source as string)?.trim();
+    const status = (req.query.status as string)?.trim();
+    const limit = Math.min(Math.max(1, parseInt(req.query.limit as string) || 50), 100);
+    let q = client
+      .from('order_execution_audit')
+      .select('id, user_id, source, exchange, market_type, symbol, side, order_type, status, error_code, error_message, exchange_order_id, precheck_result, created_at')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(limit);
+    if (exchange && ['binance', 'bybit'].includes(exchange)) q = q.eq('exchange', exchange);
+    if (source && ['DCA', 'GRID', 'COPY', 'TERMINAL'].includes(source)) q = q.eq('source', source);
+    if (status && ['PLACED', 'SKIPPED', 'FAILED'].includes(status)) q = q.eq('status', status);
+    const { data: rows, error } = await q;
+    if (error) {
+      console.error('Execution debug error:', error);
+      return res.status(500).json({ error: 'Failed to fetch execution audit' });
+    }
+    const list = (rows || []).map((r: any) => ({
+      id: r.id,
+      user_id: r.user_id,
+      userEmail,
+      source: r.source,
+      exchange: r.exchange,
+      market_type: r.market_type,
+      symbol: r.symbol,
+      side: r.side,
+      order_type: r.order_type,
+      status: r.status,
+      error_code: r.error_code ?? null,
+      error_message: r.error_message ?? null,
+      exchange_order_id: r.exchange_order_id ?? null,
+      verify_status: r.precheck_result?.verify_status ?? null,
+      verify_used: r.precheck_result?.verify_used ?? null,
+      verify_identifier_value: r.precheck_result?.verify_identifier_value ?? null,
+      created_at: r.created_at,
+    }));
+    const errorCodeCounts: Record<string, number> = {};
+    for (const r of list) {
+      const key = r.status === 'FAILED' ? (r.error_code || 'UNKNOWN') : r.status;
+      errorCodeCounts[key] = (errorCodeCounts[key] || 0) + 1;
+    }
+    res.json({ rows: list, errorCodeCounts, userEmail });
+  } catch (err) {
+    console.error('Execution debug error:', err);
+    res.status(500).json({ error: 'Failed to fetch execution debug' });
+  }
+});
+
+/**
+ * GET /api/admin/execution-debug/export
+ * Same as execution-debug but returns up to 500 rows for CSV download. Frontend builds CSV from JSON.
+ */
+adminRouter.get('/execution-debug/export', async (req, res) => {
+  const client = getSupabase();
+  if (!client) return res.status(503).json({ error: 'Database unavailable' });
+  const email = (req.query.email as string)?.trim();
+  if (!email || email.length < 2) {
+    return res.status(400).json({ error: 'email is required (min 2 characters)' });
+  }
+  try {
+    const { data: profiles } = await client
+      .from('user_profiles')
+      .select('id, email')
+      .ilike('email', `%${email.replace(/[%_\\]/g, '')}%`)
+      .limit(1);
+    if (!profiles?.length) {
+      return res.json({ rows: [] });
+    }
+    const userId = (profiles as { id: string }[])[0].id;
+    const userEmail = (profiles as { email?: string }[])[0].email ?? email;
+    const exchange = (req.query.exchange as string)?.trim();
+    const source = (req.query.source as string)?.trim();
+    const status = (req.query.status as string)?.trim();
+    const limit = Math.min(Math.max(1, parseInt(req.query.limit as string) || 500), 1000);
+    let q = client
+      .from('order_execution_audit')
+      .select('id, user_id, source, exchange, market_type, symbol, side, order_type, status, error_code, error_message, exchange_order_id, precheck_result, created_at')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(limit);
+    if (exchange && ['binance', 'bybit'].includes(exchange)) q = q.eq('exchange', exchange);
+    if (source && ['DCA', 'GRID', 'COPY', 'TERMINAL'].includes(source)) q = q.eq('source', source);
+    if (status && ['PLACED', 'SKIPPED', 'FAILED'].includes(status)) q = q.eq('status', status);
+    const { data: rows, error } = await q;
+    if (error) {
+      console.error('Execution debug export error:', error);
+      return res.status(500).json({ error: 'Failed to export' });
+    }
+    const list = (rows || []).map((r: any) => ({
+      id: r.id,
+      user_id: r.user_id,
+      userEmail,
+      source: r.source,
+      exchange: r.exchange,
+      market_type: r.market_type,
+      symbol: r.symbol,
+      side: r.side,
+      order_type: r.order_type,
+      status: r.status,
+      error_code: r.error_code ?? '',
+      error_message: (r.error_message ?? '').replace(/\r?\n/g, ' '),
+      exchange_order_id: r.exchange_order_id ?? '',
+      verify_status: r.precheck_result?.verify_status ?? '',
+      verify_used: r.precheck_result?.verify_used ?? '',
+      created_at: r.created_at,
+    }));
+    res.json({ rows: list });
+  } catch (err) {
+    console.error('Execution debug export error:', err);
+    res.status(500).json({ error: 'Failed to export' });
+  }
+});
