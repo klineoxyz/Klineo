@@ -3,7 +3,7 @@ import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
 import { Badge } from "@/app/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/app/components/ui/table";
-import { Activity, Pause, StopCircle, AlertTriangle, Loader2 } from "lucide-react";
+import { Activity, Pause, StopCircle, AlertTriangle, Loader2, ScrollText } from "lucide-react";
 import { api } from "@/lib/api";
 import { toast } from "@/app/lib/toast";
 import { notifyCopySetupsUpdated } from "@/lib/copySetupsEvents";
@@ -11,6 +11,7 @@ import { useDemo } from "@/app/contexts/DemoContext";
 import { LoadingWrapper } from "@/app/components/ui/loading-wrapper";
 import { EmptyState } from "@/app/components/ui/empty-state";
 import { ErrorState } from "@/app/components/ui/error-state";
+import { ExecutionLogsModal } from "@/app/components/screens/ExecutionLogsModal";
 import { formatDistanceToNow } from "date-fns";
 
 interface CopyTradingProps {
@@ -41,6 +42,7 @@ export function CopyTrading({ onNavigate }: CopyTradingProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [executionLogsOpen, setExecutionLogsOpen] = useState(false);
 
   const displaySetups = isDemoMode ? [...(demoCopySetups as CopySetup[]), ...copySetups] : copySetups;
 
@@ -127,11 +129,17 @@ export function CopyTrading({ onNavigate }: CopyTradingProps) {
               <Button variant="ghost" size="sm" onClick={clearDemo}>Exit demo</Button>
             </>
           )}
+          <Button variant="outline" size="sm" onClick={() => setExecutionLogsOpen(true)}>
+            <ScrollText className="size-4 mr-1.5" />
+            Execution Logs
+          </Button>
           <Button onClick={() => onNavigate("marketplace")} className="bg-primary text-primary-foreground w-full sm:w-auto">
             Browse Traders
           </Button>
         </div>
       </div>
+
+      <ExecutionLogsModal open={executionLogsOpen} onOpenChange={setExecutionLogsOpen} source="COPY" title="Copy Trading Execution Logs" />
 
       {/* Summary Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">

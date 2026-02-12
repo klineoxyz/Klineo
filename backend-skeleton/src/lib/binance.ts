@@ -403,8 +403,14 @@ export interface BinanceOrderResponse {
   side: string;
 }
 
+/** Detect timestamp/recvWindow error for retry with server time. */
+function isTimestampOrRecvWindowError(code: number, msg: string): boolean {
+  return code === -1021 || /timestamp|recvWindow|Timestamp/i.test(msg);
+}
+
 /**
  * Place spot order. Use getSpotSymbolFilters to validate qty/notional before calling.
+ * Retries once with exchange server time on -1021 / timestamp / recvWindow error.
  * https://binance-docs.github.io/apidocs/spot/en/#new-order-trade
  */
 export async function placeSpotOrder(
@@ -425,28 +431,45 @@ export async function placeSpotOrder(
   if (params.newClientOrderId != null) body.newClientOrderId = params.newClientOrderId;
 
   const baseUrl = getBaseUrl(credentials.environment);
-  const timestamp = Date.now();
   const recvWindow = 10000;
-  const queryParams = new URLSearchParams();
-  queryParams.append('timestamp', timestamp.toString());
-  queryParams.append('recvWindow', recvWindow.toString());
-  for (const [k, v] of Object.entries(body)) {
-    queryParams.append(k, String(v));
-  }
-  const queryString = queryParams.toString();
-  const signature = sign(queryString, credentials.apiSecret);
-  queryParams.append('signature', signature);
 
-  const url = `${baseUrl}/api/v3/order?${queryParams.toString()}`;
-  const response = await binanceFetch(url, {
-    method: 'POST',
-    headers: {
-      'X-MBX-APIKEY': credentials.apiKey,
-      'Content-Type': 'application/json',
-    },
-    signal: AbortSignal.timeout(15000),
-  });
-  const rawText = await response.text();
+  const doRequest = async (timestamp: number): Promise<Response> => {
+    const queryParams = new URLSearchParams();
+    queryParams.append('timestamp', timestamp.toString());
+    queryParams.append('recvWindow', recvWindow.toString());
+    for (const [k, v] of Object.entries(body)) {
+      queryParams.append(k, String(v));
+    }
+    const queryString = queryParams.toString();
+    const signature = sign(queryString, credentials.apiSecret);
+    queryParams.append('signature', signature);
+    const url = `${baseUrl}/api/v3/order?${queryParams.toString()}`;
+    return binanceFetch(url, {
+      method: 'POST',
+      headers: {
+        'X-MBX-APIKEY': credentials.apiKey,
+        'Content-Type': 'application/json',
+      },
+      signal: AbortSignal.timeout(15000),
+    });
+  };
+
+  let response = await doRequest(Date.now());
+  let rawText = await response.text();
+
+  if (!response.ok) {
+    try {
+      const err = JSON.parse(rawText) as { code?: number; msg?: string };
+      if (isTimestampOrRecvWindowError(err.code ?? 0, err.msg ?? '')) {
+        const serverTime = await getServerTime(credentials);
+        response = await doRequest(serverTime);
+        rawText = await response.text();
+      }
+    } catch {
+      /* not a JSON error or getServerTime failed; throw below */
+    }
+  }
+
   if (!response.ok) {
     try {
       const err = JSON.parse(rawText) as { code?: number; msg?: string };

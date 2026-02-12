@@ -229,6 +229,22 @@ export async function executeOrder(
     exchange_request_payload: reqPayload,
   };
 
+  const demoMode = process.env.DEMO_MODE === 'true' || process.env.DEMO_MODE === '1';
+  if (demoMode) {
+    await writeAudit(client, {
+      ...auditRow,
+      status: 'SKIPPED',
+      error_code: 'DEMO_MODE',
+      error_message: 'Demo mode: order not sent to exchange',
+    });
+    return {
+      success: false,
+      status: 'SKIPPED',
+      reason_code: 'DEMO_MODE',
+      message: 'Demo mode: order not sent to exchange',
+    };
+  }
+
   if (params.marketType === 'spot') {
     let priceForNotional = 0;
     try {

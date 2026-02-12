@@ -27,11 +27,13 @@ import {
   TrendingUp,
   CopyPlus,
   RefreshCw,
+  ScrollText,
 } from "lucide-react";
 import { toast } from "@/app/lib/toast";
 import { api, dcaBots, type DcaBot, type DcaBotFeatured, type TopBot, type EntitlementResponse } from "@/lib/api";
 import { getPresetsByRisk, filterPresetsBySearch, type DcaPreset, type DcaPresetRisk } from "@/app/data/dcaPresets";
 import { CreateBotModal } from "@/app/components/screens/dca/CreateBotModal";
+import { ExecutionLogsModal } from "@/app/components/screens/ExecutionLogsModal";
 
 interface DcaBotsPageProps {
   onNavigate: (view: string) => void;
@@ -51,6 +53,7 @@ export function DcaBotsPage({ onNavigate }: DcaBotsPageProps) {
   const [topBots, setTopBots] = useState<TopBot[]>([]);
   const [templateBot, setTemplateBot] = useState<TopBot | null>(null);
   const [triggerTickId, setTriggerTickId] = useState<string | null>(null);
+  const [executionLogsOpen, setExecutionLogsOpen] = useState(false);
   const myBotsSectionRef = useRef<HTMLDivElement>(null);
 
   const loadBots = async () => {
@@ -434,8 +437,14 @@ export function DcaBotsPage({ onNavigate }: DcaBotsPageProps) {
       {/* My Bots table */}
       <div ref={myBotsSectionRef}>
         <Card>
-        <div className="p-4 sm:p-6 border-b border-border flex flex-col gap-2">
+        <div className="p-4 sm:p-6 border-b border-border flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
           <h3 className="text-base sm:text-lg font-semibold">My Bots</h3>
+          <Button variant="outline" size="sm" onClick={() => setExecutionLogsOpen(true)}>
+            <ScrollText className="size-4 mr-1.5" />
+            Execution Logs
+          </Button>
+        </div>
+        <div className="px-4 sm:px-6 pb-2">
           {atBotLimit && activeBots.length > 0 && (
             <p className="text-sm text-amber-600 dark:text-amber-500">You&apos;re at your plan limit ({limitLabel} running bot{limitLabel !== "Unlimited" && Number(limitLabel) !== 1 ? "s" : ""}). Upgrade to run more.</p>
           )}
@@ -595,6 +604,13 @@ export function DcaBotsPage({ onNavigate }: DcaBotsPageProps) {
         )}
         </Card>
       </div>
+
+      <ExecutionLogsModal
+        open={executionLogsOpen}
+        onOpenChange={setExecutionLogsOpen}
+        source="DCA"
+        title="DCA Execution Logs"
+      />
 
       <CreateBotModal
         open={createModalOpen}

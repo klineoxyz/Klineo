@@ -40,6 +40,7 @@ import {
   AlertTriangle,
   RefreshCw,
   Key,
+  ScrollText,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Alert, AlertDescription } from "@/app/components/ui/alert";
@@ -56,6 +57,7 @@ import type { OrderBookLevel, UsdtPairInfo, Ticker24h } from "@/lib/binance";
 import type { OhlcvItem } from "@/app/components/charts/LightweightChartsWidget";
 import { Card } from "@/app/components/ui/card";
 import { FuturesEnableModal } from "@/app/components/screens/FuturesEnableModal";
+import { ExecutionLogsModal } from "@/app/components/screens/ExecutionLogsModal";
 
 type Timeframe = '1m' | '5m' | '15m' | '30m' | '1h' | '2h' | '4h' | '12h' | '1D' | '5D' | '1W' | '1M';
 
@@ -265,6 +267,7 @@ export function TradingTerminalNew({ onNavigate }: TradingTerminalProps) {
   const [killSwitchUpdating, setKillSwitchUpdating] = useState<Record<string, boolean>>({});
   const [futuresTestId, setFuturesTestId] = useState<string | null>(null);
   const [enableFuturesConnection, setEnableFuturesConnection] = useState<ExchangeConnection | null>(null);
+  const [executionLogsOpen, setExecutionLogsOpen] = useState(false);
   const futuresQuickActionsRef = useRef<HTMLDivElement>(null);
   const [manualOrderConnectionId, setManualOrderConnectionId] = useState("");
   const [manualOrderSymbol, setManualOrderSymbol] = useState("BTCUSDT");
@@ -617,6 +620,10 @@ export function TradingTerminalNew({ onNavigate }: TradingTerminalProps) {
             <Zap className="size-4 text-primary" />
             Futures Trading
           </h3>
+          <Button size="sm" variant="outline" onClick={() => setExecutionLogsOpen(true)}>
+            <ScrollText className="size-4 mr-1" />
+            Execution Logs
+          </Button>
           {supportFuturesConnections.length === 0 ? (
             <Button size="sm" className="gap-2" onClick={() => onNavigate("settings")}>
               <Key className="size-4" />
@@ -661,6 +668,8 @@ export function TradingTerminalNew({ onNavigate }: TradingTerminalProps) {
           )}
         </div>
       </Card>
+
+      <ExecutionLogsModal open={executionLogsOpen} onOpenChange={setExecutionLogsOpen} title="Terminal Execution Logs" />
 
       <FuturesEnableModal
         open={!!enableFuturesConnection}

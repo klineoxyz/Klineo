@@ -65,6 +65,7 @@ tradingRouter.get('/execution-logs', async (req: AuthenticatedRequest, res) => {
       logs: (data ?? []).map((row: any) => ({
         id: row.id,
         source: row.source,
+        reference_id: row.bot_id ?? row.copy_setup_id ?? null,
         bot_id: row.bot_id,
         copy_setup_id: row.copy_setup_id,
         exchange: row.exchange,
@@ -90,37 +91,54 @@ tradingRouter.get('/execution-logs', async (req: AuthenticatedRequest, res) => {
 
 /**
  * POST /api/trading/test-order
- * Place smallest valid market order for selected pair (spot). Uses first connected exchange for user.
+ * Place smallest valid market order. Only allowed in LIVE mode; rejected in DEMO_MODE.
+ * Input: exchange, marketType, symbol. Resolves user's first connection for that exchange.
  * Writes to order_execution_audit. Returns exchange_order_id on success.
- * Body: { connectionId: string, symbol: string } e.g. { connectionId: "uuid", symbol: "ETHUSDT" }
  */
 tradingRouter.post(
   '/test-order',
   validate([
-    body('connectionId').isUUID().withMessage('connectionId required'),
+    body('exchange').isIn(['binance', 'bybit']).withMessage('exchange must be binance or bybit'),
+    body('marketType').isIn(['spot', 'futures']).withMessage('marketType must be spot or futures'),
     body('symbol').trim().notEmpty().withMessage('symbol required'),
   ]),
   async (req: AuthenticatedRequest, res) => {
     const client = getSupabase();
     if (!client) return res.status(503).json({ error: 'Database unavailable' });
     const userId = req.user!.id;
-    const { connectionId, symbol } = req.body as { connectionId: string; symbol: string };
+    const { exchange, marketType, symbol } = req.body as { exchange: string; marketType: string; symbol: string };
     const normalizedSymbol = symbol.replace('/', '').toUpperCase();
 
+    if (process.env.DEMO_MODE === 'true' || process.env.DEMO_MODE === '1') {
+      return res.status(403).json({
+        success: false,
+        status: 'SKIPPED',
+        reason_code: 'DEMO_MODE',
+        message: 'Test order is only allowed in LIVE mode. Disable DEMO_MODE to validate API.',
+      });
+    }
+
     try {
-      const { data: connection, error: connErr } = await client
+      let query = client
         .from('user_exchange_connections')
-        .select('id, exchange, environment, encrypted_config_b64')
-        .eq('id', connectionId)
+        .select('id, exchange, environment, encrypted_config_b64, futures_enabled')
         .eq('user_id', userId)
-        .single();
+        .eq('exchange', exchange)
+        .eq('last_test_status', 'ok')
+        .is('disabled_at', null)
+        .order('created_at', { ascending: false })
+        .limit(1);
+      if (marketType === 'futures') {
+        query = query.eq('futures_enabled', true);
+      }
+      const { data: connection, error: connErr } = await query.maybeSingle();
 
       if (connErr || !connection?.encrypted_config_b64) {
         return res.status(404).json({
           success: false,
           status: 'FAILED',
           reason_code: 'CONNECTION_NOT_FOUND',
-          message: 'Connection not found',
+          message: `No valid ${exchange} ${marketType} connection found. Connect and test first.`,
         });
       }
 
@@ -128,15 +146,16 @@ tradingRouter.post(
       const parsed = JSON.parse(raw) as { apiKey: string; apiSecret: string };
       const env = (connection.environment || 'production') as 'production' | 'testnet';
 
+      const quantity = marketType === 'spot' ? '0.001' : '0.001';
       const result = await executeOrder(client, {
         userId,
         source: 'TERMINAL',
-        exchange: connection.exchange as 'binance' | 'bybit',
-        marketType: 'spot',
+        exchange: exchange as 'binance' | 'bybit',
+        marketType: marketType as 'spot' | 'futures',
         symbol: normalizedSymbol,
         side: 'buy',
         orderType: 'market',
-        quantity: '0.001',
+        quantity,
         credentials: { apiKey: parsed.apiKey, apiSecret: parsed.apiSecret },
         environment: env,
       });
