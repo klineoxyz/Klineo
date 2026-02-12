@@ -429,7 +429,7 @@ export function SmokeTest(props?: { embedInAdmin?: boolean }) {
             <span className="font-medium text-foreground">Toggles for live tests: </span>
             <span>Exchange smoke tests = {toggles.exchange ? 'ON' : 'OFF'}</span>
             <span className="mx-2">|</span>
-            <span>Runner cron secret test = {toggles.runnerCron ? 'ON' : 'OFF'}</span>
+            <span>Runner cron (admin proxy) = {toggles.runnerCron ? 'ON' : 'OFF'}</span>
             <span className="ml-2">— Skips show reason (flag, auth, or missing header) in Message column.</span>
           </div>
         );

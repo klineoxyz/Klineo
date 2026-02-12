@@ -124,3 +124,19 @@ export function requireSmokeTestsAdminIfHeader(
   }
   next();
 }
+
+/**
+ * Require x-klineo-smoke-tests: true header. Use for admin smoke endpoints to prevent accidental calls.
+ * Returns 403 with "Smoke header required" if header is missing or not 'true'.
+ */
+export function requireSmokeHeaderPresent(
+  req: Request,
+  res: Response,
+  next: NextFunction
+) {
+  const h = req.headers[SMOKE_TESTS_HEADER.toLowerCase()] ?? (req.headers as Record<string, string | undefined>)[SMOKE_TESTS_HEADER];
+  if (h !== 'true') {
+    return res.status(403).json({ error: 'Smoke header required', message: 'Send x-klineo-smoke-tests: true to run this smoke endpoint.' });
+  }
+  next();
+}

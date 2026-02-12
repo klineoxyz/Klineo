@@ -1039,30 +1039,30 @@ export const smokeTests: SmokeTestDefinition[] = [
       return result;
     }
   },
-  // POST /api/runner/cron (cron-secret) — when toggle on, call admin proxy so frontend never sees RUNNER_CRON_SECRET
+  // Runner cron (admin proxy) — when toggle on, call admin endpoint so frontend never sees RUNNER_CRON_SECRET
   {
-    name: 'POST /api/runner/cron (cron-secret)',
+    name: 'Runner cron (admin proxy)',
     category: 'admin',
     run: async () => {
       if (!getSmokeRunnerCronTestEnabled()) {
-        return { name: 'POST /api/runner/cron (cron-secret)', status: 'SKIP', message: 'Runner cron secret test disabled (toggle or VITE_ENABLE_RUNNER_CRON_TEST)' };
+        return { name: 'Runner cron (admin proxy)', status: 'SKIP', message: 'Runner cron (admin proxy) test disabled (toggle or env)' };
       }
       const user = await getCurrentUser();
       if (!user) {
-        return { name: 'POST /api/runner/cron (cron-secret)', status: 'SKIP', message: 'Login required' };
+        return { name: 'Runner cron (admin proxy)', status: 'SKIP', message: 'Login required' };
       }
       if (user.role !== 'admin') {
-        return { name: 'POST /api/runner/cron (cron-secret)', status: 'SKIP', message: 'Admin required (uses backend secret)' };
+        return { name: 'Runner cron (admin proxy)', status: 'SKIP', message: 'Admin required' };
       }
       const baseURL = getBaseURL();
       const headers = await getAuthHeaders(true);
-      const result = await runTest('POST /api/runner/cron (cron-secret)', () =>
+      const result = await runTest('Runner cron (admin proxy)', () =>
         fetch(`${baseURL}/api/admin/smoke/runner-cron-secret`, { method: 'POST', headers })
       );
       if (result.httpCode === 200 || result.httpCode === 503) {
-        return { ...result, status: 'PASS', message: result.httpCode === 503 ? 'Runner disabled (503)' : 'Success (cron-secret via admin proxy)' };
+        return { ...result, status: 'PASS', message: result.httpCode === 503 ? 'Runner disabled (503)' : 'Success (admin proxy)' };
       }
-      if (result.httpCode === 403) return { ...result, status: 'FAIL', message: 'Admin required' };
+      if (result.httpCode === 403) return { ...result, status: 'FAIL', message: 'Smoke header required or admin required' };
       return result;
     }
   },
@@ -1185,12 +1185,12 @@ const LAUNCH_PRESET_NAMES = [
   'POST /api/exchange-connections/:id/futures/test',
   'POST /api/exchange-connections/:id/futures/enable',
   'POST /api/futures/order',
-  'POST /api/runner/cron (cron-secret)',
+  'Runner cron (admin proxy)',
 ];
 
 /**
  * Run Launch preset: Public + Auth + Runner status; Futures tests SKIP unless toggle or VITE_ENABLE_EXCHANGE_SMOKE_TESTS;
- * POST /api/runner/cron (cron-secret) SKIP unless toggle or VITE_ENABLE_RUNNER_CRON_TEST.
+ * Runner cron (admin proxy) SKIP unless toggle or VITE_ENABLE_RUNNER_CRON_TEST.
  */
 export async function runLaunchTests(): Promise<SmokeTestResult[]> {
   const results: SmokeTestResult[] = [];
@@ -1212,9 +1212,9 @@ export async function runLaunchTests(): Promise<SmokeTestResult[]> {
         continue;
       }
     }
-    if (name === 'POST /api/runner/cron (cron-secret)') {
+    if (name === 'Runner cron (admin proxy)') {
       if (!runnerCronTestEnabled) {
-        results.push({ name, status: 'SKIP', message: 'Runner cron secret test disabled (toggle or env)' });
+        results.push({ name, status: 'SKIP', message: 'Runner cron (admin proxy) disabled (toggle or env)' });
         continue;
       }
     }

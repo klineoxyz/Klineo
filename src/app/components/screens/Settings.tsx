@@ -1544,7 +1544,7 @@ export function Settings({ onNavigate }: SettingsProps) {
               <Alert className="border-amber-500/50 bg-amber-500/10">
                 <Zap className="size-4 text-amber-600 dark:text-amber-500" />
                 <AlertDescription>
-                  <strong>LIVE trading tests enabled.</strong> Smoke tests (Admin → Smoke Test) will run futures/test, futures/enable, futures/order, and runner/cron (cron-secret) when you run them. Turn off when not needed.
+                  <strong>LIVE trading tests enabled.</strong> Smoke tests (Admin → Smoke Test) will run futures/test, futures/enable, futures/order, and Runner cron (admin proxy) when you run them. Turn off when not needed.
                 </AlertDescription>
               </Alert>
             )}
@@ -1573,8 +1573,8 @@ export function Settings({ onNavigate }: SettingsProps) {
                 </div>
                 <div className="flex items-center justify-between rounded-lg border border-border p-4">
                   <div>
-                    <Label htmlFor="smoke-runner-cron-toggle" className="font-medium">Enable Runner Cron Secret Test</Label>
-                    <p className="text-xs text-muted-foreground mt-1">Run POST /api/runner/cron (cron-secret) in Smoke Test</p>
+                    <Label htmlFor="smoke-runner-cron-toggle" className="font-medium">Enable Runner cron (admin proxy)</Label>
+                    <p className="text-xs text-muted-foreground mt-1">Run Runner cron (admin proxy) in Smoke Test</p>
                   </div>
                   <Switch
                     id="smoke-runner-cron-toggle"

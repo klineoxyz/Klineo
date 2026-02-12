@@ -1,6 +1,6 @@
 import crypto from 'crypto';
 import { Router } from 'express';
-import { verifySupabaseJWT, requireAdmin, AuthenticatedRequest } from '../middleware/auth.js';
+import { verifySupabaseJWT, requireAdmin, requireSmokeHeaderPresent, AuthenticatedRequest } from '../middleware/auth.js';
 import { validate, uuidParam, statusBody, optionalString, pageQuery, limitQuery, searchQuery } from '../middleware/validation.js';
 import { body } from 'express-validator';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
@@ -1340,10 +1340,10 @@ adminRouter.get('/master-trader-applications/:id/proof-url',
 
 /**
  * POST /api/admin/smoke/runner-cron-secret
- * Admin-only. Runs the same logic as POST /api/runner/cron (using backend RUNNER_CRON_SECRET internally).
+ * Admin-only. Requires x-klineo-smoke-tests: true. Runs the same logic as POST /api/runner/cron internally.
  * Used by Smoke Test so the frontend never needs the cron secret. Returns the same cron response shape.
  */
-adminRouter.post('/smoke/runner-cron-secret', async (req: AuthenticatedRequest, res) => {
+adminRouter.post('/smoke/runner-cron-secret', requireSmokeHeaderPresent, async (req: AuthenticatedRequest, res) => {
   try {
     const { statusCode, body } = await runCronForSmoke();
     res.status(statusCode).json(body);
