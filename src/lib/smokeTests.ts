@@ -1039,7 +1039,7 @@ export const smokeTests: SmokeTestDefinition[] = [
       return result;
     }
   },
-  // POST /api/runner/cron with x-cron-secret (no JWT) — only when toggle or VITE_ENABLE_RUNNER_CRON_TEST and cron-secret configured (never display secret)
+  // POST /api/runner/cron (cron-secret) — when toggle on, call admin proxy so frontend never sees RUNNER_CRON_SECRET
   {
     name: 'POST /api/runner/cron (cron-secret)',
     category: 'admin',
@@ -1047,21 +1047,22 @@ export const smokeTests: SmokeTestDefinition[] = [
       if (!getSmokeRunnerCronTestEnabled()) {
         return { name: 'POST /api/runner/cron (cron-secret)', status: 'SKIP', message: 'Runner cron secret test disabled (toggle or VITE_ENABLE_RUNNER_CRON_TEST)' };
       }
-      const secret = import.meta.env.VITE_RUNNER_CRON_SECRET as string | undefined;
-      if (!secret?.trim()) {
-        return { name: 'POST /api/runner/cron (cron-secret)', status: 'SKIP', message: 'cron-secret configured: no (RUNNER_CRON_SECRET in backend only)' };
+      const user = await getCurrentUser();
+      if (!user) {
+        return { name: 'POST /api/runner/cron (cron-secret)', status: 'SKIP', message: 'Login required' };
+      }
+      if (user.role !== 'admin') {
+        return { name: 'POST /api/runner/cron (cron-secret)', status: 'SKIP', message: 'Admin required (uses backend secret)' };
       }
       const baseURL = getBaseURL();
+      const headers = await getAuthHeaders(true);
       const result = await runTest('POST /api/runner/cron (cron-secret)', () =>
-        fetch(`${baseURL}/api/runner/cron`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'x-cron-secret': secret, [SMOKE_TESTS_HEADER]: 'true' },
-        })
+        fetch(`${baseURL}/api/admin/smoke/runner-cron-secret`, { method: 'POST', headers })
       );
       if (result.httpCode === 200 || result.httpCode === 503) {
-        return { ...result, status: 'PASS', message: result.httpCode === 503 ? 'Runner disabled (503)' : 'Success (cron-secret); configured: yes' };
+        return { ...result, status: 'PASS', message: result.httpCode === 503 ? 'Runner disabled (503)' : 'Success (cron-secret via admin proxy)' };
       }
-      if (result.httpCode === 401) return { ...result, status: 'FAIL', message: 'Cron-secret should allow without JWT' };
+      if (result.httpCode === 403) return { ...result, status: 'FAIL', message: 'Admin required' };
       return result;
     }
   },

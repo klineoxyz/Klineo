@@ -8,6 +8,7 @@ import { financialRatiosRouter, getMarketingSpend, postMarketingSpend } from './
 import { getPackageProfitAllowanceUsd } from './payment-intents.js';
 import { invalidateKillSwitchCache } from '../lib/platformSettings.js';
 import { allocatePurchaseRevenue } from '../lib/allocatePurchaseRevenue.js';
+import { runCronForSmoke } from './strategies-runner.js';
 
 let supabase: SupabaseClient | null = null;
 
@@ -1336,6 +1337,28 @@ adminRouter.get('/master-trader-applications/:id/proof-url',
     }
   }
 );
+
+/**
+ * POST /api/admin/smoke/runner-cron-secret
+ * Admin-only. Runs the same logic as POST /api/runner/cron (using backend RUNNER_CRON_SECRET internally).
+ * Used by Smoke Test so the frontend never needs the cron secret. Returns the same cron response shape.
+ */
+adminRouter.post('/smoke/runner-cron-secret', async (req: AuthenticatedRequest, res) => {
+  try {
+    const { statusCode, body } = await runCronForSmoke();
+    res.status(statusCode).json(body);
+  } catch (err) {
+    console.error('Admin smoke runner-cron-secret error:', err);
+    res.status(500).json({
+      ok: false,
+      requestId: 'smoke-cron',
+      startedAt: new Date().toISOString(),
+      finishedAt: new Date().toISOString(),
+      summary: { processed: 0, ran: 0, skipped: 0, blocked: 0, errored: 0 },
+      notes: [err instanceof Error ? err.message : 'Unknown error'],
+    });
+  }
+});
 
 /**
  * PATCH /api/admin/master-trader-applications/:id

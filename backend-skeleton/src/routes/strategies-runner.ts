@@ -72,6 +72,93 @@ function sanitizeMessage(msg: string): string {
   return msg.replace(/api[_-]?key/gi, '[REDACTED]').replace(/secret/gi, '[REDACTED]').replace(/\s+/g, ' ').trim();
 }
 
+/** Cron response body shape (same as POST /api/runner/cron). */
+export type CronResponseBody = {
+  ok: boolean;
+  requestId: string;
+  startedAt: string;
+  finishedAt: string;
+  summary: { processed: number; ran: number; skipped: number; blocked: number; errored: number };
+  notes: string[];
+};
+
+/**
+ * Run cron internally and return status + body. Used by POST /api/admin/smoke/runner-cron-secret
+ * so the frontend never needs RUNNER_CRON_SECRET. Returns 503 if runner disabled or DB unavailable.
+ */
+export async function runCronForSmoke(): Promise<{ statusCode: number; body: CronResponseBody }> {
+  const requestId = 'smoke-cron';
+  const startedAt = new Date();
+
+  if (!ENABLE_RUNNER) {
+    return {
+      statusCode: 503,
+      body: {
+        ok: false,
+        requestId,
+        startedAt: startedAt.toISOString(),
+        finishedAt: new Date().toISOString(),
+        summary: { processed: 0, ran: 0, skipped: 0, blocked: 0, errored: 0 },
+        notes: ['Strategy runner is disabled'],
+      },
+    };
+  }
+
+  const client = getSupabase();
+  if (!client) {
+    return {
+      statusCode: 503,
+      body: {
+        ok: false,
+        requestId,
+        startedAt: startedAt.toISOString(),
+        finishedAt: new Date().toISOString(),
+        summary: { processed: 0, ran: 0, skipped: 0, blocked: 0, errored: 0 },
+        notes: ['Database unavailable'],
+      },
+    };
+  }
+
+  try {
+    const summary = await runDueStrategies(client, startedAt, { requestId });
+    const finishedAt = new Date();
+    const processed = summary.ran + summary.skipped + summary.blocked + summary.errors;
+    return {
+      statusCode: 200,
+      body: {
+        ok: true,
+        requestId,
+        startedAt: startedAt.toISOString(),
+        finishedAt: finishedAt.toISOString(),
+        summary: {
+          processed,
+          ran: summary.ran,
+          skipped: summary.skipped,
+          blocked: summary.blocked,
+          errored: summary.errors,
+        },
+        notes: [],
+      },
+    };
+  } catch (err) {
+    const finishedAt = new Date();
+    const msg = err instanceof Error ? err.message : 'Unknown error';
+    const safe = sanitizeMessage(msg);
+    console.error(`[${requestId}] cron error:`, safe);
+    return {
+      statusCode: 500,
+      body: {
+        ok: false,
+        requestId,
+        startedAt: startedAt.toISOString(),
+        finishedAt: finishedAt.toISOString(),
+        summary: { processed: 0, ran: 0, skipped: 0, blocked: 0, errored: 0 },
+        notes: [safe],
+      },
+    };
+  }
+}
+
 /** Shared cron handler: run due strategies and return structured JSON. */
 async function handleCronRun(req: Request, res: Response): Promise<void> {
   const client = getSupabase();
