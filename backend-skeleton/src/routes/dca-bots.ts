@@ -9,6 +9,7 @@ import { body } from 'express-validator';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { fetchEntitlement } from '../middleware/requireEntitlement.js';
 import { getMaxDcaBots } from './profile.js';
+import { processOneBot } from '../lib/dcaEngine.js';
 
 let supabase: SupabaseClient | null = null;
 
@@ -233,6 +234,52 @@ dcaBotsRouter.put(
     } catch (err) {
       console.error('DCA bot update error:', err);
       res.status(500).json({ error: 'Failed to update bot' });
+    }
+  }
+);
+
+/**
+ * POST /api/dca-bots/:id/trigger-tick
+ * Run one tick for this bot now (for diagnosis). Returns success/error so user can see why trades aren't executing.
+ */
+dcaBotsRouter.post(
+  '/:id/trigger-tick',
+  validate([uuidParam('id')]),
+  async (req: AuthenticatedRequest, res) => {
+    const client = getSupabase();
+    if (!client) return res.status(503).json({ error: 'Database unavailable' });
+    try {
+      const { id } = req.params;
+      const userId = req.user!.id;
+      const { data: bot, error: fetchError } = await client
+        .from('dca_bots')
+        .select('id, user_id, name, exchange, market, pair, timeframe, status, config, last_tick_at, next_tick_at, last_tick_status, last_tick_error, is_locked, lock_expires_at')
+        .eq('id', id)
+        .eq('user_id', userId)
+        .maybeSingle();
+      if (fetchError || !bot) {
+        return res.status(404).json({ error: 'Bot not found' });
+      }
+      if (bot.status !== 'running') {
+        return res.status(400).json({ error: 'Bot is not running', status: bot.status });
+      }
+      if (bot.market !== 'spot') {
+        return res.status(400).json({ error: 'Only spot DCA bots can be ticked' });
+      }
+      const now = new Date();
+      const result = await processOneBot(client, bot as Parameters<typeof processOneBot>[1], now, 'user-trigger');
+      const success = result.status === 'ok';
+      const message = 'error' in result ? result.error : ('reason' in result ? result.reason : null);
+      return res.json({
+        success,
+        status: result.status,
+        error: message ?? undefined,
+        message: success ? 'Tick completed' : (message ?? 'Tick failed'),
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Trigger tick failed';
+      console.error('DCA trigger-tick error:', msg);
+      return res.status(500).json({ error: 'Trigger tick failed', message: msg });
     }
   }
 );

@@ -26,6 +26,7 @@ import {
   Trophy,
   TrendingUp,
   CopyPlus,
+  RefreshCw,
 } from "lucide-react";
 import { toast } from "@/app/lib/toast";
 import { api, dcaBots, type DcaBot, type DcaBotFeatured, type TopBot, type EntitlementResponse } from "@/lib/api";
@@ -49,6 +50,7 @@ export function DcaBotsPage({ onNavigate }: DcaBotsPageProps) {
   const [featuredBots, setFeaturedBots] = useState<DcaBotFeatured[]>([]);
   const [topBots, setTopBots] = useState<TopBot[]>([]);
   const [templateBot, setTemplateBot] = useState<TopBot | null>(null);
+  const [triggerTickId, setTriggerTickId] = useState<string | null>(null);
 
   const loadBots = async () => {
     setLoading(true);
@@ -167,6 +169,36 @@ export function DcaBotsPage({ onNavigate }: DcaBotsPageProps) {
       }
     } finally {
       setUpdatingId(null);
+    }
+  };
+
+  const handleTriggerTick = async (id: string) => {
+    setTriggerTickId(id);
+    try {
+      const res = await api.post<{ success: boolean; status: string; error?: string; message?: string }>(
+        `/api/dca-bots/${id}/trigger-tick`
+      );
+      await loadBots();
+      if (res.success) {
+        toast.success("Tick completed", { description: res.message ?? "Bot was processed successfully." });
+      } else {
+        toast.error("Tick failed", {
+          description: res.error ?? res.message ?? "Check connection and backend ENABLE_STRATEGY_RUNNER.",
+        });
+      }
+    } catch (err: unknown) {
+      const raw = err instanceof Error ? err.message : String(err ?? "Unknown error");
+      let msg = raw;
+      try {
+        const body = typeof raw === "string" && raw.startsWith("{") ? (JSON.parse(raw) as { message?: string }) : null;
+        if (body?.message) msg = body.message;
+      } catch {
+        /* use raw */
+      }
+      toast.error("Run tick failed", { description: msg });
+      loadBots();
+    } finally {
+      setTriggerTickId(null);
     }
   };
 
@@ -445,7 +477,7 @@ export function DcaBotsPage({ onNavigate }: DcaBotsPageProps) {
                         )}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-muted-foreground max-w-[180px]">
+                    <TableCell className="text-muted-foreground max-w-[220px]">
                       {bot.last_tick_at ? (
                         <span title={bot.last_tick_error ?? undefined}>
                           {new Date(bot.last_tick_at).toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" })}
@@ -457,6 +489,14 @@ export function DcaBotsPage({ onNavigate }: DcaBotsPageProps) {
                               {bot.last_tick_error}
                             </span>
                           )}
+                        </span>
+                      ) : bot.last_tick_error ? (
+                        <span className="block text-xs text-destructive" title={bot.last_tick_error}>
+                          Error: {bot.last_tick_error}
+                        </span>
+                      ) : bot.status === "running" ? (
+                        <span className="text-muted-foreground text-xs" title="Backend needs ENABLE_STRATEGY_RUNNER=true. Use «Run tick» to test.">
+                          No tick yet
                         </span>
                       ) : (
                         <span className="text-muted-foreground">—</span>
@@ -500,6 +540,22 @@ export function DcaBotsPage({ onNavigate }: DcaBotsPageProps) {
                         >
                           Stop
                         </Button>
+                        {bot.status === "running" && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleTriggerTick(bot.id)}
+                            disabled={triggerTickId === bot.id}
+                            title="Run one tick now to see why trades might not execute"
+                          >
+                            {triggerTickId === bot.id ? (
+                              <Loader2 className="size-3 animate-spin" />
+                            ) : (
+                              <RefreshCw className="size-3 mr-1" />
+                            )}
+                            Run tick
+                          </Button>
+                        )}
                         <Button
                           variant="outline"
                           size="sm"

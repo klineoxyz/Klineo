@@ -352,8 +352,9 @@ async function syncOpenOrders(
 
 /**
  * Process one bot tick: validate, get price, state, run grid logic, update state and lock.
+ * Exported for user-triggered "Run tick now" (single-bot diagnosis).
  */
-async function processOneBot(
+export async function processOneBot(
   client: SupabaseClient,
   bot: DcaBotRow,
   now: Date,
@@ -373,10 +374,12 @@ async function processOneBot(
   const cooldownMinutes = Number(config.cooldownMinutes ?? 0);
 
   if (baseOrderUsdt <= 0 || gridStepPct <= 0) {
+    const errMsg = 'Invalid config: baseOrderSizeUsdt or gridStepPct';
+    console.warn('[dca-engine] bot=%s status=error error=%s', bot.id, errMsg);
     await releaseDcaLock(client, bot.id, {
       last_tick_at: now.toISOString(),
       last_tick_status: 'error',
-      last_tick_error: 'Invalid config: baseOrderSizeUsdt or gridStepPct',
+      last_tick_error: errMsg,
       next_tick_at: new Date(now.getTime() + TICK_INTERVAL_SEC * 1000).toISOString(),
       is_locked: false,
     });
@@ -385,10 +388,12 @@ async function processOneBot(
 
   const conn = await loadConnection(client, bot.user_id, bot.exchange);
   if (!conn?.encrypted_config_b64) {
+    const errMsg = 'No exchange connection for ' + bot.exchange;
+    console.warn('[dca-engine] bot=%s status=blocked error=%s', bot.id, errMsg);
     await releaseDcaLock(client, bot.id, {
       last_tick_at: now.toISOString(),
       last_tick_status: 'blocked',
-      last_tick_error: 'No exchange connection for ' + bot.exchange,
+      last_tick_error: errMsg,
       next_tick_at: new Date(now.getTime() + TICK_INTERVAL_SEC * 1000).toISOString(),
       is_locked: false,
     });
@@ -406,6 +411,7 @@ async function processOneBot(
         : ({ apiKey: parsed.apiKey, apiSecret: parsed.apiSecret, environment: env } as BybitCredentials);
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Decrypt failed';
+    console.warn('[dca-engine] bot=%s status=error error=%s', bot.id, msg);
     await releaseDcaLock(client, bot.id, {
       last_tick_at: now.toISOString(),
       last_tick_status: 'error',
@@ -422,6 +428,7 @@ async function processOneBot(
     price = await getSpotPrice(bot.exchange, bot.pair, env);
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Ticker failed';
+    console.warn('[dca-engine] bot=%s status=error error=%s', bot.id, msg);
     await releaseDcaLock(client, bot.id, {
       last_tick_at: now.toISOString(),
       last_tick_status: 'error',
@@ -736,7 +743,11 @@ export async function processRunningDcaBots(
     .order('next_tick_at', { ascending: true, nullsFirst: true })
     .limit(limit);
 
-  if (error || !bots?.length) {
+  if (error) {
+    console.error('[dca-engine] fetch bots error:', error.message);
+    return { processed: 0, results };
+  }
+  if (!bots?.length) {
     return { processed: 0, results };
   }
 
@@ -749,8 +760,13 @@ export async function processRunningDcaBots(
     try {
       const result = await processOneBot(client, bot, now, 'dca-engine');
       results.push(result);
+      const err = 'error' in result ? result.error : ('reason' in result ? result.reason : null);
+      if (result.status !== 'ok') {
+        console.warn('[dca-engine] bot=%s status=%s %s', bot.id, result.status, err ?? '');
+      }
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Tick failed';
+      console.warn('[dca-engine] bot=%s status=error error=%s', bot.id, msg);
       await releaseDcaLock(client, bot.id, {
         last_tick_at: now.toISOString(),
         last_tick_status: 'error',

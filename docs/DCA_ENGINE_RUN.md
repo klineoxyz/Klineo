@@ -53,3 +53,24 @@ The **Spot DCA Grid** execution engine runs only for bots with `market='spot'` a
 - **Poll**: Bots with `status='running'`, `market='spot'`, and `next_tick_at` null or past are processed (up to `limit` per tick).
 - **Lock**: Each bot is locked for 60s so two ticks cannot run concurrently.
 - **After tick**: `last_tick_at`, `last_tick_status`, `last_tick_error` are set; `next_tick_at` is set to now + 15s; lock is released.
+
+## How to check why trades are not executing
+
+1. **UI — Last tick column**  
+   In **My Bots**, the "Last tick" column shows the last run time and, on failure, **last_tick_error** (e.g. "No exchange connection for binance", "Decrypt failed", "Ticker failed"). If the bot has never been ticked, it shows "No tick yet".
+
+2. **UI — Run tick**  
+   For a **running** bot, click **Run tick** in the Actions column. The backend runs one tick immediately and returns success or an error message (toast). Use this to see the exact failure without waiting for the scheduler.
+
+3. **Backend logs**  
+   When the in-process scheduler or the tick endpoint runs, each non-ok result is logged with:
+   - `[dca-engine] bot=<id> status=blocked error=No exchange connection for binance`
+   - `[dca-engine] bot=<id> status=error error=Decrypt failed`
+   - etc.  
+   Check your server logs (e.g. Railway logs) and search for `[dca-engine]` to see why a bot failed.
+
+4. **Common causes**  
+   - **No tick yet** / engine never runs: set `ENABLE_STRATEGY_RUNNER=true` and restart the backend.  
+   - **No exchange connection for &lt;exchange&gt;**: user has not connected that exchange (or connection was removed).  
+   - **Decrypt failed**: bad or rotated encryption key, or corrupted connection config.  
+   - **Ticker failed**: exchange API error (e.g. rate limit, invalid pair, network).
