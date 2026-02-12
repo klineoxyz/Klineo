@@ -114,10 +114,10 @@ export async function runStrategyTick(
       }
     }
 
-    // Load connection (kill_switch checked inside runRsiTick)
+    // Load connection (must be successfully tested and futures-enabled for strategy execution)
     const { data: conn, error: connErr } = await client
       .from('user_exchange_connections')
-      .select('id, encrypted_config_b64, environment, futures_enabled, kill_switch, max_leverage_allowed, max_notional_usdt, margin_mode, position_mode, default_leverage')
+      .select('id, encrypted_config_b64, environment, futures_enabled, kill_switch, max_leverage_allowed, max_notional_usdt, margin_mode, position_mode, default_leverage, last_test_status')
       .eq('id', row.exchange_connection_id)
       .eq('user_id', row.user_id)
       .single();
@@ -125,6 +125,11 @@ export async function runStrategyTick(
     if (connErr || !conn) {
       await recordRun(client, strategyRunId, row.user_id, now, 'error', 'connection_not_found', 'hold', null, { requestId });
       return { status: 'error', reason: 'connection_not_found', signal: 'hold' };
+    }
+
+    if (conn.last_test_status !== 'ok') {
+      await recordRun(client, strategyRunId, row.user_id, now, 'blocked', 'connection_not_tested', 'hold', null, { requestId });
+      return { status: 'blocked', reason: 'connection_not_tested', signal: 'hold' };
     }
 
     const hasB64 = typeof conn.encrypted_config_b64 === 'string' && conn.encrypted_config_b64.length > 0;
