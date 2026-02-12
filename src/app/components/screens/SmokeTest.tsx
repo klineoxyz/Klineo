@@ -278,6 +278,18 @@ export function SmokeTest() {
         <p className="text-sm text-muted-foreground">Test backend endpoints and production setup</p>
       </div>
 
+      {/* Run actions - visible at top so Admin tab has an obvious Run button */}
+      <div className="flex flex-wrap items-center gap-2">
+        <Button onClick={handleRunAll} disabled={isRunning} className="gap-2">
+          {isRunning ? <Loader2 className="size-4 animate-spin" /> : <CheckCircle2 className="size-4" />}
+          Run All Tests
+        </Button>
+        <Button onClick={handleRunLaunch} disabled={isRunning} variant="secondary" className="gap-2">
+          {isRunning ? <Loader2 className="size-4 animate-spin" /> : <Play className="size-4" />}
+          Run All (Launch)
+        </Button>
+      </div>
+
       {/* Environment Info */}
       <Card className="p-4">
         <h3 className="font-semibold mb-3">Environment</h3>
