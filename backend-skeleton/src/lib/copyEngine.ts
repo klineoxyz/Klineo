@@ -12,6 +12,7 @@
  *    - Record order/position/trade in positions, orders, trades tables (caller or separate).
  * 3. Spot and Futures both execute on the user's connected exchange when correctly connected (API tested).
  *
+ * Exchange as source of truth: use live exchange balance for size/checks; sync order status from exchange when displaying. See docs/EXCHANGE_AS_SOURCE_OF_TRUTH.md.
  * See docs/PRO_COPY_TRADING_STANDARDS.md and docs/PLATFORM_AUDIT_REPORT.md.
  */
 

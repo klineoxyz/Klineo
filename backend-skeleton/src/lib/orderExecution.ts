@@ -4,6 +4,11 @@
  * - Single exchange call path
  * - Every attempt written to order_execution_audit (PLACED | SKIPPED | FAILED)
  * No silent failures. No success without exchange_order_id.
+ *
+ * EXCHANGE AS SOURCE OF TRUTH (apply everywhere):
+ * - Balances: always use live exchange balance for checks; never assume DB/cache is correct after user or bot trades.
+ * - Order status: sync from exchange when displaying or before acting (e.g. reconcile position before placing sells).
+ * - Sells: required amount = quantity to sell (no fee buffer on base); reconcile position with exchange when state may be stale.
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';

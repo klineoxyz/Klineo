@@ -3,6 +3,9 @@
  * Only runs for market='spot'. Futures are not executed.
  * Polls running bots, acquires per-bot lock, executes grid logic (entry, safety orders, TP), enforces risk controls.
  *
+ * Exchange as source of truth: we reconcile position with exchange balance each tick, sync order status
+ * from exchange (syncOpenOrders), and use actual base balance for TP sell quantity. See docs/EXCHANGE_AS_SOURCE_OF_TRUTH.md.
+ *
  * Exchange safety: min qty/step/notional from Binance getSpotSymbolFilters (Bybit uses defaults).
  * Client order ID rules (same format for both exchanges):
  * - Binance newClientOrderId: ^[a-zA-Z0-9-_]{1,36}$

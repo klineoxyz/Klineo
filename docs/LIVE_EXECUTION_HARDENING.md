@@ -2,6 +2,8 @@
 
 All order execution paths (DCA, Grid/Strategy, Copy Trading, Manual Terminal) now go through a **central execution layer** with **pre-flight checks** and **audit logging**. No silent failures; no success without an exchange order ID.
 
+**Exchange as source of truth:** Balances and order status should come from the exchange where it matters. See [EXCHANGE_AS_SOURCE_OF_TRUTH.md](./EXCHANGE_AS_SOURCE_OF_TRUTH.md) for principles used across DCA, Copy, Grid, and Terminal.
+
 ---
 
 ## Files Modified

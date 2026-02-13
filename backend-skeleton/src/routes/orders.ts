@@ -24,8 +24,9 @@ ordersRouter.use(verifySupabaseJWT);
 
 /**
  * GET /api/orders
- * List current user's orders with pagination.
+ * List current user's orders with pagination (from DB).
  * Query: source = 'all' | 'copy' | 'dca'
+ * For DCA: call POST /api/dca-bots/sync-orders to refresh status from exchange, then re-call this.
  */
 ordersRouter.get('/',
   validate([pageQuery, limitQuery]),
