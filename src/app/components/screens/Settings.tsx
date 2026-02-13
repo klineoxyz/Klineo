@@ -355,6 +355,16 @@ export function Settings({ onNavigate }: SettingsProps) {
     fetchEntitlement();
   }, [fetchEntitlement]);
 
+  // Refetch entitlement and connections when user returns to tab (e.g. after executing DCA/orders elsewhere)
+  useEffect(() => {
+    const onFocus = () => {
+      fetchEntitlement();
+      if (user?.id) refreshConnections();
+    };
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [fetchEntitlement, user?.id]);
+
   // My Referrals: fetch when user or timeframe changes
   useEffect(() => {
     if (!user?.id) {

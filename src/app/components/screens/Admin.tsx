@@ -50,6 +50,9 @@ export function Admin() {
     monthlyRevenue: 0,
     platformFees: 0,
     referralPayouts: 0,
+    activeDcaBots: 0,
+    ordersLast24h: 0,
+    tradesLast24h: 0,
   });
   const [users, setUsers] = useState<any[]>([]);
   const [usersPagination, setUsersPagination] = useState({ page: 1, limit: 50, total: 0, totalPages: 0 });
@@ -150,17 +153,12 @@ export function Admin() {
   const [executionDebugLoading, setExecutionDebugLoading] = useState(false);
   const [executionDebugExportLoading, setExecutionDebugExportLoading] = useState(false);
 
-  // Load stats on mount (live data from API)
-  useEffect(() => {
-    loadStats(true);
-  }, []);
-
   const [statsRefreshing, setStatsRefreshing] = useState(false);
   const loadStats = async (isInitial = false) => {
     if (!isInitial) setStatsRefreshing(true);
     try {
       const data = await api.get('/api/admin/stats');
-      setStats(data as any);
+      setStats((prev) => ({ ...prev, ...(data as any) }));
     } catch (err: any) {
       console.error('Failed to load stats:', err);
       toast.error('Failed to load dashboard stats');
@@ -169,6 +167,23 @@ export function Admin() {
       else setStatsRefreshing(false);
     }
   };
+
+  // Load stats on mount and refetch when tab/window gains focus (so admin sees latest after users execute bots)
+  useEffect(() => {
+    loadStats(true);
+  }, []);
+
+  useEffect(() => {
+    const onFocus = () => loadStats(false);
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, []);
+
+  // Periodic refresh while Admin is visible (every 90s) so stats stay current
+  useEffect(() => {
+    const interval = setInterval(() => loadStats(false), 90_000);
+    return () => clearInterval(interval);
+  }, []);
 
   const loadUsers = async (page = 1, search = "") => {
     setUsersLoading(true);
@@ -833,8 +848,8 @@ export function Admin() {
         </Button>
       </div>
 
-      {/* Quick Stats — live from GET /api/admin/stats */}
-      <div className="grid grid-cols-5 gap-4">
+      {/* Quick Stats — live from GET /api/admin/stats; refetched on focus and every 90s */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
         <Card className="p-4 space-y-2">
           <div className="text-xs text-muted-foreground uppercase tracking-wide">Total Users</div>
           <div className="text-2xl font-semibold">{loading ? "—" : stats.totalUsers.toLocaleString()}</div>
@@ -858,6 +873,22 @@ export function Admin() {
         <Card className="p-4 space-y-2">
           <div className="text-xs text-muted-foreground uppercase tracking-wide">Referral Payouts</div>
           <div className="text-2xl font-semibold">{loading ? "—" : `$${stats.referralPayouts.toLocaleString()}`}</div>
+        </Card>
+      </div>
+
+      {/* Platform activity — updates when users run DCA bots / place orders */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <Card className="p-4 space-y-2">
+          <div className="text-xs text-muted-foreground uppercase tracking-wide">Active DCA Bots</div>
+          <div className="text-2xl font-semibold">{loading ? "—" : (stats.activeDcaBots ?? 0).toLocaleString()}</div>
+        </Card>
+        <Card className="p-4 space-y-2">
+          <div className="text-xs text-muted-foreground uppercase tracking-wide">Orders (24h)</div>
+          <div className="text-2xl font-semibold">{loading ? "—" : (stats.ordersLast24h ?? 0).toLocaleString()}</div>
+        </Card>
+        <Card className="p-4 space-y-2">
+          <div className="text-xs text-muted-foreground uppercase tracking-wide">Trades (24h)</div>
+          <div className="text-2xl font-semibold">{loading ? "—" : (stats.tradesLast24h ?? 0).toLocaleString()}</div>
         </Card>
       </div>
 

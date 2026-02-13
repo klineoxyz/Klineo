@@ -114,12 +114,18 @@ adminRouter.get('/stats', async (req, res) => {
   }
 
   try {
-    const [usersResult, tradersResult, subscriptionsResult, feesResult, referralEarningsResult] = await Promise.all([
+    const twentyFourHoursAgo = new Date();
+    twentyFourHoursAgo.setHours(twentyFourHoursAgo.getHours() - 24);
+
+    const [usersResult, tradersResult, subscriptionsResult, feesResult, referralEarningsResult, dcaBotsResult, orders24hResult, trades24hResult] = await Promise.all([
       client.from('user_profiles').select('*', { count: 'exact', head: true }),
       client.from('traders').select('*', { count: 'exact', head: true }).eq('status', 'approved'),
       client.from('subscriptions').select('*', { count: 'exact', head: true }).eq('status', 'active'),
       client.from('fee_ledger').select('amount'),
       client.from('purchase_referral_earnings').select('amount'),
+      client.from('dca_bots').select('*', { count: 'exact', head: true }).eq('status', 'running'),
+      client.from('orders').select('*', { count: 'exact', head: true }).gte('created_at', twentyFourHoursAgo.toISOString()),
+      client.from('trades').select('*', { count: 'exact', head: true }).gte('executed_at', twentyFourHoursAgo.toISOString()),
     ]);
 
     const totalFees = feesResult.data?.reduce((sum, f) => sum + parseFloat(f.amount?.toString() || '0'), 0) || 0;
@@ -141,6 +147,9 @@ adminRouter.get('/stats', async (req, res) => {
       monthlyRevenue: Math.round(monthlyRevenue * 100) / 100,
       platformFees: Math.round(totalFees * 100) / 100,
       referralPayouts: Math.round(totalReferralPayouts * 100) / 100,
+      activeDcaBots: dcaBotsResult.count || 0,
+      ordersLast24h: orders24hResult.count || 0,
+      tradesLast24h: trades24hResult.count || 0,
     });
   } catch (err) {
     console.error('Admin stats error:', err);

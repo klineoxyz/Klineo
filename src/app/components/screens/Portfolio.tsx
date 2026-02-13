@@ -24,24 +24,31 @@ export function Portfolio() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const loadSummary = async () => {
-      setIsLoading(true);
-      setError(null);
-      try {
-        const data = await api.get<PortfolioSummary>("/api/portfolio/summary");
-        setSummary(data);
-      } catch (err: any) {
-        const message = err?.message || "Failed to load portfolio";
-        setError(message);
-        toast.error("Failed to load portfolio", { description: message });
-      } finally {
-        setIsLoading(false);
-      }
-    };
+  const loadSummary = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const data = await api.get<PortfolioSummary>("/api/portfolio/summary");
+      setSummary(data);
+    } catch (err: any) {
+      const message = err?.message || "Failed to load portfolio";
+      setError(message);
+      toast.error("Failed to load portfolio", { description: message });
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
+  useEffect(() => {
     if (!isDemoMode) loadSummary();
     else setIsLoading(false);
+  }, [isDemoMode]);
+
+  // Refetch when user returns to tab so portfolio reflects latest after DCA/orders/trades
+  useEffect(() => {
+    const onFocus = () => { if (!isDemoMode) loadSummary(); };
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
   }, [isDemoMode]);
 
   if (isLoading && !isDemoMode) {

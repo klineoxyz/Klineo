@@ -79,6 +79,13 @@ export function Dashboard({ onNavigate }: DashboardProps) {
     loadLiveData();
   }, [isDemoMode, loadLiveData]);
 
+  // Refetch when user returns to tab so dashboard reflects latest after DCA/orders/trades
+  useEffect(() => {
+    const onFocus = () => { if (!isDemoMode) loadLiveData(); };
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [isDemoMode, loadLiveData]);
+
   // Demo mode: mock sparklines; Live: derive from real data or empty
   const portfolioData = useMemo(() => generateSparklineData(30, 24000, 0.02, 500), []);
   const dailyPnLData = useMemo(() => generateSparklineData(30, 300, 0.3, 40), []);
