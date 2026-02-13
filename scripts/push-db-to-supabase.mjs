@@ -41,6 +41,13 @@ async function main() {
     console.log('Pushed supabase-sync-all.sql to Supabase successfully.');
   } catch (e) {
     console.error('Push failed:', e.message);
+    if (/tenant|user not found|connection refused|ECONNREFUSED|password authentication failed/i.test(e.message)) {
+      console.error('');
+      console.error('Connection error. Check SUPABASE_DB_URL in .env.local or .env:');
+      console.error('  • Use the DIRECT connection string (port 5432), not the pooler (port 6543).');
+      console.error('  • Supabase Dashboard → Project Settings → Database → Connection string → URI');
+      console.error('  • Format: postgresql://postgres.[PROJECT-REF]:[PASSWORD]@aws-0-[REGION].pooler.supabase.com:5432/postgres');
+    }
     process.exit(1);
   } finally {
     await client.end();

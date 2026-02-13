@@ -2500,22 +2500,23 @@ export function Admin() {
                   status: c.status,
                   raw: c,
                 }));
-                const userRows = (userDiscounts || []).map((d) => ({
-                  id: d.id,
-                  type: "user" as const,
-                  code: d.code,
-                  userOrClaimed: d.userEmail ?? "—",
-                  scope: d.scope === "onboarding" ? "Onboarding" : "Trading packages",
-                  discount: d.scope === "onboarding"
-                    ? `${d.onboardingDiscountPercent ?? 0}%${d.onboardingDiscountFixedUsd ? ` or $${d.onboardingDiscountFixedUsd}` : ""}`
-                    : `${d.tradingDiscountPercent ?? 0}%`,
-                  packagesMax: d.scope === "trading_packages" ? `${d.tradingPackageIds?.length ? d.tradingPackageIds.join(", ") : "All"} / max ${d.tradingMaxPackages ?? "—"}` : "—",
-                  usedCount: d.tradingUsedCount ?? 0,
-                  claimed: !!(d as { claimed?: boolean }).claimed,
-                  claimedAt: (d as { claimedAt?: string | null }).claimedAt ?? null,
-                  status: d.status === "active" ? "Active" : d.status === "paused" ? "Paused" : d.status === "revoked" ? "Revoked" : d.status || "—",
-                  raw: d,
-                }));
+                const userRows = (userDiscounts || []).map((d) => {
+                  const usedCount = d.scope === "onboarding" ? (d.onboardingClaimedAt ? 1 : 0) : (d.tradingUsedCount ?? 0);
+                  return {
+                    id: d.id,
+                    type: "user" as const,
+                    code: d.code,
+                    userOrClaimed: d.userEmail ?? "—",
+                    scope: d.scope === "onboarding" ? "Onboarding" : "Trading packages",
+                    discount: d.scope === "onboarding"
+                      ? `${d.onboardingDiscountPercent ?? 0}%${d.onboardingDiscountFixedUsd ? ` or $${d.onboardingDiscountFixedUsd}` : ""}`
+                      : `${d.tradingDiscountPercent ?? 0}%`,
+                    packagesMax: d.scope === "trading_packages" ? `${d.tradingPackageIds?.length ? d.tradingPackageIds.join(", ") : "All"} / max ${d.tradingMaxPackages ?? "—"}` : "—",
+                    usedCount,
+                    status: d.status === "active" ? "Active" : d.status === "paused" ? "Paused" : d.status === "revoked" ? "Revoked" : d.status || "—",
+                    raw: d,
+                  };
+                });
                 const combined = [...userRows, ...claimedGlobal];
                 if (combined.length === 0) {
                   return <p className="text-sm text-muted-foreground py-4">No assigned or claimed discounts yet. Assign above or create global coupons.</p>;
@@ -2549,10 +2550,8 @@ export function Admin() {
                         <TableCell className="text-sm">{row.discount}</TableCell>
                         <TableCell className="text-sm text-muted-foreground">{row.packagesMax}</TableCell>
                         <TableCell>
-                          {(row.type === "user" && (row as { claimed?: boolean }).claimed) || row.usedCount > 0 ? (
-                            <Badge variant="default" className="bg-[#10B981]/10 text-[#10B981] border-[#10B981]/50" title={(row as { claimedAt?: string | null }).claimedAt ? `Claimed on ${(row as { claimedAt?: string | null }).claimedAt}` : undefined}>
-                              Claimed{row.usedCount > 0 ? ` (${row.usedCount})` : (row as { claimedAt?: string | null }).claimedAt ? ` · ${(row as { claimedAt?: string | null }).claimedAt}` : ""}
-                            </Badge>
+                          {row.usedCount > 0 ? (
+                            <Badge variant="default" className="bg-[#10B981]/10 text-[#10B981] border-[#10B981]/50">Claimed ({row.usedCount})</Badge>
                           ) : (
                             <span className="text-muted-foreground text-sm">—</span>
                           )}
