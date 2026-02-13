@@ -22,12 +22,15 @@ import {
 } from "@/app/components/ui/select";
 import { ChevronRight, ChevronLeft, Loader2 } from "lucide-react";
 import { toast } from "@/app/lib/toast";
-import { dcaBots, type DcaBotConfig, type DcaBot, type TopBot } from "@/lib/api";
+import { dcaBots, exchangeSpot, type DcaBotConfig, type DcaBot, type TopBot } from "@/lib/api";
 import type { DcaPreset } from "@/app/data/dcaPresets";
 
 const STEPS = 5;
 const TIMEFRAMES = ["1m", "3m", "5m", "15m", "30m", "1h", "2h", "4h", "1d"];
 const PAIRS = ["BTC/USDT", "ETH/USDT", "BNB/USDT", "SOL/USDT", "XRP/USDT", "AVAX/USDT", "DOGE/USDT", "MATIC/USDT"];
+
+/** Fallback min base order (USDT) when exchange API is unavailable. */
+const FALLBACK_MIN_BASE_ORDER_USDT = 10;
 
 export interface CreateBotModalProps {
   open: boolean;
@@ -88,6 +91,9 @@ export function CreateBotModal({ open, onOpenChange, onSuccess, preset, editBot,
   const [timeframe, setTimeframe] = useState("1h");
   const [config, setConfig] = useState<DcaBotConfig>(defaultConfig);
   const [createLoading, setCreateLoading] = useState(false);
+  const [pairFilters, setPairFilters] = useState<{ minNotional: number } | null>(null);
+  const [pairFiltersLoading, setPairFiltersLoading] = useState(false);
+  const [pairFiltersError, setPairFiltersError] = useState<string | null>(null);
 
   useEffect(() => {
     if (open && editBot) {
@@ -123,10 +129,47 @@ export function CreateBotModal({ open, onOpenChange, onSuccess, preset, editBot,
     if (!open) setStep(1);
   }, [open]);
 
+  // Fetch exchange min notional for the selected pair when on step 2 (so we use the exchange's rule, not our own).
+  useEffect(() => {
+    if (!open || step !== 2 || !exchange || !pair.trim()) {
+      setPairFilters(null);
+      setPairFiltersError(null);
+      return;
+    }
+    let cancelled = false;
+    setPairFiltersLoading(true);
+    setPairFiltersError(null);
+    exchangeSpot
+      .getSymbolFilters(exchange, pair.trim())
+      .then((res) => {
+        if (!cancelled) {
+          setPairFilters({ minNotional: res.minNotional });
+          setPairFiltersError(null);
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setPairFilters(null);
+          setPairFiltersError(err instanceof Error ? err.message : "Failed to load minimum");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setPairFiltersLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, step, exchange, pair]);
+
   const canNextStep1 = name.trim().length > 0 && pair.trim().length > 0;
-  const canNextStep2 =
+  const minBaseOrderUsdt = pairFilters?.minNotional ?? FALLBACK_MIN_BASE_ORDER_USDT;
+  const baseOrderBelowMin =
     typeof config.baseOrderSizeUsdt === "number" &&
     config.baseOrderSizeUsdt > 0 &&
+    config.baseOrderSizeUsdt < minBaseOrderUsdt;
+  const canNextStep2 =
+    typeof config.baseOrderSizeUsdt === "number" &&
+    config.baseOrderSizeUsdt >= minBaseOrderUsdt &&
     typeof config.gridStepPct === "number" &&
     config.gridStepPct > 0 &&
     typeof config.maxSafetyOrders === "number" &&
@@ -288,7 +331,7 @@ export function CreateBotModal({ open, onOpenChange, onSuccess, preset, editBot,
                 <Label>Base order size (USDT)</Label>
                 <Input
                   type="number"
-                  min={1}
+                  min={minBaseOrderUsdt}
                   value={config.baseOrderSizeUsdt ?? ""}
                   onChange={(e) =>
                     setConfig((c) => ({
@@ -297,6 +340,22 @@ export function CreateBotModal({ open, onOpenChange, onSuccess, preset, editBot,
                     }))
                   }
                 />
+                {pairFiltersLoading ? (
+                  <p className="text-xs text-muted-foreground">Loading minimum for {pair}…</p>
+                ) : pairFiltersError ? (
+                  <p className="text-xs text-amber-600 dark:text-amber-400">
+                    Could not load exchange minimum ({pairFiltersError}). Using {FALLBACK_MIN_BASE_ORDER_USDT} USDT. Increase base order if orders fail at runtime.
+                  </p>
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    Minimum for this pair ({exchange === "binance" ? "Binance" : "Bybit"} spot): {minBaseOrderUsdt} USDT. Orders below the exchange minimum will fail when the bot runs.
+                  </p>
+                )}
+                {baseOrderBelowMin && (
+                  <p className="text-xs text-destructive font-medium">
+                    Base order must be at least {minBaseOrderUsdt} USDT for this pair.
+                  </p>
+                )}
               </div>
               <div className="space-y-2">
                 <Label>Grid step %</Label>
@@ -361,13 +420,24 @@ export function CreateBotModal({ open, onOpenChange, onSuccess, preset, editBot,
 
           {step === 3 && (
             <>
+              <div className="flex items-center justify-between">
+                <Label>TP ladder (multi-target take profit)</Label>
+                <Switch
+                  checked={config.tpLadder ?? false}
+                  onCheckedChange={(v) => setConfig((c) => ({ ...c, tpLadder: v }))}
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                When TP ladder is on, take profit uses 3 levels below. When off, the single target % is used.
+              </p>
               <div className="space-y-2">
-                <Label>Take profit % (single target)</Label>
+                <Label className={config.tpLadder ? "opacity-60" : ""}>Take profit % (single target)</Label>
                 <Input
                   type="number"
                   min={0.1}
                   step={0.1}
                   value={config.tpPct ?? ""}
+                  disabled={config.tpLadder ?? false}
                   onChange={(e) =>
                     setConfig((c) => ({
                       ...c,
@@ -375,13 +445,9 @@ export function CreateBotModal({ open, onOpenChange, onSuccess, preset, editBot,
                     }))
                   }
                 />
-              </div>
-              <div className="flex items-center justify-between">
-                <Label>TP ladder (3 levels)</Label>
-                <Switch
-                  checked={config.tpLadder ?? false}
-                  onCheckedChange={(v) => setConfig((c) => ({ ...c, tpLadder: v }))}
-                />
+                {config.tpLadder && (
+                  <p className="text-xs text-muted-foreground">Single target is disabled when TP ladder is on.</p>
+                )}
               </div>
               {config.tpLadder && config.tpLadderLevels && (
                 <div className="grid grid-cols-3 gap-2 text-xs">

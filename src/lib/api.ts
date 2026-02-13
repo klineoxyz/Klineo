@@ -324,6 +324,30 @@ export const exchangeConnections = {
   },
 };
 
+/** Spot symbol filters from exchange (min notional, etc.) for DCA/create bot UI. */
+export interface SpotSymbolFiltersResponse {
+  minNotional: number;
+  minQty: number;
+  stepSize: number;
+  maxQty: number;
+}
+
+export const exchangeSpot = {
+  /** GET /api/exchange/spot/symbol-filters — exchange minimum for the pair (e.g. min notional in USDT). */
+  getSymbolFilters: async (
+    exchange: 'binance' | 'bybit',
+    pairOrSymbol: string
+  ): Promise<SpotSymbolFiltersResponse> => {
+    const params = new URLSearchParams({ exchange });
+    if (pairOrSymbol.includes('/')) {
+      params.set('pair', pairOrSymbol);
+    } else {
+      params.set('symbol', pairOrSymbol);
+    }
+    return api.get(`/api/exchange/spot/symbol-filters?${params.toString()}`);
+  },
+};
+
 /** Trading: execution logs, test order, permissions check. */
 export interface CheckPermissionsResponse {
   ok: boolean;

@@ -1,10 +1,11 @@
 /**
- * Spot order validation (dry-run). No real orders placed.
+ * Spot order validation (dry-run) and symbol filters.
+ * GET  /api/exchange/spot/symbol-filters — returns exchange min notional etc. for a pair (for DCA/create bot UI).
  * POST /api/exchange/spot/validate-order — checks symbol, filters, rounds qty, returns normalized request.
  */
 import { Router } from 'express';
 import { verifySupabaseJWT, AuthenticatedRequest } from '../middleware/auth.js';
-import { body } from 'express-validator';
+import { body, query } from 'express-validator';
 import { validate } from '../middleware/validation.js';
 import { toExchangeSymbol } from '../lib/symbols.js';
 import { getSpotSymbolFilters } from '../lib/binance.js';
@@ -15,6 +16,43 @@ import { roundToStep, clampAndRoundQty } from '../lib/symbols.js';
 
 export const exchangeSpotRouter: Router = Router();
 exchangeSpotRouter.use(verifySupabaseJWT);
+
+/**
+ * GET /api/exchange/spot/symbol-filters?exchange=binance&symbol=BTCUSDT
+ * or ?exchange=binance&pair=BTC/USDT
+ * Returns the exchange's min notional (and other filters) for the pair. Used by DCA Create Bot to show/validate base order size.
+ */
+exchangeSpotRouter.get(
+  '/spot/symbol-filters',
+  validate([
+    query('exchange').isIn(['binance', 'bybit']).withMessage('exchange must be binance or bybit'),
+    query('symbol').optional().trim().notEmpty().withMessage('symbol must be non-empty when provided'),
+    query('pair').optional().trim().notEmpty().withMessage('pair must be non-empty when provided'),
+  ]),
+  async (req: AuthenticatedRequest, res) => {
+    const exchange = (req.query.exchange as string)?.toLowerCase();
+    const symbolRaw = (req.query.symbol as string) || (req.query.pair as string);
+    if (!symbolRaw?.trim()) {
+      return res.status(400).json({ error: 'Provide symbol or pair (e.g. BTCUSDT or BTC/USDT)' });
+    }
+    const symbol = toExchangeSymbol(symbolRaw);
+    try {
+      const filters =
+        exchange === 'bybit'
+          ? await getBybitSpotFilters(symbol, 'production')
+          : await getSpotSymbolFilters(symbol);
+      return res.json({
+        minNotional: filters.minNotional,
+        minQty: filters.minQty,
+        stepSize: filters.stepSize,
+        maxQty: filters.maxQty,
+      });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Symbol not found';
+      return res.status(400).json({ error: msg });
+    }
+  }
+);
 
 exchangeSpotRouter.post(
   '/spot/validate-order',
