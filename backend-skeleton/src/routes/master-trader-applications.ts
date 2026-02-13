@@ -178,11 +178,14 @@ masterTraderApplicationsRouter.post(
       }
 
       const inserted = row as { id: string; status: string; created_at: string };
-      const copyTo = process.env.MASTER_TRADER_COPY_TO_EMAIL || 'klineoxyz@gmail.com';
+      // Always send notification to klineoxyz@gmail.com; optional extra recipient via MASTER_TRADER_COPY_TO_EMAIL
+      const adminEmail = 'klineoxyz@gmail.com';
+      const extraTo = process.env.MASTER_TRADER_COPY_TO_EMAIL?.trim();
+      const toList = extraTo && extraTo !== adminEmail ? [adminEmail, extraTo] : [adminEmail];
       let emailSent = false;
       try {
         const result = await sendMasterTraderApplicationCopy({
-          to: copyTo,
+          to: toList,
           formData: {
             fullName,
             email,
@@ -202,9 +205,9 @@ masterTraderApplicationsRouter.post(
         });
         emailSent = result.ok;
         if (!result.ok) {
-          console.error('[Master Trader] Email copy not sent:', result.error, '- Set RESEND_API_KEY and optionally EMAIL_FROM, MASTER_TRADER_COPY_TO_EMAIL in backend env.');
+          console.error('[Master Trader] Email copy not sent:', result.error, '- Set RESEND_API_KEY and optionally EMAIL_FROM in backend env.');
         } else {
-          console.log('[Master Trader] Application copy email sent to', copyTo);
+          console.log('[Master Trader] Application copy email sent to', toList.join(', '));
         }
       } catch (emailErr) {
         console.error('[Master Trader] Email send failed:', emailErr);

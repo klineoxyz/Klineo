@@ -1748,9 +1748,16 @@ export function Admin() {
               <h3 className="text-lg font-semibold">Master Trader Requests</h3>
               <p className="text-sm text-muted-foreground">Review and approve or reject applications. Use <strong>View</strong> to see the full application (all form fields: personal info, trading experience, proof screenshot, profile URL, strategy). Approved traders can submit strategies and compete for TOP 10 monthly campaign rewards. Rejected applicants see the reason on their application page and can apply again.</p>
             </div>
-            {masterTraderApplicationsLoading ? (
+            {/* Avoid blackout: keep table visible with existing data while refreshing; only show full loading when no data yet */}
+            {masterTraderApplicationsLoading && masterTraderApplications.length === 0 ? (
               <div className="p-8 text-center text-muted-foreground">Loading applications...</div>
             ) : (
+              <>
+                {masterTraderApplicationsLoading && (
+                  <div className="px-4 py-2 text-xs text-muted-foreground border-b border-border bg-muted/30 flex items-center gap-2">
+                    <RefreshCw className="size-3.5 animate-spin" aria-hidden /> Refreshing…
+                  </div>
+                )}
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -1779,7 +1786,7 @@ export function Admin() {
                     masterTraderApplications.map((app: any) => {
                       const fd = app.formData || {};
                       const get = (camel: string) => fd[camel] ?? fd[camel.replace(/([A-Z])/g, (m: string) => "_" + m.toLowerCase())];
-                      const tableProofUrl = app.proofUrl || (() => { const u = get("proofUrl") ?? get("tradingProofUrl"); return u != null && String(u).trim() !== "" ? String(u).trim() : null; })();
+                      const tableProofUrl = app.proofUrl || (() => { const u = get("proofUrl") ?? get("tradingProofUrl") ?? get("proof_url"); return u != null && String(u).trim() !== "" ? String(u).trim() : null; })();
                       const tradingStyleLabel: Record<string, string> = { day: "Day Trading", swing: "Swing Trading", scalping: "Scalping", position: "Position Trading" };
                       const marketsLabel: Record<string, string> = { spot: "Spot Only", futures: "Futures Only", both: "Both Spot & Futures" };
                       return (
@@ -1867,6 +1874,7 @@ export function Admin() {
                   )}
                 </TableBody>
               </Table>
+              </>
             )}
           </Card>
 
@@ -1913,25 +1921,33 @@ export function Admin() {
                   {/* 3. Proof of Performance — exact labels from application form (screenshot required; profile URL optional) */}
                   <div className="rounded border border-border p-4 space-y-2 bg-muted/30">
                     <h4 className="text-sm font-semibold">Proof of Performance</h4>
-                    {/* Trading History Screenshot * — required on form; user uploads snapshot. Use proofUrl from app or fallback to formData. */}
+                    {/* Trading History Screenshot * — link first so it's always viewable even when img is blocked */}
                     <div className="space-y-2">
                       <dt className="text-muted-foreground text-xs font-medium">Trading History Screenshot *</dt>
                       <dd>
                         {(() => {
-                          const displayProofUrl = (masterTraderReviewApp.proofUrl && String(masterTraderReviewApp.proofUrl).trim()) || v(get("proofUrl")) || v(get("tradingProofUrl"));
+                          const displayProofUrl = (masterTraderReviewApp.proofUrl && String(masterTraderReviewApp.proofUrl).trim()) || v(get("proofUrl")) || v(get("tradingProofUrl")) || v(get("proof_url"));
                           const imageUrl = masterTraderProofSignedUrl || displayProofUrl;
                           const linkUrl = imageUrl || displayProofUrl;
                           if (!displayProofUrl && !masterTraderProofSignedUrl) {
                             return <span className="text-xs text-muted-foreground">No screenshot uploaded</span>;
                           }
                           return (
-                            <div className="space-y-2">
+                            <div className="space-y-3">
                               {linkUrl && (
-                                <a href={linkUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline inline-block">Open screenshot in new tab</a>
+                                <a
+                                  href={linkUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+                                >
+                                  Open screenshot in new tab
+                                </a>
                               )}
-                              {masterTraderProofImageError ? (
-                                <p className="text-xs text-amber-600 dark:text-amber-500">Image could not be loaded inline. Use the link above to open the screenshot in a new tab.</p>
-                              ) : linkUrl ? (
+                              {masterTraderProofImageError && (
+                                <p className="text-xs text-amber-600 dark:text-amber-500">Image could not be loaded inline. Use the button above to open the screenshot in a new tab.</p>
+                              )}
+                              {linkUrl && !masterTraderProofImageError && (
                                 <img
                                   src={linkUrl}
                                   alt="Trading history screenshot submitted by applicant"
@@ -1939,7 +1955,7 @@ export function Admin() {
                                   onError={() => setMasterTraderProofImageError(true)}
                                   referrerPolicy="no-referrer"
                                 />
-                              ) : null}
+                              )}
                             </div>
                           );
                         })()}

@@ -11,7 +11,8 @@ if (!RESEND_API_KEY && process.env.NODE_ENV !== 'test') {
 }
 
 export async function sendMasterTraderApplicationCopy(params: {
-  to: string;
+  /** One or more recipient emails (e.g. always include klineoxyz@gmail.com) */
+  to: string | string[];
   formData: {
     fullName: string;
     email: string;
@@ -34,7 +35,8 @@ export async function sendMasterTraderApplicationCopy(params: {
     return { ok: false, error: 'Email not configured' };
   }
 
-  const { to, formData, proofUrl, applicationId } = params;
+  const { formData, proofUrl, applicationId } = params;
+  const toList = Array.isArray(params.to) ? params.to : [params.to];
   const tradingStyleLabels: Record<string, string> = {
     day: 'Day Trading',
     swing: 'Swing Trading',
@@ -88,7 +90,7 @@ export async function sendMasterTraderApplicationCopy(params: {
       },
       body: JSON.stringify({
         from: DEFAULT_FROM,
-        to: [to],
+        to: toList,
         subject: `[KLINEO] Master Trader application: ${formData.fullName}`,
         html,
       }),
