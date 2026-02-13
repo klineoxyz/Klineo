@@ -4,13 +4,16 @@
  * Polls running bots, acquires per-bot lock, executes grid logic (entry, safety orders, TP), enforces risk controls.
  *
  * Exchange safety: min qty/step/notional from Binance getSpotSymbolFilters (Bybit uses defaults).
- * Binance requires newClientOrderId to match ^[a-zA-Z0-9-_]{1,36}$ — we use makeDcaClientOrderId() for all orders.
+ * Client order ID rules (same format for both exchanges):
+ * - Binance newClientOrderId: ^[a-zA-Z0-9-_]{1,36}$
+ * - Bybit orderLinkId: max 36 chars, numbers/letters (upper+lower)/dashes/underscores
+ * We use makeDcaClientOrderId() for all DCA orders so both Binance and Bybit accept them.
  * Partial fills: state is set when we place orders; reconciliation from exchange fill events can be added later.
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 
-/** Binance/Bybit legal client order ID: max 36 chars, only [a-zA-Z0-9-_]. */
+/** Binance & Bybit compliant client order ID: max 36 chars, only [a-zA-Z0-9-_]. */
 function makeDcaClientOrderId(botId: string, type: string, timestamp: number, ladderIndex?: number): string {
   const id = (botId || '').replace(/-/g, '').slice(0, 20);
   const ts = String(timestamp).slice(-9);
@@ -20,9 +23,11 @@ function makeDcaClientOrderId(botId: string, type: string, timestamp: number, la
 }
 
 const MAX_CLIENT_ORDER_ID_LEN = 36;
+const CLIENT_ORDER_ID_REGEX = /^[a-zA-Z0-9-_]+$/;
+
 function assertDcaClientOrderId(s: string): void {
-  if (s.length > MAX_CLIENT_ORDER_ID_LEN || !/^[a-zA-Z0-9-_]+$/.test(s)) {
-    throw new Error(`DCA clientOrderId must match ^[a-zA-Z0-9-_]{1,36}$ (got ${s.length} chars)`);
+  if (s.length > MAX_CLIENT_ORDER_ID_LEN || !CLIENT_ORDER_ID_REGEX.test(s)) {
+    throw new Error(`DCA clientOrderId must match ^[a-zA-Z0-9-_]{1,36}$ (Binance/Bybit). Got ${s.length} chars.`);
   }
 }
 import { decrypt } from './crypto.js';
