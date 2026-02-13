@@ -1302,6 +1302,7 @@ adminRouter.get('/master-trader-applications', async (req, res) => {
 /**
  * POST /api/admin/send-test-master-trader-email
  * Send a test Master Trader notification email to klineoxyz@gmail.com (Resend). Admin-only.
+ * Returns 200 with { ok: false, error } when email is not configured or Resend fails (so the client can show the message).
  */
 adminRouter.post('/send-test-master-trader-email', async (_req, res) => {
   try {
@@ -1309,7 +1310,7 @@ adminRouter.post('/send-test-master-trader-email', async (_req, res) => {
     if (result.ok) {
       res.json({ ok: true, message: 'Test email sent to klineoxyz@gmail.com' });
     } else {
-      res.status(500).json({ ok: false, error: result.error ?? 'Failed to send' });
+      res.json({ ok: false, error: result.error ?? 'Failed to send' });
     }
   } catch (err) {
     console.error('Admin send-test-master-trader-email error:', err);
