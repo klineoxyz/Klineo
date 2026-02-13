@@ -1,10 +1,11 @@
 /**
  * Simple email sending via Resend.
- * Set RESEND_API_KEY to enable. Optional: EMAIL_FROM (e.g. "KLINEO <onboarding@resend.dev>").
+ * Set RESEND_API_KEY to enable.
+ * Uses Resend's default sender (onboarding@resend.dev) so no domain verification is required.
  */
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
-const DEFAULT_FROM = process.env.EMAIL_FROM ?? 'KLINEO <onboarding@resend.dev>';
+const DEFAULT_FROM = 'KLINEO <onboarding@resend.dev>';
 
 if (!RESEND_API_KEY && process.env.NODE_ENV !== 'test') {
   console.warn('[email] RESEND_API_KEY is not set. Master Trader application notification emails will not be sent. Add RESEND_API_KEY to your backend environment (e.g. .env or Railway).');
