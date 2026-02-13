@@ -511,6 +511,11 @@ export interface DcaBot {
   last_tick_error?: string | null;
   is_locked?: boolean;
   lock_expires_at?: string | null;
+  /** From dca_bot_state: filled safety orders count (base = 1 level). */
+  safety_orders_filled?: number;
+  avg_entry_price?: number | null;
+  position_size?: number | null;
+  realized_pnl?: number;
 }
 
 export interface CreateDcaBotRequest {

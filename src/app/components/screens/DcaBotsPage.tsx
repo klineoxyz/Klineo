@@ -470,7 +470,7 @@ export function DcaBotsPage({ onNavigate }: DcaBotsPageProps) {
                 <TableHead>DCA Progress</TableHead>
                 <TableHead>Avg Entry</TableHead>
                 <TableHead>TP Target</TableHead>
-                <TableHead>Unrealized PnL</TableHead>
+                <TableHead>Realized PnL</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -533,10 +533,22 @@ export function DcaBotsPage({ onNavigate }: DcaBotsPageProps) {
                       )}
                     </TableCell>
                     <TableCell className="font-mono">${allocated.toFixed(2)}</TableCell>
-                    <TableCell className="font-mono">0 / {bot.config?.maxSafetyOrders ?? 0}</TableCell>
-                    <TableCell className="font-mono">—</TableCell>
+                    <TableCell className="font-mono">
+                      {bot.safety_orders_filled ?? 0} / {bot.config?.maxSafetyOrders ?? 0}
+                    </TableCell>
+                    <TableCell className="font-mono">
+                      {bot.avg_entry_price != null ? `$${Number(bot.avg_entry_price).toFixed(4)}` : "—"}
+                    </TableCell>
                     <TableCell className="font-mono">{bot.config?.tpPct ?? "—"}%</TableCell>
-                    <TableCell className="font-mono">—</TableCell>
+                    <TableCell className="font-mono">
+                      {bot.realized_pnl != null ? (
+                        <span className={bot.realized_pnl >= 0 ? "text-[#10B981]" : "text-[#EF4444]"}>
+                          {bot.realized_pnl >= 0 ? "+" : ""}${bot.realized_pnl.toFixed(2)}
+                        </span>
+                      ) : (
+                        "—"
+                      )}
+                    </TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-2">
                         {bot.status === "running" ? (

@@ -27,7 +27,7 @@ dcaBotsRouter.use(verifySupabaseJWT);
 
 /**
  * GET /api/dca-bots
- * List current user's DCA bots
+ * List current user's DCA bots with dca_bot_state (DCA progress, avg entry, realized PnL).
  */
 dcaBotsRouter.get('/', async (req: AuthenticatedRequest, res) => {
   const client = getSupabase();
@@ -35,14 +35,25 @@ dcaBotsRouter.get('/', async (req: AuthenticatedRequest, res) => {
   try {
     const { data, error } = await client
       .from('dca_bots')
-      .select('*')
+      .select('*, dca_bot_state(safety_orders_filled, avg_entry_price, position_size, realized_pnl)')
       .eq('user_id', req.user!.id)
       .order('created_at', { ascending: false });
     if (error) {
       console.error('DCA bots list error:', error);
       return res.status(500).json({ error: 'Failed to fetch bots' });
     }
-    res.json({ bots: data ?? [] });
+    const bots = (data ?? []).map((row: any) => {
+      const state = Array.isArray(row.dca_bot_state) ? row.dca_bot_state[0] : row.dca_bot_state;
+      const { dca_bot_state: _, ...bot } = row;
+      return {
+        ...bot,
+        safety_orders_filled: state?.safety_orders_filled ?? 0,
+        avg_entry_price: state?.avg_entry_price != null ? Number(state.avg_entry_price) : null,
+        position_size: state?.position_size != null ? Number(state.position_size) : null,
+        realized_pnl: state?.realized_pnl != null ? Number(state.realized_pnl) : 0,
+      };
+    });
+    res.json({ bots });
   } catch (err) {
     console.error('DCA bots list error:', err);
     res.status(500).json({ error: 'Failed to fetch bots' });

@@ -242,6 +242,7 @@ async function placeDcaOrder(
 
 /**
  * Insert into unified orders table for DCA attribution (UI Orders/Trade History).
+ * Returns the inserted order id, or null if insert failed (logged).
  */
 async function insertDcaOrderIntoUnified(
   client: SupabaseClient,
@@ -253,20 +254,47 @@ async function insertDcaOrderIntoUnified(
   amount: number,
   price: number | null,
   exchangeOrderId: string
-): Promise<void> {
-  await client.from('orders').insert({
-    user_id: userId,
-    dca_bot_id: botId,
-    source: 'dca',
-    symbol,
-    side,
-    order_type: orderType,
-    amount,
-    price,
-    status: 'pending',
-    exchange_order_id: exchangeOrderId,
-    updated_at: new Date().toISOString(),
-  });
+): Promise<string | null> {
+  const { data, error } = await client
+    .from('orders')
+    .insert({
+      user_id: userId,
+      dca_bot_id: botId,
+      source: 'dca',
+      symbol,
+      side,
+      order_type: orderType,
+      amount,
+      price,
+      status: orderType === 'market' ? 'filled' : 'pending',
+      exchange_order_id: exchangeOrderId,
+      updated_at: new Date().toISOString(),
+    })
+    .select('id')
+    .single();
+  if (error) {
+    console.error('[dca-engine] insertDcaOrderIntoUnified failed:', error.message, { userId, botId, symbol, side });
+    return null;
+  }
+  const orderId = (data as { id?: string } | null)?.id ?? null;
+  if (orderId && orderType === 'market') {
+    const { error: tradeErr } = await client.from('trades').insert({
+      user_id: userId,
+      order_id: orderId,
+      dca_bot_id: botId,
+      source: 'dca',
+      symbol,
+      side,
+      amount,
+      price: price ?? 0,
+      fee: 0,
+      executed_at: new Date().toISOString(),
+    });
+    if (tradeErr) {
+      console.warn('[dca-engine] insert DCA trade failed (order already in Orders):', tradeErr.message);
+    }
+  }
+  return orderId;
 }
 
 /**
