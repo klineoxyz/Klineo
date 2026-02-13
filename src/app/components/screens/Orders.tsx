@@ -4,7 +4,7 @@ import { Badge } from "@/app/components/ui/badge";
 import { Button } from "@/app/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/app/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/app/components/ui/tabs";
-import { X, Loader2, LayoutGrid, Users } from "lucide-react";
+import { X, Loader2, LayoutGrid, Users, RefreshCw } from "lucide-react";
 import { api } from "@/lib/api";
 import { toast } from "@/app/lib/toast";
 import { useDemo } from "@/app/contexts/DemoContext";
@@ -49,8 +49,23 @@ export function Orders() {
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>("all");
+  const [isSyncing, setIsSyncing] = useState(false);
 
   const displayOrders = isDemoMode ? demoOrders : orders;
+
+  const refreshFromExchange = async () => {
+    if (isSyncing) return;
+    setIsSyncing(true);
+    try {
+      await api.post<{ success: boolean; synced: number }>("/api/dca-bots/sync-orders");
+      await loadOrders(page, sourceFilter);
+      toast.success("Orders synced from exchange");
+    } catch {
+      toast.error("Sync failed", { description: "Could not refresh orders from exchange." });
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   const loadOrders = async (pageNum: number = 1, source: SourceFilter = sourceFilter) => {
     setIsLoading(true);
@@ -156,7 +171,7 @@ export function Orders() {
         </Card>
       </div>
 
-      {/* Source filter: All | Copy Trading | DCA Bots */}
+      {/* Source filter + Refresh from exchange */}
       {!isDemoMode && (
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-sm text-muted-foreground">Source:</span>
@@ -167,6 +182,10 @@ export function Orders() {
               <TabsTrigger value="dca" className="gap-1"><LayoutGrid className="size-3.5" /> DCA Bots</TabsTrigger>
             </TabsList>
           </Tabs>
+          <Button variant="outline" size="sm" onClick={refreshFromExchange} disabled={isSyncing} className="ml-2 gap-1.5">
+            {isSyncing ? <Loader2 className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />}
+            Refresh from exchange
+          </Button>
         </div>
       )}
 

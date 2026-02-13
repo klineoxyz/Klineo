@@ -9,7 +9,7 @@ import { body } from 'express-validator';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { fetchEntitlement } from '../middleware/requireEntitlement.js';
 import { getMaxDcaBots } from './profile.js';
-import { processOneBot } from '../lib/dcaEngine.js';
+import { processOneBot, syncDcaOrdersForUser } from '../lib/dcaEngine.js';
 
 let supabase: SupabaseClient | null = null;
 
@@ -253,6 +253,29 @@ dcaBotsRouter.put(
     }
   }
 );
+
+/**
+ * POST /api/dca-bots/sync-orders
+ * Sync DCA order status from exchange for all running spot DCA bots. Updates Orders/Trade History data.
+ */
+dcaBotsRouter.post('/sync-orders', async (req: AuthenticatedRequest, res) => {
+  const client = getSupabase();
+  if (!client) return res.status(503).json({ error: 'Database unavailable' });
+  try {
+    const userId = req.user!.id;
+    const { synced, errors } = await syncDcaOrdersForUser(client, userId);
+    return res.json({
+      success: true,
+      synced,
+      errors: errors.length ? errors : undefined,
+      message: `Synced ${synced} bot(s) from exchange.`,
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Sync failed';
+    console.error('DCA sync-orders error:', msg);
+    return res.status(500).json({ error: 'Sync failed', message: msg });
+  }
+});
 
 /**
  * POST /api/dca-bots/:id/trigger-tick

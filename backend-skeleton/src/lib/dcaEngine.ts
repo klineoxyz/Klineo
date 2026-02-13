@@ -48,7 +48,7 @@ import {
   cancelSpotOrder as bybitCancelSpotOrder,
   type BybitCredentials,
 } from './bybit.js';
-import { executeOrder } from './orderExecution.js';
+import { executeOrder, getSpotBaseBalance } from './orderExecution.js';
 
 const LOCK_TTL_SEC = 60;
 const TICK_INTERVAL_SEC = 15;
@@ -345,8 +345,9 @@ async function cancelDcaOrder(
 
 /**
  * Sync dca_bot_orders with exchange open orders: mark missing ones as filled/cancelled.
+ * Also updates unified orders table and dca_bot_state on TP fill. Exported for manual sync from API.
  */
-async function syncOpenOrders(
+export async function syncOpenOrders(
   client: SupabaseClient,
   botId: string,
   exchange: string,
@@ -411,6 +412,48 @@ async function syncOpenOrders(
       }
     }
   }
+}
+
+/**
+ * Sync order status from exchange for all running spot DCA bots of a user.
+ * Updates dca_bot_orders and unified orders (and dca_bot_state on TP fill). Use for "Refresh from exchange".
+ */
+export async function syncDcaOrdersForUser(
+  client: SupabaseClient,
+  userId: string
+): Promise<{ synced: number; errors: string[] }> {
+  const { data: bots } = await client
+    .from('dca_bots')
+    .select('id, user_id, exchange, pair')
+    .eq('user_id', userId)
+    .eq('status', 'running')
+    .eq('market', 'spot');
+  const errors: string[] = [];
+  let synced = 0;
+  for (const bot of bots ?? []) {
+    const conn = await loadConnection(client, bot.user_id, bot.exchange);
+    if (!conn?.encrypted_config_b64) continue;
+    let creds: BinanceCredentials | BybitCredentials;
+    try {
+      const decrypted = await decrypt(conn.encrypted_config_b64);
+      const parsed = JSON.parse(decrypted) as { apiKey: string; apiSecret: string };
+      const env = (conn.environment || 'production') as 'production' | 'testnet';
+      creds =
+        bot.exchange === 'binance'
+          ? ({ apiKey: parsed.apiKey, apiSecret: parsed.apiSecret, environment: env } as BinanceCredentials)
+          : ({ apiKey: parsed.apiKey, apiSecret: parsed.apiSecret, environment: env } as BybitCredentials);
+    } catch {
+      errors.push(`Bot ${bot.id}: decrypt failed`);
+      continue;
+    }
+    try {
+      await syncOpenOrders(client, bot.id, bot.exchange, bot.pair, creds);
+      synced++;
+    } catch (e) {
+      errors.push(`Bot ${bot.id}: ${e instanceof Error ? e.message : 'sync failed'}`);
+    }
+  }
+  return { synced, errors };
 }
 
 /**
@@ -515,7 +558,7 @@ export async function processOneBot(
     .maybeSingle();
 
   const state = stateRow as DcaBotStateRow | null;
-  const positionSize = state?.position_size != null ? parseFloat(String(state.position_size)) : 0;
+  let positionSize = state?.position_size != null ? parseFloat(String(state.position_size)) : 0;
   const avgEntry = state?.avg_entry_price != null ? parseFloat(String(state.avg_entry_price)) : 0;
   const safetyFilled = state?.safety_orders_filled ?? 0;
   const realizedPnl = state?.realized_pnl != null ? parseFloat(String(state.realized_pnl)) : 0;
@@ -536,6 +579,30 @@ export async function processOneBot(
     }
   } catch {
     /* use defaults */
+  }
+
+  // Reconcile position with exchange: if user sold manually, our state may show more than they have
+  if (positionSize > 0) {
+    let actualBase: number;
+    try {
+      actualBase = await getSpotBaseBalance(bot.exchange as 'binance' | 'bybit', creds, sym, env as 'production' | 'testnet');
+    } catch {
+      actualBase = positionSize;
+    }
+    const tolerance = Math.max(filters.stepSize * 2, 1e-8);
+    if (actualBase < positionSize - tolerance) {
+      const reconciledSize = actualBase >= filters.minQty ? actualBase : 0;
+      await client
+        .from('dca_bot_state')
+        .update({
+          position_size: reconciledSize,
+          avg_entry_price: reconciledSize > 0 ? state?.avg_entry_price : null,
+          safety_orders_filled: reconciledSize > 0 ? (state?.safety_orders_filled ?? 0) : 0,
+          updated_at: now.toISOString(),
+        })
+        .eq('dca_bot_id', bot.id);
+      positionSize = reconciledSize;
+    }
   }
 
   // Risk: daily loss limit (simplified: compare realized_pnl vs cap; we don't have daily window here, so we use total realized)
@@ -736,15 +803,23 @@ export async function processOneBot(
   }
   const hasTpOrders = openTpRows && openTpRows.length > 0 && !shouldReplaceTp;
   if (!hasTpOrders && positionSize > 0) {
-    const sellQty = roundToStep(positionSize, filters.stepSize);
+    let actualBaseForSell: number;
+    try {
+      actualBaseForSell = await getSpotBaseBalance(bot.exchange as 'binance' | 'bybit', creds, sym, env as 'production' | 'testnet');
+    } catch {
+      actualBaseForSell = positionSize;
+    }
+    const sellQtyNum = Math.min(positionSize, actualBaseForSell);
+    const sellQty = roundToStep(sellQtyNum, filters.stepSize);
     if (parseFloat(sellQty) >= filters.minQty) {
       try {
         if (tpLadder && tpLadderLevels.length >= 3) {
           const totalShare = tpLadderLevels.reduce((s, l) => s + (l.sharePct ?? 0), 0) || 100;
+          const totalToSell = sellQtyNum;
           for (let i = 0; i < tpLadderLevels.length; i++) {
             const level = tpLadderLevels[i];
             const pct = (level.sharePct ?? 33) / totalShare;
-            const partQty = roundToStep(positionSize * pct, filters.stepSize);
+            const partQty = roundToStep(totalToSell * pct, filters.stepSize);
             if (parseFloat(partQty) < filters.minQty) continue;
             const levelTpPrice = avgEntry * (1 + (level.pct ?? tpPct) / 100);
             const clientOrderId = makeDcaClientOrderId(bot.id, 'tp', now.getTime(), i);
@@ -783,6 +858,16 @@ export async function processOneBot(
         });
         return { botId: bot.id, status: 'error', error: msg };
       }
+    } else if (actualBaseForSell < filters.minQty) {
+      await client
+        .from('dca_bot_state')
+        .update({
+          position_size: 0,
+          avg_entry_price: null,
+          safety_orders_filled: 0,
+          updated_at: now.toISOString(),
+        })
+        .eq('dca_bot_id', bot.id);
     }
   }
 

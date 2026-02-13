@@ -126,6 +126,24 @@ async function getSpotBalanceBybit(
   return { baseFree, quoteFree };
 }
 
+/**
+ * Spot: get current base asset balance (free + locked) from exchange.
+ * Used by DCA engine to reconcile position with exchange after manual sells.
+ */
+export async function getSpotBaseBalance(
+  exchange: 'binance' | 'bybit',
+  credentials: { apiKey: string; apiSecret: string },
+  symbol: string,
+  environment: 'production' | 'testnet'
+): Promise<number> {
+  if (exchange === 'binance') {
+    const { baseFree } = await getSpotBalanceBinance(credentials, symbol, environment);
+    return baseFree;
+  }
+  const { baseFree } = await getSpotBalanceBybit(credentials, symbol, environment);
+  return baseFree;
+}
+
 /** Futures: get available balance in USDT. */
 async function getFuturesBalanceBinance(
   credentials: { apiKey: string; apiSecret: string },
