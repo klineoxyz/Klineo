@@ -51,8 +51,11 @@ export async function checkPermissions(
           message: 'Spot trading is disabled for this API key. Enable it in Binance API Management.',
         };
       }
-      const hasSpot = Array.isArray(account.permissions) && account.permissions.some((p) => /SPOT|MARGIN/i.test(String(p)));
-      if (!hasSpot && (account.permissions?.length ?? 0) > 0) {
+      // GET /api/v3/account is the Spot account endpoint only. Success + canTrade => key can trade Spot.
+      const accountTypeSpot = /SPOT|MARGIN/i.test(String(account.accountType ?? ''));
+      const permissionsSpot = Array.isArray(account.permissions) && account.permissions.some((p) => /SPOT|MARGIN/i.test(String(p)));
+      const hasSpot = accountTypeSpot || permissionsSpot || account.canTrade;
+      if (!hasSpot) {
         return {
           ok: false,
           reason_code: 'SPOT_NOT_ENABLED',
