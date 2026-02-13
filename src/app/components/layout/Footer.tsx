@@ -160,6 +160,16 @@ export function Footer({ onNavigate }: FooterProps) {
                   Become a Master Trader
                 </button>
               </li>
+              <li>
+                <a 
+                  href="/brand/KLINEO-Brand-Kit.pdf"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm text-muted-foreground hover:text-foreground transition"
+                >
+                  Brand Guidelines
+                </a>
+              </li>
             </ul>
           </div>
 

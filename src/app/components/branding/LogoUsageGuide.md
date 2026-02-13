@@ -1,17 +1,18 @@
 # KLINEO Logo Usage Guidelines
 
-## Logo Assets
+**Full brand kit:** Place `KLINEO-Brand-Kit.pdf` in `public/brand/` and open via footer link **Brand Guidelines** (`/brand/KLINEO-Brand-Kit.pdf`).
+
+## Logo Assets (in `src/assets/`)
 
 ### Standalone Icon (K Badge)
-- **File**: `figma:asset/2155d7c44a35a506acdc6c9058e7618ade0238bc.png` (small)
-- **File**: `figma:asset/bdb42a28b1ff7e16e1e2714565a2b72b338465de.png` (large)
-- **File**: `figma:asset/4a52b2718df23b0bc41f7d66e77c7a81670855ca.png` (favicon)
-- **Description**: Square black badge with off-white capital K and thin amber underline
+- **Files**: `6c13e9a600576bf702d05a5cf77f566f05f5c6a4.png`, `klineo-icon-64.png`
+- **Favicon**: `public/favicon.png` (same K icon)
+- **Description**: Square black badge with white/silver capital K and yellow-gold underline
 
 ### Wordmark
-- **File**: `figma:asset/1fa460da5408b0af2529206309b8ef37bafcce67.png` (dark background)
-- **File**: `figma:asset/ce7cf7fe1d4a65b9bc1b031de0649c40973b6660.png` (light background)
-- **Description**: "KLINEO" in uppercase technical sans-serif with underline
+- **Dark background**: `klineo-logo-dark-bg.png` — "KLINEO" in white/silver with white + yellow underline
+- **Light background**: `klineo-logo-white-bg.png` — "KLINEO" in black with black + yellow underline
+- **Description**: Uppercase bold italic wordmark with two-tone underline
 
 ## Usage Rules
 
