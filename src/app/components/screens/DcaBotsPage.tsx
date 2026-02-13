@@ -534,7 +534,7 @@ export function DcaBotsPage({ onNavigate }: DcaBotsPageProps) {
                     </TableCell>
                     <TableCell className="font-mono">${allocated.toFixed(2)}</TableCell>
                     <TableCell className="font-mono">
-                      {bot.safety_orders_filled ?? 0} / {bot.config?.maxSafetyOrders ?? 0}
+                      {Math.min(bot.safety_orders_filled ?? 0, bot.config?.maxSafetyOrders ?? 0)} / {bot.config?.maxSafetyOrders ?? 0}
                     </TableCell>
                     <TableCell className="font-mono">
                       {bot.avg_entry_price != null ? `$${Number(bot.avg_entry_price).toFixed(4)}` : "—"}

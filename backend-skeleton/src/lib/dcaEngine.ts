@@ -366,7 +366,7 @@ async function syncOpenOrders(
   }
   const { data: ourOrders } = await client
     .from('dca_bot_orders')
-    .select('id, exchange_order_id, client_order_id')
+    .select('id, exchange_order_id, client_order_id, side, qty, price')
     .eq('dca_bot_id', botId)
     .in('status', ['submitted', 'pending', 'open', 'new']);
   for (const row of ourOrders ?? []) {
@@ -386,6 +386,30 @@ async function syncOpenOrders(
     const lower = String(statusStr).toLowerCase();
     const mapped = lower === 'filled' || lower === 'partiallyfilled' ? 'filled' : 'cancelled';
     await client.from('dca_bot_orders').update({ status: mapped }).eq('id', row.id);
+
+    if (mapped === 'filled') {
+      await client.from('orders').update({ status: 'filled', updated_at: new Date().toISOString() }).eq('exchange_order_id', String(exId)).eq('source', 'dca');
+      if (row.side === 'sell') {
+        const { data: stateRow } = await client.from('dca_bot_state').select('avg_entry_price, position_size, realized_pnl').eq('dca_bot_id', botId).maybeSingle();
+        const state = stateRow as { avg_entry_price?: string | null; position_size?: string | null; realized_pnl?: string | null } | null;
+        const avgEntry = state?.avg_entry_price != null ? parseFloat(String(state.avg_entry_price)) : 0;
+        const positionSize = state?.position_size != null ? parseFloat(String(state.position_size)) : 0;
+        const realizedPnl = state?.realized_pnl != null ? parseFloat(String(state.realized_pnl)) : 0;
+        const sellQty = row.qty != null ? parseFloat(String(row.qty)) : 0;
+        const sellPrice = row.price != null ? parseFloat(String(row.price)) : 0;
+        const pnl = sellQty > 0 && avgEntry > 0 ? (sellPrice - avgEntry) * sellQty : 0;
+        await client
+          .from('dca_bot_state')
+          .update({
+            position_size: 0,
+            avg_entry_price: null,
+            safety_orders_filled: 0,
+            realized_pnl: realizedPnl + pnl,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('dca_bot_id', botId);
+      }
+    }
   }
 }
 

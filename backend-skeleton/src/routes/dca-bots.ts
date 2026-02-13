@@ -42,12 +42,17 @@ dcaBotsRouter.get('/', async (req: AuthenticatedRequest, res) => {
       console.error('DCA bots list error:', error);
       return res.status(500).json({ error: 'Failed to fetch bots' });
     }
+    const maxSafetyOrdersFromConfig = (config: Record<string, unknown> | undefined) =>
+      Math.max(0, Number(config?.maxSafetyOrders ?? 0));
     const bots = (data ?? []).map((row: any) => {
       const state = Array.isArray(row.dca_bot_state) ? row.dca_bot_state[0] : row.dca_bot_state;
       const { dca_bot_state: _, ...bot } = row;
+      const rawFilled = state?.safety_orders_filled ?? 0;
+      const maxSafety = maxSafetyOrdersFromConfig(row.config);
+      const safety_orders_filled = Math.min(Number(rawFilled), maxSafety);
       return {
         ...bot,
-        safety_orders_filled: state?.safety_orders_filled ?? 0,
+        safety_orders_filled: maxSafety > 0 ? safety_orders_filled : 0,
         avg_entry_price: state?.avg_entry_price != null ? Number(state.avg_entry_price) : null,
         position_size: state?.position_size != null ? Number(state.position_size) : null,
         realized_pnl: state?.realized_pnl != null ? Number(state.realized_pnl) : 0,

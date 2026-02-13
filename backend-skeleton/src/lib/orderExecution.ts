@@ -494,7 +494,7 @@ export async function executeOrder(
           requiredBalance = (params.requestedQuote ?? notional) * feeMultiplier;
           availableBalance = quoteFree;
         } else {
-          requiredBalance = qtyNum * feeMultiplier;
+          requiredBalance = qtyNum;
           availableBalance = baseFree;
         }
       } else {
@@ -503,7 +503,7 @@ export async function executeOrder(
           requiredBalance = (params.requestedQuote ?? notional) * feeMultiplier;
           availableBalance = quoteFree;
         } else {
-          requiredBalance = qtyNum * feeMultiplier;
+          requiredBalance = qtyNum;
           availableBalance = baseFree;
         }
       }
@@ -540,7 +540,9 @@ export async function executeOrder(
         success: false,
         status: 'SKIPPED',
         reason_code: 'INSUFFICIENT_BALANCE',
-        message: `Insufficient balance. Available: ${availableBalance.toFixed(4)}, required: ${requiredBalance.toFixed(4)} (incl. ${feePct}% fee buffer).`,
+        message: side === 'BUY'
+          ? `Insufficient balance. Available: ${availableBalance.toFixed(4)}, required: ${requiredBalance.toFixed(4)} (incl. ${feePct}% fee buffer).`
+          : `Insufficient balance. Available: ${availableBalance.toFixed(4)} ${sym.replace('USDT', '')}, required: ${requiredBalance.toFixed(4)} to sell.`,
       };
     }
     try {
