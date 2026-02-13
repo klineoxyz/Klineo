@@ -353,6 +353,8 @@ export interface CheckPermissionsResponse {
   ok: boolean;
   reason_code?: string;
   message: string;
+  /** Link to fix permissions (e.g. Binance API Management). */
+  help_url?: string;
 }
 
 export const trading = {
