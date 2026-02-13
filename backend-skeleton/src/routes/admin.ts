@@ -1489,22 +1489,47 @@ adminRouter.get('/user-discounts', async (req, res) => {
       (profiles || []).forEach((p: any) => { emailMap[p.id] = p.email || '—'; });
     }
 
-    const formatted = discounts?.map((d: any) => ({
-      id: d.id,
-      userId: d.user_id,
-      userEmail: emailMap[d.user_id] || '—',
-      code: d.code || null,
-      scope: d.scope,
-      onboardingDiscountPercent: d.onboarding_discount_percent != null ? parseFloat(d.onboarding_discount_percent) : null,
-      onboardingDiscountFixedUsd: d.onboarding_discount_fixed_usd != null ? parseFloat(d.onboarding_discount_fixed_usd) : null,
-      tradingDiscountPercent: d.trading_discount_percent != null ? parseFloat(d.trading_discount_percent) : null,
-      tradingPackageIds: d.trading_package_ids || [],
-      tradingMaxPackages: d.trading_max_packages,
-      tradingUsedCount: d.trading_used_count || 0,
-      status: d.status,
-      createdAt: new Date(d.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-      updatedAt: d.updated_at ? new Date(d.updated_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : null,
-    }));
+    const onboardingDiscountIds = (discounts || []).filter((d: any) => d.scope === 'onboarding').map((d: any) => ({ user_id: d.user_id, code: (d.code || '').toUpperCase().trim() }));
+    const claimedOnboarding = new Set<string>();
+    let onboardingClaimedAt: Record<string, string> = {};
+    if (onboardingDiscountIds.length > 0) {
+      const { data: intents } = await client
+        .from('payment_intents')
+        .select('user_id, coupon_code, updated_at')
+        .eq('kind', 'joining_fee')
+        .eq('status', 'approved')
+        .in('user_id', userIds);
+      (intents || []).forEach((i: any) => {
+        const key = `${i.user_id}:${(i.coupon_code || '').toUpperCase().trim()}`;
+        claimedOnboarding.add(key);
+        if (i.updated_at) onboardingClaimedAt[key] = i.updated_at;
+      });
+    }
+
+    const formatted = discounts?.map((d: any) => {
+      const onboardingClaimed = d.scope === 'onboarding' && d.code && claimedOnboarding.has(`${d.user_id}:${(d.code || '').toUpperCase().trim()}`);
+      const tradingClaimed = (d.trading_used_count || 0) > 0;
+      const claimed = onboardingClaimed || tradingClaimed;
+      const claimedAtKey = `${d.user_id}:${(d.code || '').toUpperCase().trim()}`;
+      return {
+        id: d.id,
+        userId: d.user_id,
+        userEmail: emailMap[d.user_id] || '—',
+        code: d.code || null,
+        scope: d.scope,
+        onboardingDiscountPercent: d.onboarding_discount_percent != null ? parseFloat(d.onboarding_discount_percent) : null,
+        onboardingDiscountFixedUsd: d.onboarding_discount_fixed_usd != null ? parseFloat(d.onboarding_discount_fixed_usd) : null,
+        tradingDiscountPercent: d.trading_discount_percent != null ? parseFloat(d.trading_discount_percent) : null,
+        tradingPackageIds: d.trading_package_ids || [],
+        tradingMaxPackages: d.trading_max_packages,
+        tradingUsedCount: d.trading_used_count || 0,
+        status: d.status,
+        claimed: !!claimed,
+        claimedAt: onboardingClaimed && onboardingClaimedAt[claimedAtKey] ? new Date(onboardingClaimedAt[claimedAtKey]).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : null,
+        createdAt: new Date(d.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+        updatedAt: d.updated_at ? new Date(d.updated_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : null,
+      };
+    });
 
     res.json({ userDiscounts: formatted || [] });
   } catch (err) {

@@ -2511,6 +2511,8 @@ export function Admin() {
                     : `${d.tradingDiscountPercent ?? 0}%`,
                   packagesMax: d.scope === "trading_packages" ? `${d.tradingPackageIds?.length ? d.tradingPackageIds.join(", ") : "All"} / max ${d.tradingMaxPackages ?? "—"}` : "—",
                   usedCount: d.tradingUsedCount ?? 0,
+                  claimed: !!(d as { claimed?: boolean }).claimed,
+                  claimedAt: (d as { claimedAt?: string | null }).claimedAt ?? null,
                   status: d.status === "active" ? "Active" : d.status === "paused" ? "Paused" : d.status === "revoked" ? "Revoked" : d.status || "—",
                   raw: d,
                 }));
@@ -2547,8 +2549,10 @@ export function Admin() {
                         <TableCell className="text-sm">{row.discount}</TableCell>
                         <TableCell className="text-sm text-muted-foreground">{row.packagesMax}</TableCell>
                         <TableCell>
-                          {row.usedCount > 0 ? (
-                            <Badge variant="default" className="bg-[#10B981]/10 text-[#10B981] border-[#10B981]/50">Claimed ({row.usedCount})</Badge>
+                          {(row.type === "user" && (row as { claimed?: boolean }).claimed) || row.usedCount > 0 ? (
+                            <Badge variant="default" className="bg-[#10B981]/10 text-[#10B981] border-[#10B981]/50" title={(row as { claimedAt?: string | null }).claimedAt ? `Claimed on ${(row as { claimedAt?: string | null }).claimedAt}` : undefined}>
+                              Claimed{row.usedCount > 0 ? ` (${row.usedCount})` : (row as { claimedAt?: string | null }).claimedAt ? ` · ${(row as { claimedAt?: string | null }).claimedAt}` : ""}
+                            </Badge>
                           ) : (
                             <span className="text-muted-foreground text-sm">—</span>
                           )}
