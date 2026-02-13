@@ -82,6 +82,7 @@
     "@vitejs/plugin-react": "4.7.0",
     "dotenv": "^16.4.5",
     "pg": "^8.13.0",
+    "sharp": "^0.34.5",
     "supabase": "^2.19.0",
     "tailwindcss": "4.1.12",
     "vite": "6.3.5"
