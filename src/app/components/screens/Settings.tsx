@@ -517,25 +517,15 @@ export function Settings({ onNavigate }: SettingsProps) {
     }
   };
 
-  const [permissionErrorHelp, setPermissionErrorHelp] = useState<{ message: string; help_url: string; connLabel: string } | null>(null);
-
   const handleCheckPermissions = async (conn: ExchangeConnection, marketType: 'spot' | 'futures') => {
     const key = `${conn.id}_${marketType}`;
     setPermissionCheckLoading(key);
-    setPermissionErrorHelp(null);
     try {
       const result = await trading.checkPermissions(conn.exchange as 'binance' | 'bybit', marketType);
       if (result.ok) {
         toast.success(`Permissions OK (${marketType})`, { description: result.message });
       } else {
         toast.error(result.reason_code ?? 'Permission check failed', { description: result.message });
-        if (result.help_url) {
-          setPermissionErrorHelp({
-            message: result.message,
-            help_url: result.help_url,
-            connLabel: `${conn.exchange} ${marketType}`,
-          });
-        }
       }
     } catch (err: any) {
       const msg = getApiErrorMessage(err);
@@ -1204,30 +1194,6 @@ export function Settings({ onNavigate }: SettingsProps) {
             </Card>
           ) : (
             <div className="space-y-4">
-              {permissionErrorHelp && (
-                <Alert variant="destructive" className="border-red-500/20 bg-red-500/10">
-                  <AlertTriangle className="size-4" />
-                  <AlertDescription className="space-y-2">
-                    <p>{permissionErrorHelp.message}</p>
-                    <p className="text-sm">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="border-red-500/50 text-red-700 dark:text-red-300 hover:bg-red-500/10"
-                        onClick={() => {
-                          window.open(permissionErrorHelp!.help_url, '_blank', 'noopener,noreferrer');
-                        }}
-                      >
-                        Open Binance API Management
-                      </Button>
-                      <span className="ml-2 text-muted-foreground">→ Enable &quot;Enable Reading&quot; and &quot;Enable Spot &amp; Margin Trading&quot;</span>
-                    </p>
-                    <Button variant="ghost" size="sm" className="text-muted-foreground -ml-2" onClick={() => setPermissionErrorHelp(null)}>
-                      Dismiss
-                    </Button>
-                  </AlertDescription>
-                </Alert>
-              )}
               {exchangeConnectionsList.map((conn) => (
                 <Card key={conn.id} className="p-6">
                   <div className="flex items-start justify-between">
@@ -1270,14 +1236,6 @@ export function Settings({ onNavigate }: SettingsProps) {
                             {/restricted|eligibility|451|region|unavailable.*location/i.test(conn.last_error_message) && (
                               <p className="text-xs text-muted-foreground mt-1">
                                 Binance restricts access by the <strong>request origin IP</strong> (our server). Your API key can be valid; if you are in an allowed region, the platform can route API calls via a proxy in that region. Contact support or check deployment docs for BINANCE_HTTP_PROXY.
-                              </p>
-                            )}
-                            {conn.exchange === 'binance' && /spot|permission|margin|reading|trade/i.test(conn.last_error_message) && (
-                              <p className="text-xs text-muted-foreground mt-1">
-                                Fix: In Binance API Management enable <strong>Enable Reading</strong> and <strong>Enable Spot &amp; Margin Trading</strong>.{" "}
-                                <a href="https://www.binance.com/en/my/settings/api-management" target="_blank" rel="noopener noreferrer" className="text-primary underline">
-                                  Open Binance API Management
-                                </a>
                               </p>
                             )}
                           </>

@@ -13,8 +13,6 @@ export type PermissionsCheckResult = {
   ok: boolean;
   reason_code?: string;
   message: string;
-  /** Optional URL for user to fix permission (e.g. Binance API Management). */
-  help_url?: string;
 };
 
 const sanitize = (s: string) => s.replace(/api[_-]?key/gi, '[REDACTED]').replace(/secret/gi, '[REDACTED]');
@@ -46,13 +44,11 @@ export async function checkPermissions(
         environment,
       };
       const account = await binance.getAccountInfo(creds);
-      const binanceApiUrl = 'https://www.binance.com/en/my/settings/api-management';
       if (!account.canTrade) {
         return {
           ok: false,
           reason_code: 'API_READ_ONLY',
-          message: 'Spot trading is disabled for this API key. Enable "Enable Spot & Margin Trading" in Binance API Management.',
-          help_url: binanceApiUrl,
+          message: 'Spot trading is disabled for this API key. Enable it in Binance API Management.',
         };
       }
       const hasSpot = Array.isArray(account.permissions) && account.permissions.some((p) => /SPOT|MARGIN/i.test(String(p)));
@@ -60,8 +56,7 @@ export async function checkPermissions(
         return {
           ok: false,
           reason_code: 'SPOT_NOT_ENABLED',
-          message: 'Spot/Margin permission not found. In Binance API Management enable "Enable Reading" and "Enable Spot & Margin Trading".',
-          help_url: binanceApiUrl,
+          message: 'Spot/Margin permission not found. In Binance: Profile → API Management → Edit this key → enable "Enable Reading" and "Enable Spot & Margin Trading". Do NOT enable Withdrawals.',
         };
       }
       return { ok: true, message: 'Spot permissions OK' };
