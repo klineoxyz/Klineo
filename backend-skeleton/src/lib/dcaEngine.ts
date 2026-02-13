@@ -4,11 +4,27 @@
  * Polls running bots, acquires per-bot lock, executes grid logic (entry, safety orders, TP), enforces risk controls.
  *
  * Exchange safety: min qty/step/notional from Binance getSpotSymbolFilters (Bybit uses defaults).
- * Idempotent orders: clientOrderId = klineo_dca_{botId}_{level}_{timestamp}.
+ * Binance requires newClientOrderId to match ^[a-zA-Z0-9-_]{1,36}$ — we use makeDcaClientOrderId() for all orders.
  * Partial fills: state is set when we place orders; reconciliation from exchange fill events can be added later.
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
+
+/** Binance/Bybit legal client order ID: max 36 chars, only [a-zA-Z0-9-_]. */
+function makeDcaClientOrderId(botId: string, type: string, timestamp: number, ladderIndex?: number): string {
+  const id = (botId || '').replace(/-/g, '').slice(0, 20);
+  const ts = String(timestamp).slice(-9);
+  const t = ladderIndex !== undefined ? `t${ladderIndex}` : type;
+  const tag = t.length >= 2 ? t.slice(0, 2) : t + '0';
+  return `kdca${id}_${tag}${ts}`;
+}
+
+const MAX_CLIENT_ORDER_ID_LEN = 36;
+function assertDcaClientOrderId(s: string): void {
+  if (s.length > MAX_CLIENT_ORDER_ID_LEN || !/^[a-zA-Z0-9-_]+$/.test(s)) {
+    throw new Error(`DCA clientOrderId must match ^[a-zA-Z0-9-_]{1,36}$ (got ${s.length} chars)`);
+  }
+}
 import { decrypt } from './crypto.js';
 import { toExchangeSymbol, roundToStep } from './symbols.js';
 import {
@@ -501,7 +517,8 @@ export async function processOneBot(
           }
           const sellQty = roundToStep(positionSize, filters.stepSize);
           if (parseFloat(sellQty) >= filters.minQty) {
-            const clientOrderId = `klineo_dca_${bot.id}_flatten_${now.getTime()}`;
+            const clientOrderId = makeDcaClientOrderId(bot.id, 'fl', now.getTime());
+            assertDcaClientOrderId(clientOrderId);
             const { exchangeOrderId } = await placeDcaOrder(client, bot.user_id, bot.id, bot.exchange, creds, { pair: bot.pair, side: 'sell', type: 'market', qty: sellQty, clientOrderId }, env);
             await insertDcaOrderIntoUnified(client, bot.user_id, bot.id, sym, 'sell', 'market', parseFloat(sellQty), price, exchangeOrderId);
           }
@@ -543,7 +560,8 @@ export async function processOneBot(
       });
       return { botId: bot.id, status: 'skipped', reason: 'Min notional' };
     }
-    const clientOrderId = `klineo_dca_${bot.id}_base_${now.getTime()}`;
+    const clientOrderId = makeDcaClientOrderId(bot.id, 'ba', now.getTime());
+    assertDcaClientOrderId(clientOrderId);
     try {
       const { exchangeOrderId } = await placeDcaOrder(client, bot.user_id, bot.id, bot.exchange, creds, {
         pair: bot.pair,
@@ -605,7 +623,9 @@ export async function processOneBot(
     const qty = roundToStep(Math.max(qtyRaw, filters.minQty), filters.stepSize);
     const notional = parseFloat(qty) * levelPrice;
     if (notional >= filters.minNotional && price <= levelPrice * 1.001) {
-      const clientOrderId = `klineo_dca_${bot.id}_s${level}_${now.getTime()}`;
+      const levelTag = level <= 9 ? `s${level}` : String(level).padStart(2, '0');
+      const clientOrderId = makeDcaClientOrderId(bot.id, levelTag, now.getTime());
+      assertDcaClientOrderId(clientOrderId);
       try {
         const { exchangeOrderId } = await placeDcaOrder(client, bot.user_id, bot.id, bot.exchange, creds, {
           pair: bot.pair,
@@ -661,7 +681,6 @@ export async function processOneBot(
   if (!hasTpOrders && positionSize > 0) {
     const sellQty = roundToStep(positionSize, filters.stepSize);
     if (parseFloat(sellQty) >= filters.minQty) {
-      const clientOrderId = `klineo_dca_${bot.id}_tp_${now.getTime()}`;
       try {
         if (tpLadder && tpLadderLevels.length >= 3) {
           const totalShare = tpLadderLevels.reduce((s, l) => s + (l.sharePct ?? 0), 0) || 100;
@@ -671,17 +690,21 @@ export async function processOneBot(
             const partQty = roundToStep(positionSize * pct, filters.stepSize);
             if (parseFloat(partQty) < filters.minQty) continue;
             const levelTpPrice = avgEntry * (1 + (level.pct ?? tpPct) / 100);
+            const clientOrderId = makeDcaClientOrderId(bot.id, 'tp', now.getTime(), i);
+            assertDcaClientOrderId(clientOrderId);
             const { exchangeOrderId } = await placeDcaOrder(client, bot.user_id, bot.id, bot.exchange, creds, {
               pair: bot.pair,
               side: 'sell',
               type: 'limit',
               qty: partQty,
               price: levelTpPrice.toFixed(2),
-              clientOrderId: `${clientOrderId}_${i}`,
+              clientOrderId,
             }, env);
             await insertDcaOrderIntoUnified(client, bot.user_id, bot.id, sym, 'sell', 'limit', parseFloat(partQty), levelTpPrice, exchangeOrderId);
           }
         } else {
+          const clientOrderId = makeDcaClientOrderId(bot.id, 'tp', now.getTime());
+          assertDcaClientOrderId(clientOrderId);
           const { exchangeOrderId } = await placeDcaOrder(client, bot.user_id, bot.id, bot.exchange, creds, {
             pair: bot.pair,
             side: 'sell',
