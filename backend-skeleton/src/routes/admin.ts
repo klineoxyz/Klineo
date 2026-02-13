@@ -9,6 +9,7 @@ import { getPackageProfitAllowanceUsd } from './payment-intents.js';
 import { invalidateKillSwitchCache } from '../lib/platformSettings.js';
 import { allocatePurchaseRevenue } from '../lib/allocatePurchaseRevenue.js';
 import { runCronForSmoke } from './strategies-runner.js';
+import { sendMasterTraderTestEmail } from '../lib/email.js';
 
 let supabase: SupabaseClient | null = null;
 
@@ -1295,6 +1296,24 @@ adminRouter.get('/master-trader-applications', async (req, res) => {
   } catch (err) {
     console.error('Master trader applications error:', err);
     res.status(500).json({ error: 'Failed to fetch applications' });
+  }
+});
+
+/**
+ * POST /api/admin/send-test-master-trader-email
+ * Send a test Master Trader notification email to klineoxyz@gmail.com (Resend). Admin-only.
+ */
+adminRouter.post('/send-test-master-trader-email', async (_req, res) => {
+  try {
+    const result = await sendMasterTraderTestEmail();
+    if (result.ok) {
+      res.json({ ok: true, message: 'Test email sent to klineoxyz@gmail.com' });
+    } else {
+      res.status(500).json({ ok: false, error: result.error ?? 'Failed to send' });
+    }
+  } catch (err) {
+    console.error('Admin send-test-master-trader-email error:', err);
+    res.status(500).json({ ok: false, error: err instanceof Error ? err.message : 'Unknown error' });
   }
 });
 

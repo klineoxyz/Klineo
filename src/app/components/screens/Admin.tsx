@@ -137,6 +137,7 @@ export function Admin() {
   const [masterTraderReviewLoading, setMasterTraderReviewLoading] = useState(false);
   const [masterTraderProofImageError, setMasterTraderProofImageError] = useState(false);
   const [masterTraderProofSignedUrl, setMasterTraderProofSignedUrl] = useState<string | null>(null);
+  const [masterTraderTestEmailLoading, setMasterTraderTestEmailLoading] = useState(false);
 
   // Execution Debug (admin support)
   const [executionDebugEmail, setExecutionDebugEmail] = useState("");
@@ -1744,9 +1745,41 @@ export function Admin() {
 
         <TabsContent value="master-trader-requests" className="space-y-6" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
           <Card onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
-            <div className="p-4 border-b border-border">
-              <h3 className="text-lg font-semibold">Master Trader Requests</h3>
-              <p className="text-sm text-muted-foreground">Review and approve or reject applications. Use <strong>View</strong> to see the full application (all form fields: personal info, trading experience, proof screenshot, profile URL, strategy). Approved traders can submit strategies and compete for TOP 10 monthly campaign rewards. Rejected applicants see the reason on their application page and can apply again.</p>
+            <div className="p-4 border-b border-border flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+              <div>
+                <h3 className="text-lg font-semibold">Master Trader Requests</h3>
+                <p className="text-sm text-muted-foreground">Review and approve or reject applications. Use <strong>View</strong> to see the full application (all form fields: personal info, trading experience, proof screenshot, profile URL, strategy). Approved traders can submit strategies and compete for TOP 10 monthly campaign rewards. Rejected applicants see the reason on their application page and can apply again.</p>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={masterTraderTestEmailLoading}
+                onClick={async () => {
+                  setMasterTraderTestEmailLoading(true);
+                  try {
+                    const res = await api.post<{ ok: boolean; error?: string; message?: string }>('/api/admin/send-test-master-trader-email');
+                    if (res?.ok) {
+                      toast.success('Test email sent', { description: 'A sample Master Trader notification was sent to klineoxyz@gmail.com.' });
+                    } else {
+                      toast.error('Test email failed', { description: res?.error ?? 'Unknown error' });
+                    }
+                  } catch (err: unknown) {
+                    toast.error('Test email failed', { description: err instanceof Error ? err.message : 'Request failed' });
+                  } finally {
+                    setMasterTraderTestEmailLoading(false);
+                  }
+                }}
+              >
+                {masterTraderTestEmailLoading ? (
+                  <>
+                    <RefreshCw className="size-3.5 animate-spin shrink-0" aria-hidden />
+                    Sending…
+                  </>
+                ) : (
+                  'Send test email'
+                )}
+              </Button>
             </div>
             {/* Avoid blackout: keep table visible with existing data while refreshing; only show full loading when no data yet */}
             {masterTraderApplicationsLoading && masterTraderApplications.length === 0 ? (

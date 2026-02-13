@@ -108,6 +108,32 @@ export async function sendMasterTraderApplicationCopy(params: {
   }
 }
 
+/**
+ * Send a test Master Trader notification email to klineoxyz@gmail.com (for verifying Resend).
+ * Uses sample form data so you can confirm the email layout and delivery.
+ */
+export async function sendMasterTraderTestEmail(): Promise<{ ok: boolean; error?: string }> {
+  return sendMasterTraderApplicationCopy({
+    to: 'klineoxyz@gmail.com',
+    formData: {
+      fullName: 'Test Applicant',
+      email: 'test@example.com',
+      country: 'United States',
+      telegram: '@testuser',
+      primaryExchange: 'Binance',
+      yearsExperience: 3,
+      tradingStyle: 'swing',
+      preferredMarkets: 'futures',
+      avgMonthlyReturn: '15',
+      strategyDescription: 'This is a test application to verify that Master Trader notification emails are delivered to klineoxyz@gmail.com via Resend.',
+      whyMasterTrader: 'Testing the email pipeline. You can ignore this message.',
+      profileUrl: 'https://www.klineo.xyz',
+    },
+    proofUrl: null,
+    applicationId: 'test-' + Date.now(),
+  });
+}
+
 function escapeHtml(s: string): string {
   return s
     .replace(/&/g, '&amp;')
