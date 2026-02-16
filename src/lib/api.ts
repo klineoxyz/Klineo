@@ -119,10 +119,18 @@ export async function apiRequest<T = unknown>(
   }
 
   const contentType = res.headers.get('content-type');
+  const text = await res.text();
   if (contentType?.includes('application/json')) {
-    return res.json() as Promise<T>;
+    if (!text || !text.trim()) {
+      throw new Error('Server returned empty response. Please retry or check the connection.');
+    }
+    try {
+      return JSON.parse(text) as T;
+    } catch {
+      throw new Error('Server returned invalid response. Please retry.');
+    }
   }
-  return res.text() as unknown as T;
+  return text as unknown as T;
 }
 
 export const api = {

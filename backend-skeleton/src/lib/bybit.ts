@@ -81,7 +81,9 @@ export function parseBybitServerTimeMs(data: {
 export async function getServerTime(environment: BybitEnvironment): Promise<number> {
   const baseUrl = getBaseUrl(environment);
   const res = await fetch(`${baseUrl}/v5/market/time`, { signal: AbortSignal.timeout(5000) });
-  const data = (await res.json()) as { retCode?: number; result?: { timeSecond?: string; timeNano?: string }; time?: number };
+  const rawText = await res.text();
+  if (!rawText?.trim()) throw new Error('Bybit returned empty response');
+  const data = JSON.parse(rawText) as { retCode?: number; result?: { timeSecond?: string; timeNano?: string }; time?: number };
   if (data.retCode !== 0 && data.retCode !== undefined) {
     throw new Error(`Bybit time: ${data.retCode}`);
   }
@@ -162,7 +164,16 @@ async function signedRequest<T>(
   }
 
   const response = await fetch(url, options);
-  const data = await response.json() as { retCode?: number; retMsg?: string; result?: T };
+  const rawText = await response.text();
+  if (!rawText || !rawText.trim()) {
+    throw new Error('Bybit returned an empty response. Check that you are using the correct API endpoint (testnet vs mainnet) and retry.');
+  }
+  let data: { retCode?: number; retMsg?: string; result?: T };
+  try {
+    data = JSON.parse(rawText) as { retCode?: number; retMsg?: string; result?: T };
+  } catch {
+    throw new Error('Bybit returned invalid JSON. The API may be temporarily unavailable—please retry.');
+  }
 
   if (data.retCode !== 0 && data.retCode !== undefined) {
     const human = mapBybitErrorToHuman(data.retCode, data.retMsg);
@@ -284,7 +295,16 @@ async function publicGetBybit<T>(
   const qs = new URLSearchParams(params).toString();
   const url = qs ? `${baseUrl}${endpoint}?${qs}` : `${baseUrl}${endpoint}`;
   const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
-  const data = (await res.json()) as { retCode?: number; retMsg?: string; result?: T };
+  const rawText = await res.text();
+  if (!rawText?.trim()) {
+    throw new Error('Bybit returned an empty response. Please retry.');
+  }
+  let data: { retCode?: number; retMsg?: string; result?: T };
+  try {
+    data = JSON.parse(rawText) as { retCode?: number; retMsg?: string; result?: T };
+  } catch {
+    throw new Error('Bybit API returned invalid response. Please retry.');
+  }
   if (data.retCode !== 0 && data.retCode !== undefined) {
     throw new Error(data.retMsg || `Bybit API ${data.retCode}`);
   }

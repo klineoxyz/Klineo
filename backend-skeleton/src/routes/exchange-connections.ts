@@ -355,8 +355,9 @@ exchangeConnectionsRouter.post(
       });
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Unknown error';
-      console.error(`[${requestId}] Error testing connection:`, errorMessage);
-      res.status(500).json({ error: 'Failed to test connection', requestId });
+      const sanitized = errorMessage.replace(/api[_-]?key/gi, '[REDACTED]').replace(/secret/gi, '[REDACTED]');
+      console.error(`[${requestId}] Error testing connection:`, sanitized);
+      res.status(500).json({ error: 'Failed to test connection', message: sanitized, requestId });
     }
   }
 );
