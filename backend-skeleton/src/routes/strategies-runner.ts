@@ -11,6 +11,7 @@ import { validate, uuidParam } from '../middleware/validation.js';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { runStrategyTick, runDueStrategies } from '../lib/strategyRunner.js';
 import { recordTradeResult } from '../lib/strategyRisk.js';
+import { processRunningDcaBots } from '../lib/dcaEngine.js';
 import { RUNNER_CONFIG } from '../lib/runnerConfig.js';
 
 let supabase: SupabaseClient | null = null;
@@ -242,6 +243,29 @@ strategiesRunnerRouter.post('/cron', cronOrAdminAuth, requireRunnerEnabled, (req
  * Auth: query param x_cron_secret = RUNNER_CRON_SECRET. Less secure (URL can be logged); use only if necessary.
  */
 strategiesRunnerRouter.post('/cron-internal', cronInternalAuth, requireRunnerEnabled, (req, res) => void handleCronRun(req, res));
+
+/**
+ * POST /api/runner/dca-cron — run DCA bot ticks only. Auth: x-cron-secret or admin JWT.
+ * For Railway cron: call every 1 min; claim_due_dca_bots ensures exactly-once per bot per interval.
+ */
+strategiesRunnerRouter.post('/dca-cron', cronOrAdminAuth, requireRunnerEnabled, async (req: Request, res: Response) => {
+  const client = getSupabase();
+  if (!client) return res.status(503).json({ ok: false, error: 'Database unavailable', requestId: (req as any).requestId || 'runner' });
+  const requestId = (req as any).requestId || 'runner';
+  try {
+    const { processed, results } = await processRunningDcaBots(client, { limit: 10 });
+    return res.json({
+      ok: true,
+      processed,
+      results: results.map((r) => ({ botId: r.botId, status: r.status })),
+      requestId,
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'DCA cron failed';
+    console.error(`[${requestId}] dca-cron error:`, msg);
+    return res.status(500).json({ ok: false, error: msg, requestId });
+  }
+});
 
 // All routes below require JWT + admin
 strategiesRunnerRouter.use(verifySupabaseJWT);

@@ -447,6 +447,40 @@ export async function getSpotOpenOrders(
 }
 
 /**
+ * Get spot execution list (trade history). GET /v5/execution/list
+ * https://bybit-exchange.github.io/docs/v5/order/execution
+ */
+export interface BybitExecutionRow {
+  symbol?: string;
+  orderId?: string;
+  orderLinkId?: string;
+  side?: string;
+  execId?: string;
+  execPrice?: string;
+  execQty?: string;
+  execTime?: string;
+  execType?: string;
+  execValue?: string;
+  execFee?: string;
+  orderPrice?: string;
+  orderQty?: string;
+  leavesQty?: string;
+}
+
+export async function getSpotExecutionList(
+  credentials: BybitCredentials,
+  params: { symbol: string; startTime?: number; endTime?: number; limit?: number }
+): Promise<BybitExecutionRow[]> {
+  const sym = (params.symbol || '').toUpperCase().replace(/\//g, '');
+  if (!sym) throw new Error('Symbol required for getSpotExecutionList');
+  const q: Record<string, string> = { category: 'spot', symbol: sym, limit: String(Math.min(100, Math.max(1, params.limit ?? 50))) };
+  if (params.startTime != null) q.startTime = String(params.startTime);
+  if (params.endTime != null) q.endTime = String(params.endTime);
+  const result = await signedRequest<{ list?: BybitExecutionRow[]; nextPageCursor?: string }>('GET', '/v5/execution/list', credentials, q);
+  return result?.list ?? [];
+}
+
+/**
  * Cancel spot order by orderId or orderLinkId.
  * POST /v5/order/cancel
  */

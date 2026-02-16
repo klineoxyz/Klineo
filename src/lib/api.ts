@@ -516,6 +516,9 @@ export interface DcaBot {
   avg_entry_price?: number | null;
   position_size?: number | null;
   realized_pnl?: number;
+  last_tp_order_id?: string | null;
+  /** From state_meta: e.g. "Position closed manually", "Partial manual sell; TP adjusted". */
+  status_reason?: string | null;
 }
 
 export interface CreateDcaBotRequest {

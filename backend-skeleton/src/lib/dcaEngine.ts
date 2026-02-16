@@ -50,6 +50,7 @@ import {
   getSpotOpenOrders as bybitGetSpotOpenOrders,
   getSpotOrder as bybitGetSpotOrder,
   cancelSpotOrder as bybitCancelSpotOrder,
+  getSpotExecutionList as bybitGetSpotExecutionList,
   type BybitCredentials,
 } from './bybit.js';
 import { executeOrder, getSpotBaseBalance } from './orderExecution.js';
@@ -76,6 +77,15 @@ export interface DcaBotRow {
   lock_expires_at: string | null;
 }
 
+/** state_meta: last_ingested_trade_time (ms), last_ingested_trade_id, last_reconciled_at (iso), status_reason, tp_order_link_id (Bybit) */
+export interface DcaBotStateMeta {
+  last_ingested_trade_time?: number;
+  last_ingested_trade_id?: string;
+  last_reconciled_at?: string;
+  status_reason?: string;
+  tp_order_link_id?: string;
+}
+
 export interface DcaBotStateRow {
   id: string;
   dca_bot_id: string;
@@ -86,6 +96,7 @@ export interface DcaBotStateRow {
   last_entry_order_id: string | null;
   last_tp_order_id: string | null;
   realized_pnl: string | null;
+  state_meta?: DcaBotStateMeta | null;
   updated_at: string;
 }
 
@@ -410,6 +421,8 @@ export async function syncOpenOrders(
             avg_entry_price: null,
             safety_orders_filled: 0,
             realized_pnl: realizedPnl + pnl,
+            last_tp_order_id: null,
+            state_meta: { last_reconciled_at: new Date().toISOString() },
             updated_at: new Date().toISOString(),
           })
           .eq('dca_bot_id', botId);
@@ -418,10 +431,12 @@ export async function syncOpenOrders(
   }
 }
 
+const INGEST_OVERLAP_MS = 2 * 60 * 1000; // 2 min overlap for idempotency
+
 /**
- * Ingest recent exchange spot trades for the symbol into orders/trades (Binance only).
- * Used so My Orders / Trade History reflect manual and bot fills. Call after syncOpenOrders.
- * One order row per exchange orderId; one trade row per order (aggregated qty).
+ * Ingest recent exchange spot trades for the symbol into orders/trades (Binance + Bybit).
+ * Idempotent: uses last_ingested_trade_time from bot state_meta; dedupes by exchange_trade_id.
+ * Links fills to bot via dca_bot_orders (orderId -> tp_order_id / last_entry_order_id).
  */
 export async function ingestRecentTradesFromExchange(
   client: SupabaseClient,
@@ -429,75 +444,134 @@ export async function ingestRecentTradesFromExchange(
   exchange: string,
   symbol: string,
   credentials: BinanceCredentials | BybitCredentials,
-  env: 'production' | 'testnet'
+  env: 'production' | 'testnet',
+  options?: { botId?: string }
 ): Promise<void> {
-  if (exchange !== 'binance') return;
   const sym = normalizeSymbol(symbol);
-  const creds = credentials as BinanceCredentials;
-  let trades: Array<{ orderId: number; id: number; qty: string; price: string; time: number; isBuyer: boolean }>;
-  try {
-    trades = await binanceGetMyTrades(creds, sym, 30);
-  } catch {
-    return;
+  let lastIngestedTime = 0;
+  if (options?.botId) {
+    const { data: stateRow } = await client.from('dca_bot_state').select('state_meta').eq('dca_bot_id', options.botId).maybeSingle();
+    const meta = (stateRow as { state_meta?: DcaBotStateMeta } | null)?.state_meta;
+    if (meta?.last_ingested_trade_time) lastIngestedTime = meta.last_ingested_trade_time;
   }
-  if (!trades?.length) return;
-  const byOrder = new Map<number, typeof trades>();
+  const sinceMs = Math.max(0, lastIngestedTime - INGEST_OVERLAP_MS);
+
+  type TradeRow = { exchangeOrderId: string; exchangeTradeId: string; qty: number; price: number; time: number; side: 'buy' | 'sell' };
+  const trades: TradeRow[] = [];
+
+  if (exchange === 'binance') {
+    const creds = credentials as BinanceCredentials;
+    let raw: Array<{ orderId: number; id: number; qty: string; price: string; time: number; isBuyer: boolean }>;
+    try {
+      raw = await binanceGetMyTrades(creds, sym, 100);
+    } catch {
+      return;
+    }
+    for (const t of raw) {
+      if (t.time < sinceMs) continue;
+      trades.push({
+        exchangeOrderId: String(t.orderId),
+        exchangeTradeId: String(t.id),
+        qty: parseFloat(t.qty),
+        price: parseFloat(t.price || '0'),
+        time: t.time,
+        side: t.isBuyer ? 'buy' : 'sell',
+      });
+    }
+  } else {
+    const creds = credentials as BybitCredentials;
+    let raw: Array<{ orderId?: string; execId?: string; execQty?: string; execPrice?: string; execTime?: string; side?: string }>;
+    try {
+      raw = await bybitGetSpotExecutionList(creds, { symbol: sym, startTime: sinceMs, limit: 100 });
+    } catch {
+      return;
+    }
+    for (const t of raw) {
+      if (!t.execId || !t.orderId) continue;
+      const time = t.execTime ? parseInt(t.execTime, 10) : 0;
+      if (time < sinceMs) continue;
+      trades.push({
+        exchangeOrderId: t.orderId,
+        exchangeTradeId: t.execId,
+        qty: parseFloat(t.execQty || '0'),
+        price: parseFloat(t.execPrice || '0'),
+        time,
+        side: (t.side?.toLowerCase() === 'buy' ? 'buy' : 'sell') as 'buy' | 'sell',
+      });
+    }
+  }
+
+  if (trades.length === 0) return;
+
+  const seenTradeIds = new Set<string>();
+  let maxTime = lastIngestedTime;
   for (const t of trades) {
-    const list = byOrder.get(t.orderId) ?? [];
-    list.push(t);
-    byOrder.set(t.orderId, list);
-  }
-  for (const [orderId, list] of byOrder) {
-    const exOrderId = String(orderId);
-    const { data: existing } = await client
+    if (seenTradeIds.has(t.exchangeTradeId)) continue;
+    seenTradeIds.add(t.exchangeTradeId);
+    if (t.time > maxTime) maxTime = t.time;
+
+    const { data: existingOrder } = await client
       .from('orders')
       .select('id')
       .eq('user_id', userId)
-      .eq('exchange_order_id', exOrderId)
+      .eq('exchange_order_id', t.exchangeOrderId)
       .maybeSingle();
-    if (existing) continue;
-    const first = list[0]!;
-    const totalQty = list.reduce((s, t) => s + parseFloat(t.qty), 0);
-    const side = first.isBuyer ? 'buy' : 'sell';
-    const price = first.price ? parseFloat(first.price) : 0;
-    const { data: dcaRow } = await client
-      .from('dca_bot_orders')
-      .select('dca_bot_id')
-      .eq('exchange_order_id', exOrderId)
-      .limit(1)
-      .maybeSingle();
-    const botId = (dcaRow as { dca_bot_id?: string } | null)?.dca_bot_id ?? null;
-    const { data: orderData, error: orderErr } = await client
-      .from('orders')
-      .insert({
-        user_id: userId,
-        symbol: sym,
-        side,
-        order_type: 'market',
-        amount: totalQty,
-        price,
-        status: 'filled',
-        exchange_order_id: exOrderId,
-        source: 'dca',
-        dca_bot_id: botId,
+    let orderIdUuid: string | null = (existingOrder as { id: string } | null)?.id ?? null;
+    if (!orderIdUuid) {
+      const { data: dcaRow } = await client.from('dca_bot_orders').select('dca_bot_id').eq('exchange_order_id', t.exchangeOrderId).limit(1).maybeSingle();
+      const dcaBotId = (dcaRow as { dca_bot_id?: string } | null)?.dca_bot_id ?? null;
+      const { data: orderData, error: orderErr } = await client
+        .from('orders')
+        .insert({
+          user_id: userId,
+          symbol: sym,
+          side: t.side,
+          order_type: 'market',
+          amount: t.qty,
+          price: t.price,
+          status: 'filled',
+          exchange_order_id: t.exchangeOrderId,
+          exchange,
+          source: 'dca',
+          dca_bot_id: dcaBotId,
+          updated_at: new Date().toISOString(),
+        })
+        .select('id')
+        .single();
+      if (orderErr || !orderData) continue;
+      orderIdUuid = (orderData as { id: string }).id;
+    }
+    await client
+      .from('trades')
+      .upsert(
+        {
+          user_id: userId,
+          exchange,
+          exchange_trade_id: t.exchangeTradeId,
+          order_id: orderIdUuid,
+          dca_bot_id: options?.botId ?? null,
+          source: 'dca',
+          symbol: sym,
+          side: t.side,
+          amount: t.qty,
+          price: t.price,
+          fee: 0,
+          executed_at: new Date(t.time).toISOString(),
+        },
+        { onConflict: 'user_id,exchange,exchange_trade_id', ignoreDuplicates: true }
+      );
+  }
+
+  if (options?.botId && maxTime > lastIngestedTime) {
+    const { data: cur } = await client.from('dca_bot_state').select('state_meta').eq('dca_bot_id', options.botId).maybeSingle();
+    const meta = (cur as { state_meta?: DcaBotStateMeta } | null)?.state_meta ?? {};
+    await client
+      .from('dca_bot_state')
+      .update({
+        state_meta: { ...meta, last_ingested_trade_time: maxTime },
         updated_at: new Date().toISOString(),
       })
-      .select('id')
-      .single();
-    if (orderErr || !orderData) continue;
-    const orderIdUuid = (orderData as { id: string }).id;
-    await client.from('trades').insert({
-      user_id: userId,
-      order_id: orderIdUuid,
-      dca_bot_id: botId,
-      source: 'dca',
-      symbol: sym,
-      side,
-      amount: totalQty,
-      price,
-      fee: 0,
-      executed_at: new Date(first.time).toISOString(),
-    });
+      .eq('dca_bot_id', options.botId);
   }
 }
 
@@ -638,7 +712,7 @@ export async function processOneBot(
     /* non-fatal: continue with our state */
   }
   try {
-    await ingestRecentTradesFromExchange(client, bot.user_id, bot.exchange, bot.pair, creds, env as 'production' | 'testnet');
+    await ingestRecentTradesFromExchange(client, bot.user_id, bot.exchange, bot.pair, creds, env as 'production' | 'testnet', { botId: bot.id });
   } catch {
     /* non-fatal */
   }
@@ -673,43 +747,68 @@ export async function processOneBot(
     /* use defaults */
   }
 
-  // Reconcile position with exchange (source of truth): if user sold manually, our state may show more than they have
-  if (positionSize > 0) {
-    let actualBase: number;
-    try {
-      actualBase = await getSpotBaseBalance(bot.exchange as 'binance' | 'bybit', creds, sym, env as 'production' | 'testnet');
-    } catch {
-      actualBase = positionSize;
-    }
-    const tolerance = Math.max(filters.stepSize * 2, 1e-8);
-    if (actualBase < positionSize - tolerance) {
-      const reconciledSize = actualBase >= filters.minQty ? actualBase : 0;
+  // Reconcile: fetch actual base (rounded to step), compare to stored position. Cases: (a) full close -> STOP, (b) TP missing -> recreate, (c) qty changed -> update position + replace TP, (d) TP qty differs -> replace.
+  let needTpReplace = false;
+  let actualBaseRaw = 0;
+  try {
+    actualBaseRaw = await getSpotBaseBalance(bot.exchange as 'binance' | 'bybit', creds, sym, env as 'production' | 'testnet');
+  } catch {
+    actualBaseRaw = positionSize;
+  }
+  const actualBase = parseFloat(roundToStep(actualBaseRaw, filters.stepSize));
+  const stateMeta = (state?.state_meta as DcaBotStateMeta | undefined) ?? {};
+  const reconciledMeta = { ...stateMeta, last_reconciled_at: now.toISOString() };
+
+  if (positionSize > 0 || actualBase >= filters.minQty) {
+    const effectiveZero = actualBase < filters.minQty;
+    if (effectiveZero && positionSize > 0) {
       await client
         .from('dca_bot_state')
         .update({
-          position_size: reconciledSize,
-          avg_entry_price: reconciledSize > 0 ? state?.avg_entry_price : null,
-          safety_orders_filled: reconciledSize > 0 ? (state?.safety_orders_filled ?? 0) : 0,
+          position_size: 0,
+          avg_entry_price: null,
+          safety_orders_filled: 0,
+          state_meta: { ...reconciledMeta, status_reason: 'Position closed manually on exchange' },
           updated_at: now.toISOString(),
         })
         .eq('dca_bot_id', bot.id);
-      positionSize = reconciledSize;
-      // Manual close detected: bot had position but exchange shows none -> stop bot with clear reason
-      if (reconciledSize === 0 && state?.position_size != null && parseFloat(String(state.position_size)) > 0) {
-        await client
-          .from('dca_bots')
-          .update({
-            status: 'stopped',
-            last_tick_at: now.toISOString(),
-            last_tick_status: 'stopped',
-            last_tick_error: 'Position closed manually on exchange. Bot stopped.',
-            next_tick_at: null,
-            is_locked: false,
-            updated_at: now.toISOString(),
-          })
-          .eq('id', bot.id);
-        return { botId: bot.id, status: 'stopped', reason: 'Position closed manually on exchange' };
-      }
+      await client
+        .from('dca_bots')
+        .update({
+          status: 'stopped',
+          last_tick_at: now.toISOString(),
+          last_tick_status: 'stopped',
+          last_tick_error: 'Position closed manually on exchange. Bot stopped.',
+          next_tick_at: null,
+          is_locked: false,
+          updated_at: now.toISOString(),
+        })
+        .eq('id', bot.id);
+      return { botId: bot.id, status: 'stopped', reason: 'Position closed manually on exchange' };
+    }
+    const tolerance = Math.max(filters.stepSize * 2, 1e-8);
+    if (actualBase >= filters.minQty && Math.abs(actualBase - positionSize) > tolerance) {
+      const newPosition = actualBase;
+      await client
+        .from('dca_bot_state')
+        .update({
+          position_size: newPosition,
+          avg_entry_price: newPosition > 0 ? state?.avg_entry_price : null,
+          safety_orders_filled: newPosition > 0 ? (state?.safety_orders_filled ?? 0) : 0,
+          state_meta: {
+            ...reconciledMeta,
+            status_reason: newPosition < positionSize ? 'Partial manual sell; TP adjusted' : 'Manual add; TP updated',
+          },
+          updated_at: now.toISOString(),
+        })
+        .eq('dca_bot_id', bot.id);
+      positionSize = newPosition;
+      needTpReplace = true;
+    } else if (positionSize > 0 && actualBase >= filters.minQty) {
+      await client
+        .from('dca_bot_state')
+        .update({ state_meta: reconciledMeta, updated_at: now.toISOString() })
+        .eq('dca_bot_id', bot.id);
     }
   }
 
@@ -891,7 +990,7 @@ export async function processOneBot(
       }
     }
   }
-  if (shouldReplaceTp && openTpRows?.length) {
+  if ((shouldReplaceTp || needTpReplace) && openTpRows?.length) {
     for (const row of openTpRows) {
       try {
         await cancelDcaOrder(client, bot.id, bot.exchange, creds, {
@@ -906,7 +1005,7 @@ export async function processOneBot(
       }
     }
   }
-  const hasTpOrders = openTpRows && openTpRows.length > 0 && !shouldReplaceTp;
+  const hasTpOrders = openTpRows && openTpRows.length > 0 && !shouldReplaceTp && !needTpReplace;
   if (!hasTpOrders && positionSize > 0) {
     let actualBaseForSell: number;
     let balanceFetchOk = false;
@@ -963,6 +1062,12 @@ export async function processOneBot(
             clientOrderId,
           }, env);
           await insertDcaOrderIntoUnified(client, bot.user_id, bot.id, sym, 'sell', 'limit', parseFloat(sellQty), tpPriceSingle, exchangeOrderId);
+          const tpMeta = bot.exchange === 'bybit' ? { ...stateMeta, tp_order_link_id: clientOrderId } : stateMeta;
+          await client.from('dca_bot_state').update({
+            last_tp_order_id: exchangeOrderId,
+            state_meta: tpMeta,
+            updated_at: now.toISOString(),
+          }).eq('dca_bot_id', bot.id);
         }
       } catch (e) {
         const msg = e instanceof Error ? e.message : 'TP order failed';
@@ -998,7 +1103,9 @@ export async function processOneBot(
 }
 
 /**
- * Process all running spot DCA bots that are due. Uses in-db lock per bot.
+ * Process all running spot DCA bots that are due.
+ * Uses atomic claim under advisory lock (claim_due_dca_bots RPC) to prevent double tick across instances.
+ * Falls back to plain select if RPC is not available (e.g. migration not run).
  */
 export async function processRunningDcaBots(
   client: SupabaseClient,
@@ -1008,24 +1115,30 @@ export async function processRunningDcaBots(
   const now = options.now ?? new Date();
   const results: BotTickResult[] = [];
 
-  const { data: bots, error } = await client
-    .from('dca_bots')
-    .select('id, user_id, name, exchange, market, pair, timeframe, status, config, last_tick_at, next_tick_at, last_tick_status, last_tick_error, is_locked, lock_expires_at')
-    .eq('status', 'running')
-    .eq('market', 'spot')
-    .or(`next_tick_at.is.null,next_tick_at.lte.${now.toISOString()}`)
-    .order('next_tick_at', { ascending: true, nullsFirst: true })
-    .limit(limit);
-
-  if (error) {
-    console.error('[dca-engine] fetch bots error:', error.message);
-    return { processed: 0, results };
+  let bots: DcaBotRow[] | null = null;
+  const { data: claimed, error: rpcError } = await client.rpc('claim_due_dca_bots', {
+    p_limit: limit,
+    p_interval_sec: TICK_INTERVAL_SEC,
+  });
+  if (!rpcError && Array.isArray(claimed) && claimed.length > 0) {
+    bots = claimed as DcaBotRow[];
+  }
+  if (!bots?.length) {
+    const { data: fallback, error } = await client
+      .from('dca_bots')
+      .select('id, user_id, name, exchange, market, pair, timeframe, status, config, last_tick_at, next_tick_at, last_tick_status, last_tick_error, is_locked, lock_expires_at')
+      .eq('status', 'running')
+      .eq('market', 'spot')
+      .or(`next_tick_at.is.null,next_tick_at.lte.${now.toISOString()}`)
+      .order('next_tick_at', { ascending: true, nullsFirst: true })
+      .limit(limit);
+    if (!error && fallback?.length) bots = fallback as DcaBotRow[];
   }
   if (!bots?.length) {
     return { processed: 0, results };
   }
 
-  for (const bot of bots as DcaBotRow[]) {
+  for (const bot of bots) {
     const acquired = await acquireDcaLock(client, bot.id, now);
     if (!acquired) {
       results.push({ botId: bot.id, status: 'skipped', reason: 'lock_not_acquired' });

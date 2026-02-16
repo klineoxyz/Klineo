@@ -477,6 +477,8 @@ export function DcaBotsPage({ onNavigate }: DcaBotsPageProps) {
                 <TableHead>Last tick</TableHead>
                 <TableHead>Allocated</TableHead>
                 <TableHead>DCA Progress</TableHead>
+                <TableHead>Position</TableHead>
+                <TableHead>TP status</TableHead>
                 <TableHead>Avg Entry</TableHead>
                 <TableHead>TP Target</TableHead>
                 <TableHead>Realized PnL</TableHead>
@@ -516,9 +518,9 @@ export function DcaBotsPage({ onNavigate }: DcaBotsPageProps) {
                             <><StopCircle className="size-3" /> Stopped</>
                           )}
                         </Badge>
-                        {(bot.status === "stopped" || bot.status === "paused") && bot.last_tick_error && (
-                          <p className="text-xs text-muted-foreground max-w-[180px] truncate" title={bot.last_tick_error}>
-                            {bot.last_tick_error}
+                        {(bot.status === "stopped" || bot.status === "paused") && (bot.status_reason || bot.last_tick_error) && (
+                          <p className="text-xs text-muted-foreground max-w-[180px] truncate" title={bot.status_reason || bot.last_tick_error || undefined}>
+                            {bot.status_reason || bot.last_tick_error}
                           </p>
                         )}
                       </div>
@@ -551,6 +553,14 @@ export function DcaBotsPage({ onNavigate }: DcaBotsPageProps) {
                     <TableCell className="font-mono">${allocated.toFixed(2)}</TableCell>
                     <TableCell className="font-mono">
                       {Math.min(bot.safety_orders_filled ?? 0, bot.config?.maxSafetyOrders ?? 0)} / {bot.config?.maxSafetyOrders ?? 0}
+                    </TableCell>
+                    <TableCell className="font-mono">
+                      {bot.position_size != null && Number(bot.position_size) > 0 ? Number(bot.position_size).toFixed(6) : "—"}
+                    </TableCell>
+                    <TableCell className="text-xs">
+                      {bot.position_size != null && Number(bot.position_size) > 0
+                        ? (bot.last_tp_order_id ? "Active" : "Missing")
+                        : "Filled"}
                     </TableCell>
                     <TableCell className="font-mono">
                       {bot.avg_entry_price != null ? `$${Number(bot.avg_entry_price).toFixed(4)}` : "—"}

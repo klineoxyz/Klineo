@@ -37,7 +37,7 @@ dcaBotsRouter.get('/', async (req: AuthenticatedRequest, res) => {
   try {
     const { data, error } = await client
       .from('dca_bots')
-      .select('*, dca_bot_state(safety_orders_filled, avg_entry_price, position_size, realized_pnl)')
+      .select('*, dca_bot_state(safety_orders_filled, avg_entry_price, position_size, realized_pnl, last_tp_order_id, state_meta)')
       .eq('user_id', req.user!.id)
       .order('created_at', { ascending: false });
     if (error) {
@@ -52,12 +52,15 @@ dcaBotsRouter.get('/', async (req: AuthenticatedRequest, res) => {
       const rawFilled = state?.safety_orders_filled ?? 0;
       const maxSafety = maxSafetyOrdersFromConfig(row.config);
       const safety_orders_filled = Math.min(Number(rawFilled), maxSafety);
+      const stateMeta = (state?.state_meta as { status_reason?: string } | undefined) ?? {};
       return {
         ...bot,
         safety_orders_filled: maxSafety > 0 ? safety_orders_filled : 0,
         avg_entry_price: state?.avg_entry_price != null ? Number(state.avg_entry_price) : null,
         position_size: state?.position_size != null ? Number(state.position_size) : null,
         realized_pnl: state?.realized_pnl != null ? Number(state.realized_pnl) : 0,
+        last_tp_order_id: state?.last_tp_order_id ?? null,
+        status_reason: stateMeta.status_reason ?? null,
       };
     });
     res.json({ bots, runnerActive: RUNNER_CONFIG.ENABLE_STRATEGY_RUNNER });
