@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { verifySupabaseJWT, AuthenticatedRequest } from '../middleware/auth.js';
 import { validate, pageQuery, limitQuery } from '../middleware/validation.js';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { reconcileOrdersWithExchange } from '../lib/dcaEngine.js';
 
 let supabase: SupabaseClient | null = null;
 
@@ -23,10 +24,28 @@ export const ordersRouter: Router = Router();
 ordersRouter.use(verifySupabaseJWT);
 
 /**
+ * POST /api/orders/reconcile
+ * Reconcile DCA orders with exchange: mark as cancelled any pending order not on exchange.
+ * Call before GET /api/orders so OPEN list matches exchange (no phantom orders).
+ */
+ordersRouter.post('/reconcile', async (req: AuthenticatedRequest, res) => {
+  const client = getSupabase();
+  if (!client) return res.status(503).json({ error: 'Database unavailable' });
+  try {
+    const { reconciled, errors } = await reconcileOrdersWithExchange(client, req.user!.id);
+    return res.json({ success: true, reconciled, errors: errors.length ? errors : undefined });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Reconcile failed';
+    console.error('Orders reconcile error:', msg);
+    return res.status(500).json({ error: msg });
+  }
+});
+
+/**
  * GET /api/orders
  * List current user's orders with pagination (from DB).
  * Query: source = 'all' | 'copy' | 'dca'
- * For DCA: call POST /api/dca-bots/sync-orders to refresh status from exchange, then re-call this.
+ * After POST /api/orders/reconcile and POST /api/dca-bots/sync-orders, pending orders match exchange.
  */
 ordersRouter.get('/',
   validate([pageQuery, limitQuery]),

@@ -57,6 +57,7 @@ export function Orders() {
     if (isSyncing) return;
     setIsSyncing(true);
     try {
+      await api.post<{ success: boolean; reconciled?: number }>("/api/orders/reconcile");
       await api.post<{ success: boolean; synced: number }>("/api/dca-bots/sync-orders");
       await loadOrders(page, sourceFilter);
       toast.success("Orders synced from exchange");

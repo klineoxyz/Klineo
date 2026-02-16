@@ -402,6 +402,7 @@ export async function syncOpenOrders(
     const lower = String(statusStr).toLowerCase();
     const mapped = lower === 'filled' || lower === 'partiallyfilled' ? 'filled' : 'cancelled';
     await client.from('dca_bot_orders').update({ status: mapped }).eq('id', row.id);
+    await client.from('orders').update({ status: mapped, updated_at: new Date().toISOString() }).eq('exchange_order_id', String(exId)).eq('source', 'dca');
 
     if (mapped === 'filled') {
       await client.from('orders').update({ status: 'filled', updated_at: new Date().toISOString() }).eq('exchange_order_id', String(exId)).eq('source', 'dca');
@@ -615,6 +616,82 @@ export async function syncDcaOrdersForUser(
     }
   }
   return { synced, errors };
+}
+
+/**
+ * Reconcile user's DCA orders table with exchange: mark as cancelled any order we have as pending
+ * that does not exist in exchange open orders. Ensures Orders page never shows phantom OPEN orders.
+ * Call on "Refresh from exchange" and optionally when loading Orders page.
+ */
+export async function reconcileOrdersWithExchange(
+  client: SupabaseClient,
+  userId: string
+): Promise<{ reconciled: number; errors: string[] }> {
+  const { data: pendingOrders, error: fetchErr } = await client
+    .from('orders')
+    .select('id, exchange_order_id, exchange, symbol')
+    .eq('user_id', userId)
+    .eq('source', 'dca')
+    .eq('status', 'pending')
+    .not('exchange', 'is', null);
+  if (fetchErr || !pendingOrders?.length) return { reconciled: 0, errors: [] };
+  const byKey = new Map<string, typeof pendingOrders>();
+  for (const o of pendingOrders) {
+    const ex = (o as any).exchange;
+    const sym = (o as any).symbol;
+    if (!ex || !sym) continue;
+    const key = `${ex}:${(sym as string).toUpperCase().replace(/\//g, '')}`;
+    const list = byKey.get(key) ?? [];
+    list.push(o);
+    byKey.set(key, list);
+  }
+  const errors: string[] = [];
+  let reconciled = 0;
+  for (const [key, orders] of byKey) {
+    const [exchange, symbol] = key.split(':');
+    const conn = await loadConnection(client, userId, exchange);
+    if (!conn?.encrypted_config_b64) {
+      errors.push(`${key}: no connection`);
+      continue;
+    }
+    let creds: BinanceCredentials | BybitCredentials;
+    try {
+      const decrypted = await decrypt(conn.encrypted_config_b64);
+      const parsed = JSON.parse(decrypted) as { apiKey: string; apiSecret: string };
+      const env = (conn.environment || 'production') as 'production' | 'testnet';
+      creds =
+        exchange === 'binance'
+          ? ({ apiKey: parsed.apiKey, apiSecret: parsed.apiSecret, environment: env } as BinanceCredentials)
+          : ({ apiKey: parsed.apiKey, apiSecret: parsed.apiSecret, environment: env } as BybitCredentials);
+    } catch {
+      errors.push(`${key}: decrypt failed`);
+      continue;
+    }
+    const sym = (symbol as string).toUpperCase().replace(/\//g, '');
+    let openIds: Set<string>;
+    try {
+      if (exchange === 'binance') {
+        const open = await binanceGetSpotOpenOrders(creds as BinanceCredentials, sym);
+        openIds = new Set(open.map((o) => String(o.orderId)));
+      } else {
+        const open = await bybitGetSpotOpenOrders(creds as BybitCredentials, sym);
+        openIds = new Set(open.map((o) => String(o.orderId ?? o.orderLinkId ?? '')).filter(Boolean));
+      }
+    } catch (e) {
+      errors.push(`${key}: ${e instanceof Error ? e.message : 'fetch open orders failed'}`);
+      continue;
+    }
+    for (const order of orders) {
+      const exId = (order as any).exchange_order_id;
+      if (!exId || openIds.has(String(exId))) continue;
+      const { error: updErr } = await client
+        .from('orders')
+        .update({ status: 'cancelled', updated_at: new Date().toISOString() })
+        .eq('id', (order as any).id);
+      if (!updErr) reconciled++;
+    }
+  }
+  return { reconciled, errors };
 }
 
 /**

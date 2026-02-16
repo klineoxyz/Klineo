@@ -12,6 +12,10 @@ import { getMaxDcaBots } from './profile.js';
 import { processOneBot, syncDcaOrdersForUser, syncOpenOrders, ingestRecentTradesFromExchange } from '../lib/dcaEngine.js';
 import { RUNNER_CONFIG } from '../lib/runnerConfig.js';
 import { decrypt } from '../lib/crypto.js';
+import { getSpotBalances } from '../lib/orderExecution.js';
+import * as binance from '../lib/binance.js';
+import * as bybit from '../lib/bybit.js';
+import { toExchangeSymbol } from '../lib/symbols.js';
 
 let supabase: SupabaseClient | null = null;
 
@@ -46,6 +50,20 @@ dcaBotsRouter.get('/', async (req: AuthenticatedRequest, res) => {
     }
     const maxSafetyOrdersFromConfig = (config: Record<string, unknown> | undefined) =>
       Math.max(0, Number(config?.maxSafetyOrders ?? 0));
+    /** Allocated USDT = baseOrderSizeUsdt * (1 + mult + mult^2 + ... + mult^maxSafetyOrders) */
+    const allocatedUsdtForBot = (config: Record<string, unknown> | undefined): number => {
+      const base = Number(config?.baseOrderSizeUsdt ?? 0);
+      const max = maxSafetyOrdersFromConfig(config);
+      const mult = Number(config?.safetyOrderMultiplier ?? 1.2);
+      if (base <= 0 || max <= 0) return base;
+      let sum = 1;
+      let m = 1;
+      for (let i = 0; i < max; i++) {
+        m *= mult;
+        sum += m;
+      }
+      return base * sum;
+    };
     const bots = (data ?? []).map((row: any) => {
       const state = Array.isArray(row.dca_bot_state) ? row.dca_bot_state[0] : row.dca_bot_state;
       const { dca_bot_state: _, ...bot } = row;
@@ -53,8 +71,10 @@ dcaBotsRouter.get('/', async (req: AuthenticatedRequest, res) => {
       const maxSafety = maxSafetyOrdersFromConfig(row.config);
       const safety_orders_filled = Math.min(Number(rawFilled), maxSafety);
       const stateMeta = (state?.state_meta as { status_reason?: string } | undefined) ?? {};
+      const allocated = allocatedUsdtForBot(row.config);
       return {
         ...bot,
+        allocated_usdt: allocated,
         safety_orders_filled: maxSafety > 0 ? safety_orders_filled : 0,
         avg_entry_price: state?.avg_entry_price != null ? Number(state.avg_entry_price) : null,
         position_size: state?.position_size != null ? Number(state.position_size) : null,
@@ -63,7 +83,21 @@ dcaBotsRouter.get('/', async (req: AuthenticatedRequest, res) => {
         status_reason: stateMeta.status_reason ?? null,
       };
     });
-    res.json({ bots, runnerActive: RUNNER_CONFIG.ENABLE_STRATEGY_RUNNER });
+    const activeStatuses = ['running', 'paused'];
+    const activeBotsCount = bots.filter((b: any) => activeStatuses.includes(b.status)).length;
+    const totalAllocatedActiveUsdt = bots
+      .filter((b: any) => activeStatuses.includes(b.status))
+      .reduce((s: number, b: any) => s + (Number(b.allocated_usdt) || 0), 0);
+    const totalAllocatedAllUsdt = bots.reduce((s: number, b: any) => s + (Number(b.allocated_usdt) || 0), 0);
+    res.json({
+      bots,
+      summary: {
+        activeBotsCount,
+        totalAllocatedActiveUsdt: Math.round(totalAllocatedActiveUsdt * 100) / 100,
+        totalAllocatedAllUsdt: Math.round(totalAllocatedAllUsdt * 100) / 100,
+      },
+      runnerActive: RUNNER_CONFIG.ENABLE_STRATEGY_RUNNER,
+    });
   } catch (err) {
     console.error('DCA bots list error:', err);
     res.status(500).json({ error: 'Failed to fetch bots' });
@@ -109,6 +143,118 @@ dcaBotsRouter.get('/featured', async (req: AuthenticatedRequest, res) => {
   } catch (err) {
     console.error('DCA bots featured error:', err);
     res.status(500).json({ error: 'Failed to fetch featured bots' });
+  }
+});
+
+/**
+ * GET /api/dca-bots/:id/overview
+ * Bot profile: config, live balances from exchange, position, realized/unrealized PnL,
+ * open TP order only if it exists on exchange, last 20 trades attributed to bot.
+ */
+dcaBotsRouter.get('/:id/overview', validate([uuidParam('id')]), async (req: AuthenticatedRequest, res) => {
+  const client = getSupabase();
+  if (!client) return res.status(503).json({ error: 'Database unavailable' });
+  const { id } = req.params;
+  const userId = req.user!.id;
+  try {
+    const { data: bot, error: botErr } = await client
+      .from('dca_bots')
+      .select('id, name, exchange, pair, status, config')
+      .eq('id', id)
+      .eq('user_id', userId)
+      .maybeSingle();
+    if (botErr || !bot) return res.status(404).json({ error: 'Bot not found' });
+    const { data: stateRow } = await client
+      .from('dca_bot_state')
+      .select('avg_entry_price, position_size, realized_pnl, last_tp_order_id')
+      .eq('dca_bot_id', id)
+      .maybeSingle();
+    const state = stateRow as { avg_entry_price?: string | null; position_size?: string | null; realized_pnl?: string | null; last_tp_order_id?: string | null } | null;
+    const avgEntry = state?.avg_entry_price != null ? parseFloat(String(state.avg_entry_price)) : 0;
+    const realizedPnlUsdt = state?.realized_pnl != null ? parseFloat(String(state.realized_pnl)) : 0;
+    const sym = toExchangeSymbol((bot as any).pair);
+    let baseFree = 0;
+    let quoteFree = 0;
+    let markPrice = 0;
+    let openTpOrder: { id: string; price: string; qty: string; status: string } | null = null;
+    const { data: conn } = await client
+      .from('user_exchange_connections')
+      .select('encrypted_config_b64, environment')
+      .eq('user_id', userId)
+      .eq('exchange', (bot as any).exchange)
+      .or('last_test_status.eq.ok,last_test_status.is.null')
+      .is('disabled_at', null)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (conn?.encrypted_config_b64) {
+      try {
+        const decrypted = await decrypt(conn.encrypted_config_b64);
+        const creds = JSON.parse(decrypted) as { apiKey: string; apiSecret: string };
+        const envUse = (conn as any).environment === 'testnet' ? 'testnet' : 'production';
+        const bal = await getSpotBalances((bot as any).exchange, creds, sym, envUse);
+        baseFree = Math.round(bal.baseFree * 1e6) / 1e6;
+        quoteFree = Math.round(bal.quoteFree * 1e4) / 1e4;
+        if ((bot as any).exchange === 'binance') {
+          const bc: binance.BinanceCredentials = { apiKey: creds.apiKey, apiSecret: creds.apiSecret, environment: envUse };
+          const ticker = await binance.getTickerPrice(sym);
+          markPrice = parseFloat(ticker.price);
+          const openOrders = await binance.getSpotOpenOrders(bc, sym);
+          const tpId = state?.last_tp_order_id;
+          if (tpId) {
+            const found = openOrders.find((o: any) => String(o.orderId) === String(tpId));
+            if (found) openTpOrder = { id: String(found.orderId), price: found.price ?? '', qty: found.origQty ?? '', status: found.status ?? 'open' };
+          }
+        } else {
+          const bc: bybit.BybitCredentials = { apiKey: creds.apiKey, apiSecret: creds.apiSecret, environment: envUse };
+          const ticker = await bybit.getTickerPrice(sym, envUse);
+          markPrice = parseFloat(ticker.price);
+          const openOrders = await bybit.getSpotOpenOrders(bc, sym);
+          const tpId = state?.last_tp_order_id;
+          if (tpId) {
+            const found = openOrders.find((o: any) => String(o.orderId ?? o.orderLinkId) === String(tpId));
+            if (found) openTpOrder = { id: String(found.orderId ?? found.orderLinkId), price: found.price ?? '', qty: found.qty ?? found.orderQty ?? '', status: found.orderStatus ?? 'open' };
+          }
+        }
+      } catch (e) {
+        console.warn('[dca-bots overview] exchange fetch failed:', e instanceof Error ? e.message : e);
+      }
+    }
+    const positionBaseQty = baseFree;
+    const unrealizedPnlUsdt = positionBaseQty > 0 && avgEntry > 0 && markPrice > 0 ? (markPrice - avgEntry) * positionBaseQty : 0;
+    const { data: tradesRows } = await client
+      .from('trades')
+      .select('id, symbol, side, amount, price, executed_at, source')
+      .eq('dca_bot_id', id)
+      .order('executed_at', { ascending: false })
+      .limit(20);
+    const trades = (tradesRows ?? []).map((t: any) => ({
+      id: t.id,
+      symbol: t.symbol,
+      side: t.side,
+      amount: parseFloat(t.amount?.toString() || '0'),
+      price: parseFloat(t.price?.toString() || '0'),
+      executedAt: t.executed_at,
+      source: t.source ?? 'dca',
+    }));
+    return res.json({
+      config: (bot as any).config,
+      name: (bot as any).name,
+      pair: (bot as any).pair,
+      exchange: (bot as any).exchange,
+      status: (bot as any).status,
+      liveBalances: { baseFree, quoteFree, baseLocked: 0, quoteLocked: 0 },
+      positionBaseQty,
+      avgEntry: avgEntry || null,
+      realizedPnlUsdt,
+      unrealizedPnlUsdt: Math.round(unrealizedPnlUsdt * 100) / 100,
+      markPrice: markPrice || null,
+      openTpOrder,
+      trades,
+    });
+  } catch (err) {
+    console.error('DCA bot overview error:', err);
+    return res.status(500).json({ error: 'Failed to fetch overview' });
   }
 });
 

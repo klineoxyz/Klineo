@@ -551,8 +551,37 @@ export interface TopBot {
   roiPct: number;
 }
 
+/** Bot profile overview: config, live balances, position, PnL, open TP (only if on exchange), last trades. */
+export interface DcaBotOverview {
+  config: Record<string, unknown>;
+  name: string;
+  pair: string;
+  exchange: string;
+  status: string;
+  liveBalances: { baseFree: number; quoteFree: number; baseLocked: number; quoteLocked: number };
+  positionBaseQty: number;
+  avgEntry: number | null;
+  realizedPnlUsdt: number;
+  unrealizedPnlUsdt: number;
+  markPrice: number | null;
+  openTpOrder: { id: string; price: string; qty: string; status: string } | null;
+  trades: Array<{
+    id: string;
+    symbol: string;
+    side: string;
+    amount: number;
+    price: number;
+    executedAt: string;
+    source: string;
+  }>;
+}
+
 export const dcaBots = {
-  list: async (): Promise<{ bots: DcaBot[]; runnerActive?: boolean }> => api.get('/api/dca-bots'),
+  list: async (): Promise<{
+    bots: DcaBot[];
+    summary?: { activeBotsCount: number; totalAllocatedActiveUsdt: number; totalAllocatedAllUsdt?: number };
+    runnerActive?: boolean;
+  }> => api.get('/api/dca-bots'),
   sync: async (id: string): Promise<{ success: boolean; message?: string }> =>
     api.post(`/api/dca-bots/${id}/sync`),
   featured: async (): Promise<{ featured: DcaBotFeatured[] }> => api.get('/api/dca-bots/featured'),
@@ -564,6 +593,7 @@ export const dcaBots = {
   update: async (id: string, data: { name?: string; pair?: string; timeframe?: string; config?: DcaBotConfig }): Promise<{ bot: DcaBot }> =>
     api.put(`/api/dca-bots/${id}`, data),
   delete: async (id: string): Promise<void> => api.delete(`/api/dca-bots/${id}`),
+  overview: async (id: string): Promise<DcaBotOverview> => api.get(`/api/dca-bots/${id}/overview`),
 };
 
 // Marketplace strategies (backtest strategies listed by Master Traders)

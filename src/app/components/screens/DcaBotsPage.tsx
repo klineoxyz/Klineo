@@ -15,6 +15,12 @@ import {
   TableRow,
 } from "@/app/components/ui/table";
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/app/components/ui/dialog";
+import {
   Activity,
   Pause,
   Play,
@@ -28,9 +34,10 @@ import {
   CopyPlus,
   RefreshCw,
   ScrollText,
+  Eye,
 } from "lucide-react";
 import { toast } from "@/app/lib/toast";
-import { api, dcaBots, type DcaBot, type DcaBotFeatured, type TopBot, type EntitlementResponse } from "@/lib/api";
+import { api, dcaBots, type DcaBot, type DcaBotFeatured, type TopBot, type EntitlementResponse, type DcaBotOverview } from "@/lib/api";
 import { getPresetsByRisk, filterPresetsBySearch, type DcaPreset, type DcaPresetRisk } from "@/app/data/dcaPresets";
 import { CreateBotModal } from "@/app/components/screens/dca/CreateBotModal";
 import { ExecutionLogsModal } from "@/app/components/screens/ExecutionLogsModal";
@@ -57,17 +64,24 @@ export function DcaBotsPage({ onNavigate }: DcaBotsPageProps) {
   const [runnerActive, setRunnerActive] = useState<boolean>(true);
   const [syncingId, setSyncingId] = useState<string | null>(null);
   const myBotsSectionRef = useRef<HTMLDivElement>(null);
+  const [overviewOpen, setOverviewOpen] = useState(false);
+  const [overviewData, setOverviewData] = useState<DcaBotOverview | null>(null);
+  const [overviewLoading, setOverviewLoading] = useState(false);
+
+  const [summary, setSummary] = useState<{ activeBotsCount: number; totalAllocatedActiveUsdt: number; totalAllocatedAllUsdt?: number } | null>(null);
 
   const loadBots = async () => {
     setLoading(true);
     try {
-      const [{ bots: list, runnerActive: active }, { featured: featuredList }, { topBots: topList }] = await Promise.all([
+      const [listResp, { featured: featuredList }, { topBots: topList }] = await Promise.all([
         dcaBots.list(),
         dcaBots.featured().catch(() => ({ featured: [] as DcaBotFeatured[] })),
         dcaBots.getTopBots().catch(() => ({ topBots: [] as TopBot[] })),
       ]);
-      setBots(list ?? []);
-      setRunnerActive(active ?? true);
+      const list = listResp?.bots ?? [];
+      setBots(list);
+      setSummary(listResp?.summary ?? null);
+      setRunnerActive(listResp?.runnerActive ?? true);
       setFeaturedBots(featuredList ?? []);
       setTopBots(topList ?? []);
     } catch (err: unknown) {
@@ -91,20 +105,13 @@ export function DcaBotsPage({ onNavigate }: DcaBotsPageProps) {
   const activeSpotBots = bots.filter((b) => b.status === "running" && (b.market ?? "spot") === "spot");
   const atBotLimit = (maxDcaBots ?? 1) > 0 && activeSpotBots.length >= (maxDcaBots ?? 1);
   const limitLabel = (maxDcaBots ?? 0) === 0 ? "Unlimited" : String(maxDcaBots);
-  const totalAllocated = bots.reduce((sum, b) => {
-    const base = b.config?.baseOrderSizeUsdt ?? 0;
-    const max = b.config?.maxSafetyOrders ?? 0;
-    const mult = b.config?.safetyOrderMultiplier ?? 1.2;
-    let exp = base;
-    let m = 1;
-    for (let i = 0; i < max; i++) {
-      m *= mult;
-      exp += base * m;
-    }
-    return sum + exp;
-  }, 0);
-  const unrealizedPnl = 0; // placeholder
-  const realizedPnl = 0; // placeholder
+  const activeBotsCount = summary?.activeBotsCount ?? bots.filter((b) => b.status === "running" || b.status === "paused").length;
+  const totalAllocatedActiveUsdt = summary?.totalAllocatedActiveUsdt ?? bots
+    .filter((b) => b.status === "running" || b.status === "paused")
+    .reduce((sum, b) => sum + (Number((b as any).allocated_usdt) ?? 0), 0);
+  const totalAllocatedAllUsdt = summary?.totalAllocatedAllUsdt;
+  const unrealizedPnl = 0; // placeholder until overview
+  const realizedPnl = 0; // placeholder until overview
 
   const presetsByTab = getPresetsByRisk(presetTab);
   const filteredPresets = filterPresetsBySearch(presetsByTab, presetSearch);
@@ -121,6 +128,21 @@ export function DcaBotsPage({ onNavigate }: DcaBotsPageProps) {
     setPresetForCreate(null);
     setTemplateBot(null);
     setCreateModalOpen(true);
+  };
+
+  const handleViewBot = async (botId: string) => {
+    setOverviewOpen(true);
+    setOverviewData(null);
+    setOverviewLoading(true);
+    try {
+      const data = await dcaBots.overview(botId);
+      setOverviewData(data);
+    } catch (err) {
+      toast.error("Failed to load bot details", { description: err instanceof Error ? err.message : undefined });
+      setOverviewOpen(false);
+    } finally {
+      setOverviewLoading(false);
+    }
   };
 
   const handleUsePreset = (preset: DcaPreset) => {
@@ -261,13 +283,15 @@ export function DcaBotsPage({ onNavigate }: DcaBotsPageProps) {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
         <Card className="p-2.5 sm:p-3 space-y-2">
           <div className="text-[10px] sm:text-xs text-muted-foreground uppercase tracking-wide">Active Bots</div>
-          <div className="text-base sm:text-lg font-mono font-bold">{activeBots.length}</div>
+          <div className="text-base sm:text-lg font-mono font-bold">{activeBotsCount}</div>
+          <p className="text-[10px] text-muted-foreground">Running + Paused</p>
         </Card>
         <Card className="p-2.5 sm:p-3 space-y-2">
           <div className="text-[10px] sm:text-xs text-muted-foreground uppercase tracking-wide">Total Allocated (USDT)</div>
           <div className="text-base sm:text-lg font-mono font-bold">
-            ${totalAllocated.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+            ${totalAllocatedActiveUsdt.toLocaleString(undefined, { minimumFractionDigits: 2 })}
           </div>
+          <p className="text-[10px] text-muted-foreground">Active allocation (running + paused). Stopped bots excluded.</p>
         </Card>
         <Card className="p-2.5 sm:p-3 space-y-2">
           <div className="text-[10px] sm:text-xs text-muted-foreground uppercase tracking-wide">Unrealized PnL</div>
@@ -648,6 +672,15 @@ export function DcaBotsPage({ onNavigate }: DcaBotsPageProps) {
                         <Button
                           variant="outline"
                           size="sm"
+                          onClick={() => handleViewBot(bot.id)}
+                          title="View balances, PnL, and trades"
+                        >
+                          <Eye className="size-3 mr-1" />
+                          View
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
                           onClick={() => handleEditBot(bot)}
                         >
                           <Pencil className="size-3 mr-1" />
@@ -663,6 +696,111 @@ export function DcaBotsPage({ onNavigate }: DcaBotsPageProps) {
         )}
         </Card>
       </div>
+
+      <Dialog open={overviewOpen} onOpenChange={(open) => { setOverviewOpen(open); if (!open) setOverviewData(null); }}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Bot details</DialogTitle>
+          </DialogHeader>
+          {overviewLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="size-8 animate-spin text-muted-foreground" />
+            </div>
+          ) : overviewData ? (
+            <div className="space-y-6">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-xs text-muted-foreground uppercase tracking-wide">Name / Pair</p>
+                  <p className="font-medium">{overviewData.name}</p>
+                  <p className="font-mono text-sm text-muted-foreground">{overviewData.pair} · {overviewData.exchange}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground uppercase tracking-wide">Status</p>
+                  <Badge variant={overviewData.status === "running" ? "default" : "secondary"} className="capitalize">{overviewData.status}</Badge>
+                </div>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground uppercase tracking-wide mb-2">Live balances (exchange)</p>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-sm font-mono">
+                  <span>Base free: {overviewData.liveBalances.baseFree.toFixed(6)}</span>
+                  <span>Quote free: {overviewData.liveBalances.quoteFree.toFixed(2)}</span>
+                  {overviewData.liveBalances.baseLocked > 0 && <span>Base locked: {overviewData.liveBalances.baseLocked.toFixed(6)}</span>}
+                  {overviewData.liveBalances.quoteLocked > 0 && <span>Quote locked: {overviewData.liveBalances.quoteLocked.toFixed(2)}</span>}
+                </div>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                <div>
+                  <p className="text-xs text-muted-foreground uppercase tracking-wide">Position (base)</p>
+                  <p className="font-mono font-medium">{overviewData.positionBaseQty.toFixed(6)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground uppercase tracking-wide">Avg entry</p>
+                  <p className="font-mono">{overviewData.avgEntry != null ? `$${overviewData.avgEntry.toFixed(4)}` : "—"}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground uppercase tracking-wide">Mark price</p>
+                  <p className="font-mono">{overviewData.markPrice != null ? `$${overviewData.markPrice.toFixed(4)}` : "—"}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground uppercase tracking-wide">Open TP order</p>
+                  {overviewData.openTpOrder ? (
+                    <p className="font-mono text-xs">ID {overviewData.openTpOrder.id} · {overviewData.openTpOrder.price} × {overviewData.openTpOrder.qty}</p>
+                  ) : (
+                    <p className="text-muted-foreground text-sm">None on exchange</p>
+                  )}
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-xs text-muted-foreground uppercase tracking-wide">Realized PnL (USDT)</p>
+                  <p className={`font-mono font-semibold ${overviewData.realizedPnlUsdt >= 0 ? "text-[#10B981]" : "text-[#EF4444]"}`}>
+                    {overviewData.realizedPnlUsdt >= 0 ? "+" : ""}{overviewData.realizedPnlUsdt.toFixed(2)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground uppercase tracking-wide">Unrealized PnL (USDT)</p>
+                  <p className={`font-mono font-semibold ${overviewData.unrealizedPnlUsdt >= 0 ? "text-[#10B981]" : "text-[#EF4444]"}`}>
+                    {overviewData.unrealizedPnlUsdt >= 0 ? "+" : ""}{overviewData.unrealizedPnlUsdt.toFixed(2)}
+                  </p>
+                </div>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground uppercase tracking-wide mb-2">Last 20 trades (attributed to this bot)</p>
+                {overviewData.trades.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No trades yet</p>
+                ) : (
+                  <div className="border rounded-md overflow-hidden">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Side</TableHead>
+                          <TableHead>Amount</TableHead>
+                          <TableHead>Price</TableHead>
+                          <TableHead>Source</TableHead>
+                          <TableHead>Time</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {overviewData.trades.map((t) => (
+                          <TableRow key={t.id}>
+                            <TableCell className="font-mono capitalize">{t.side}</TableCell>
+                            <TableCell className="font-mono">{t.amount.toFixed(6)}</TableCell>
+                            <TableCell className="font-mono">${t.price.toFixed(4)}</TableCell>
+                            <TableCell><Badge variant="outline" className="text-xs">{t.source}</Badge></TableCell>
+                            <TableCell className="text-muted-foreground text-xs">
+                              {new Date(t.executedAt).toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" })}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : null}
+        </DialogContent>
+      </Dialog>
 
       <ExecutionLogsModal
         open={executionLogsOpen}
