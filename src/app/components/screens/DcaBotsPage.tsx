@@ -54,17 +54,20 @@ export function DcaBotsPage({ onNavigate }: DcaBotsPageProps) {
   const [templateBot, setTemplateBot] = useState<TopBot | null>(null);
   const [triggerTickId, setTriggerTickId] = useState<string | null>(null);
   const [executionLogsOpen, setExecutionLogsOpen] = useState(false);
+  const [runnerActive, setRunnerActive] = useState<boolean>(true);
+  const [syncingId, setSyncingId] = useState<string | null>(null);
   const myBotsSectionRef = useRef<HTMLDivElement>(null);
 
   const loadBots = async () => {
     setLoading(true);
     try {
-      const [{ bots: list }, { featured: featuredList }, { topBots: topList }] = await Promise.all([
+      const [{ bots: list, runnerActive: active }, { featured: featuredList }, { topBots: topList }] = await Promise.all([
         dcaBots.list(),
         dcaBots.featured().catch(() => ({ featured: [] as DcaBotFeatured[] })),
         dcaBots.getTopBots().catch(() => ({ topBots: [] as TopBot[] })),
       ]);
       setBots(list ?? []);
+      setRunnerActive(active ?? true);
       setFeaturedBots(featuredList ?? []);
       setTopBots(topList ?? []);
     } catch (err: unknown) {
@@ -247,6 +250,12 @@ export function DcaBotsPage({ onNavigate }: DcaBotsPageProps) {
           </Button>
         </div>
       </div>
+
+      {!runnerActive && (
+        <div className="rounded-lg border border-amber-500/50 bg-amber-500/10 text-amber-700 dark:text-amber-400 px-4 py-3 text-sm">
+          Runner not active — bots won&apos;t execute automatically. Enable <code className="bg-muted px-1 rounded">ENABLE_STRATEGY_RUNNER</code> on the server, or use &quot;Run tick&quot; for testing.
+        </div>
+      )}
 
       {/* Quick Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
@@ -494,18 +503,25 @@ export function DcaBotsPage({ onNavigate }: DcaBotsPageProps) {
                     <TableCell className="capitalize">{bot.exchange}</TableCell>
                     <TableCell className="font-mono">{bot.pair}</TableCell>
                     <TableCell>
-                      <Badge
-                        variant={bot.status === "running" ? "default" : "secondary"}
-                        className="gap-1"
-                      >
-                        {bot.status === "running" ? (
-                          <><Activity className="size-3" /> Running</>
-                        ) : bot.status === "paused" ? (
-                          <><Pause className="size-3" /> Paused</>
-                        ) : (
-                          <><StopCircle className="size-3" /> Stopped</>
+                      <div className="space-y-0.5">
+                        <Badge
+                          variant={bot.status === "running" ? "default" : "secondary"}
+                          className="gap-1"
+                        >
+                          {bot.status === "running" ? (
+                            <><Activity className="size-3" /> Running</>
+                          ) : bot.status === "paused" ? (
+                            <><Pause className="size-3" /> Paused</>
+                          ) : (
+                            <><StopCircle className="size-3" /> Stopped</>
+                          )}
+                        </Badge>
+                        {(bot.status === "stopped" || bot.status === "paused") && bot.last_tick_error && (
+                          <p className="text-xs text-muted-foreground max-w-[180px] truncate" title={bot.last_tick_error}>
+                            {bot.last_tick_error}
+                          </p>
                         )}
-                      </Badge>
+                      </div>
                     </TableCell>
                     <TableCell className="text-muted-foreground max-w-[220px]">
                       {bot.last_tick_at ? (
@@ -550,7 +566,28 @@ export function DcaBotsPage({ onNavigate }: DcaBotsPageProps) {
                       )}
                     </TableCell>
                     <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-2">
+                      <div className="flex items-center justify-end gap-2 flex-wrap">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={async () => {
+                            setSyncingId(bot.id);
+                            try {
+                              await dcaBots.sync(bot.id);
+                              toast.success("Synced from exchange");
+                              await loadBots();
+                            } catch (e) {
+                              toast.error("Sync failed", { description: e instanceof Error ? e.message : undefined });
+                            } finally {
+                              setSyncingId(null);
+                            }
+                          }}
+                          disabled={syncingId === bot.id}
+                          title="Sync orders and trades from exchange"
+                        >
+                          {syncingId === bot.id ? <Loader2 className="size-3 animate-spin" /> : <RefreshCw className="size-3" />}
+                          Sync
+                        </Button>
                         {bot.status === "running" ? (
                           <Button
                             variant="outline"

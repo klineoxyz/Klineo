@@ -10,6 +10,11 @@ import { invalidateKillSwitchCache } from '../lib/platformSettings.js';
 import { allocatePurchaseRevenue } from '../lib/allocatePurchaseRevenue.js';
 import { runCronForSmoke } from './strategies-runner.js';
 import { sendMasterTraderTestEmail } from '../lib/email.js';
+import { decrypt } from '../lib/crypto.js';
+import { getSpotBalances } from '../lib/orderExecution.js';
+import * as binance from '../lib/binance.js';
+import * as bybit from '../lib/bybit.js';
+import { toExchangeSymbol } from '../lib/symbols.js';
 
 let supabase: SupabaseClient | null = null;
 
@@ -2117,5 +2122,114 @@ adminRouter.get('/execution-debug/export', async (req, res) => {
   } catch (err) {
     console.error('Execution debug export error:', err);
     res.status(500).json({ error: 'Failed to export' });
+  }
+});
+
+/**
+ * GET /api/admin/dca-bots/:id/debug
+ * Admin-only: bot config + state, last 10 audit rows, sanitized balances, open orders, last 10 exchange trades.
+ * Explains "what it does today" and why manual sell breaks it.
+ */
+adminRouter.get('/dca-bots/:id/debug', validate([uuidParam('id')]), async (req, res) => {
+  const client = getSupabase();
+  if (!client) return res.status(503).json({ error: 'Database unavailable' });
+  const botId = req.params.id as string;
+  try {
+    const { data: bot, error: botErr } = await client
+      .from('dca_bots')
+      .select('id, user_id, name, exchange, pair, status, config, last_tick_at, next_tick_at, last_tick_status, last_tick_error')
+      .eq('id', botId)
+      .maybeSingle();
+    if (botErr || !bot) {
+      return res.status(404).json({ error: 'DCA bot not found' });
+    }
+    const { data: stateRow } = await client
+      .from('dca_bot_state')
+      .select('*')
+      .eq('dca_bot_id', botId)
+      .maybeSingle();
+    const { data: auditRows } = await client
+      .from('order_execution_audit')
+      .select('id, source, side, order_type, status, error_code, error_message, exchange_order_id, created_at')
+      .eq('bot_id', botId)
+      .order('created_at', { ascending: false })
+      .limit(10);
+    const { data: conn } = await client
+      .from('user_exchange_connections')
+      .select('encrypted_config_b64, environment')
+      .eq('user_id', (bot as any).user_id)
+      .eq('exchange', (bot as any).exchange)
+      .or('last_test_status.eq.ok,last_test_status.is.null')
+      .is('disabled_at', null)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    let balances: { baseFree: number; quoteFree: number } | null = null;
+    let openOrders: Array<{ orderId: string; symbol: string; side: string; type: string; status: string; origQty: string; price?: string }> = [];
+    let exchangeTrades: Array<{ id: string; orderId: string; symbol: string; side: string; qty: string; price: string; time: number }> = [];
+    const sym = toExchangeSymbol((bot as any).pair);
+    const env = ((conn as any)?.environment === 'testnet' ? 'testnet' : 'production') as 'production' | 'testnet';
+    if (conn?.encrypted_config_b64) {
+      try {
+        const decrypted = await decrypt(conn.encrypted_config_b64);
+        const creds = JSON.parse(decrypted) as { apiKey: string; apiSecret: string };
+        balances = await getSpotBalances((bot as any).exchange, creds, sym, env);
+        if ((bot as any).exchange === 'binance') {
+          const binanceCreds: binance.BinanceCredentials = { apiKey: creds.apiKey, apiSecret: creds.apiSecret, environment: env };
+          const orders = await binance.getSpotOpenOrders(binanceCreds, sym);
+          openOrders = (orders || []).map((o: any) => ({
+            orderId: String(o.orderId),
+            symbol: o.symbol,
+            side: o.side,
+            type: o.type,
+            status: o.status,
+            origQty: o.origQty,
+            price: o.price,
+          }));
+          const trades = await binance.getMyTrades(binanceCreds, sym, 10);
+          exchangeTrades = (trades || []).map((t: any) => ({
+            id: String(t.id),
+            orderId: String(t.orderId),
+            symbol: t.symbol,
+            side: t.isBuyer ? 'BUY' : 'SELL',
+            qty: t.qty,
+            price: t.price,
+            time: t.time,
+          }));
+        } else {
+          const bybitCreds: bybit.BybitCredentials = { apiKey: creds.apiKey, apiSecret: creds.apiSecret, environment: env };
+          const orders = await bybit.getSpotOpenOrders(bybitCreds, sym);
+          openOrders = (orders || []).map((o: any) => ({
+            orderId: String(o.orderId || o.orderLinkId),
+            symbol: o.symbol,
+            side: o.side,
+            type: o.orderType || o.type,
+            status: o.orderStatus || o.status,
+            origQty: o.qty || o.origQty,
+            price: o.price,
+          }));
+        }
+      } catch (e) {
+        console.warn('[admin dca-bots debug] exchange fetch failed:', e instanceof Error ? e.message : e);
+      }
+    }
+    const sanitizedBalances = balances
+      ? { baseFree: Math.round(balances.baseFree * 1e4) / 1e4, quoteFree: Math.round(balances.quoteFree * 1e4) / 1e4 }
+      : null;
+    res.json({
+      bot: { id: bot.id, name: (bot as any).name, exchange: (bot as any).exchange, pair: (bot as any).pair, status: (bot as any).status, config: (bot as any).config, last_tick_at: (bot as any).last_tick_at, next_tick_at: (bot as any).next_tick_at, last_tick_status: (bot as any).last_tick_status, last_tick_error: (bot as any).last_tick_error },
+      state: stateRow ?? null,
+      audit: auditRows ?? [],
+      balances: sanitizedBalances,
+      open_orders: openOrders,
+      exchange_trades: exchangeTrades,
+      explanation: {
+        what_it_does_today: 'DCA bot ticks on a schedule: if no position it places a base market BUY; once it has position_size it places/maintains a TP limit SELL. State is stored in dca_bot_state (position_size, avg_entry_price). Reconciliation compares exchange base balance to position_size and reduces state if user sold some or all on the exchange.',
+        why_manual_sell_breaks_it: 'If the user manually sells the entire position on the exchange, the bot still has position_size > 0 in the DB and may try to place or keep a TP SELL. Reconciliation updates state when exchange base is less than position_size, but if we only reduce state to zero without stopping the bot, the next tick can place a new base BUY (correct). If the bot had already placed a TP order that was cancelled or filled externally, the bot can show inconsistent state until reconciliation and syncOpenOrders run. Stopping the bot when manual close is detected (baseFree ≈ 0) and setting a clear status reason fixes this.',
+      },
+    });
+  } catch (err) {
+    console.error('DCA bot debug error:', err);
+    res.status(500).json({ error: 'Failed to fetch DCA bot debug' });
   }
 });

@@ -41,6 +41,7 @@ import {
   getSpotOpenOrders as binanceGetSpotOpenOrders,
   getSpotOrder as binanceGetSpotOrder,
   cancelSpotOrder as binanceCancelSpotOrder,
+  getMyTrades as binanceGetMyTrades,
   type BinanceCredentials,
 } from './binance.js';
 import {
@@ -95,7 +96,7 @@ export interface ProcessRunningDcaBotsOptions {
 
 export interface BotTickResult {
   botId: string;
-  status: 'ok' | 'skipped' | 'error' | 'blocked';
+  status: 'ok' | 'skipped' | 'error' | 'blocked' | 'stopped';
   reason?: string;
   error?: string;
 }
@@ -418,6 +419,89 @@ export async function syncOpenOrders(
 }
 
 /**
+ * Ingest recent exchange spot trades for the symbol into orders/trades (Binance only).
+ * Used so My Orders / Trade History reflect manual and bot fills. Call after syncOpenOrders.
+ * One order row per exchange orderId; one trade row per order (aggregated qty).
+ */
+export async function ingestRecentTradesFromExchange(
+  client: SupabaseClient,
+  userId: string,
+  exchange: string,
+  symbol: string,
+  credentials: BinanceCredentials | BybitCredentials,
+  env: 'production' | 'testnet'
+): Promise<void> {
+  if (exchange !== 'binance') return;
+  const sym = normalizeSymbol(symbol);
+  const creds = credentials as BinanceCredentials;
+  let trades: Array<{ orderId: number; id: number; qty: string; price: string; time: number; isBuyer: boolean }>;
+  try {
+    trades = await binanceGetMyTrades(creds, sym, 30);
+  } catch {
+    return;
+  }
+  if (!trades?.length) return;
+  const byOrder = new Map<number, typeof trades>();
+  for (const t of trades) {
+    const list = byOrder.get(t.orderId) ?? [];
+    list.push(t);
+    byOrder.set(t.orderId, list);
+  }
+  for (const [orderId, list] of byOrder) {
+    const exOrderId = String(orderId);
+    const { data: existing } = await client
+      .from('orders')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('exchange_order_id', exOrderId)
+      .maybeSingle();
+    if (existing) continue;
+    const first = list[0]!;
+    const totalQty = list.reduce((s, t) => s + parseFloat(t.qty), 0);
+    const side = first.isBuyer ? 'buy' : 'sell';
+    const price = first.price ? parseFloat(first.price) : 0;
+    const { data: dcaRow } = await client
+      .from('dca_bot_orders')
+      .select('dca_bot_id')
+      .eq('exchange_order_id', exOrderId)
+      .limit(1)
+      .maybeSingle();
+    const botId = (dcaRow as { dca_bot_id?: string } | null)?.dca_bot_id ?? null;
+    const { data: orderData, error: orderErr } = await client
+      .from('orders')
+      .insert({
+        user_id: userId,
+        symbol: sym,
+        side,
+        order_type: 'market',
+        amount: totalQty,
+        price,
+        status: 'filled',
+        exchange_order_id: exOrderId,
+        source: 'dca',
+        dca_bot_id: botId,
+        updated_at: new Date().toISOString(),
+      })
+      .select('id')
+      .single();
+    if (orderErr || !orderData) continue;
+    const orderIdUuid = (orderData as { id: string }).id;
+    await client.from('trades').insert({
+      user_id: userId,
+      order_id: orderIdUuid,
+      dca_bot_id: botId,
+      source: 'dca',
+      symbol: sym,
+      side,
+      amount: totalQty,
+      price,
+      fee: 0,
+      executed_at: new Date(first.time).toISOString(),
+    });
+  }
+}
+
+/**
  * Sync order status from exchange for all running spot DCA bots of a user.
  * Updates dca_bot_orders and unified orders (and dca_bot_state on TP fill). Use for "Refresh from exchange".
  */
@@ -553,6 +637,11 @@ export async function processOneBot(
   } catch {
     /* non-fatal: continue with our state */
   }
+  try {
+    await ingestRecentTradesFromExchange(client, bot.user_id, bot.exchange, bot.pair, creds, env as 'production' | 'testnet');
+  } catch {
+    /* non-fatal */
+  }
 
   const { data: stateRow } = await client
     .from('dca_bot_state')
@@ -562,7 +651,7 @@ export async function processOneBot(
 
   const state = stateRow as DcaBotStateRow | null;
   let positionSize = state?.position_size != null ? parseFloat(String(state.position_size)) : 0;
-  const avgEntry = state?.avg_entry_price != null ? parseFloat(String(state.avg_entry_price)) : 0;
+  let avgEntry = state?.avg_entry_price != null ? parseFloat(String(state.avg_entry_price)) : 0;
   const safetyFilled = state?.safety_orders_filled ?? 0;
   const realizedPnl = state?.realized_pnl != null ? parseFloat(String(state.realized_pnl)) : 0;
 
@@ -605,6 +694,22 @@ export async function processOneBot(
         })
         .eq('dca_bot_id', bot.id);
       positionSize = reconciledSize;
+      // Manual close detected: bot had position but exchange shows none -> stop bot with clear reason
+      if (reconciledSize === 0 && state?.position_size != null && parseFloat(String(state.position_size)) > 0) {
+        await client
+          .from('dca_bots')
+          .update({
+            status: 'stopped',
+            last_tick_at: now.toISOString(),
+            last_tick_status: 'stopped',
+            last_tick_error: 'Position closed manually on exchange. Bot stopped.',
+            next_tick_at: null,
+            is_locked: false,
+            updated_at: now.toISOString(),
+          })
+          .eq('id', bot.id);
+        return { botId: bot.id, status: 'stopped', reason: 'Position closed manually on exchange' };
+      }
     }
   }
 
@@ -710,6 +815,9 @@ export async function processOneBot(
         },
         { onConflict: 'dca_bot_id' }
       );
+      // Same-tick bracket: we now have a position; fall through to place TP limit sell below
+      positionSize = parseFloat(qty);
+      avgEntry = price;
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Place order failed';
       await releaseDcaLock(client, bot.id, {
@@ -721,13 +829,7 @@ export async function processOneBot(
       });
       return { botId: bot.id, status: 'error', error: msg };
     }
-    await releaseDcaLock(client, bot.id, {
-      last_tick_at: now.toISOString(),
-      last_tick_status: 'ok',
-      next_tick_at: new Date(now.getTime() + TICK_INTERVAL_SEC * 1000).toISOString(),
-      is_locked: false,
-    });
-    return { botId: bot.id, status: 'ok' };
+    // Do not return here: fall through to "We have a position" to place TP sell in same tick
   }
 
   // We have a position: ensure TP order(s) exist, optionally place next safety order

@@ -9,7 +9,9 @@ import { body } from 'express-validator';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { fetchEntitlement } from '../middleware/requireEntitlement.js';
 import { getMaxDcaBots } from './profile.js';
-import { processOneBot, syncDcaOrdersForUser } from '../lib/dcaEngine.js';
+import { processOneBot, syncDcaOrdersForUser, syncOpenOrders, ingestRecentTradesFromExchange } from '../lib/dcaEngine.js';
+import { RUNNER_CONFIG } from '../lib/runnerConfig.js';
+import { decrypt } from '../lib/crypto.js';
 
 let supabase: SupabaseClient | null = null;
 
@@ -58,7 +60,7 @@ dcaBotsRouter.get('/', async (req: AuthenticatedRequest, res) => {
         realized_pnl: state?.realized_pnl != null ? Number(state.realized_pnl) : 0,
       };
     });
-    res.json({ bots });
+    res.json({ bots, runnerActive: RUNNER_CONFIG.ENABLE_STRATEGY_RUNNER });
   } catch (err) {
     console.error('DCA bots list error:', err);
     res.status(500).json({ error: 'Failed to fetch bots' });
@@ -250,6 +252,54 @@ dcaBotsRouter.put(
     } catch (err) {
       console.error('DCA bot update error:', err);
       res.status(500).json({ error: 'Failed to update bot' });
+    }
+  }
+);
+
+/**
+ * POST /api/dca-bots/:id/sync
+ * Sync one bot: open orders from exchange + ingest recent trades. Use for "Sync from exchange" per bot.
+ */
+dcaBotsRouter.post(
+  '/:id/sync',
+  validate([uuidParam('id')]),
+  async (req: AuthenticatedRequest, res) => {
+    const client = getSupabase();
+    if (!client) return res.status(503).json({ error: 'Database unavailable' });
+    try {
+      const { id } = req.params;
+      const userId = req.user!.id;
+      const { data: bot, error: botErr } = await client
+        .from('dca_bots')
+        .select('id, user_id, exchange, pair')
+        .eq('id', id)
+        .eq('user_id', userId)
+        .maybeSingle();
+      if (botErr || !bot) return res.status(404).json({ error: 'Bot not found' });
+      const { data: conn } = await client
+        .from('user_exchange_connections')
+        .select('encrypted_config_b64, environment')
+        .eq('user_id', (bot as any).user_id)
+        .eq('exchange', (bot as any).exchange)
+        .or('last_test_status.eq.ok,last_test_status.is.null')
+        .is('disabled_at', null)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (!conn?.encrypted_config_b64) {
+        return res.status(400).json({ error: 'No exchange connection for this bot' });
+      }
+      const decrypted = await decrypt(conn.encrypted_config_b64);
+      const creds = JSON.parse(decrypted) as { apiKey: string; apiSecret: string };
+      const env = (conn as any).environment === 'testnet' ? 'testnet' : 'production';
+      const sym = (bot as any).pair.replace('/', '').toUpperCase();
+      await syncOpenOrders(client, (bot as any).id, (bot as any).exchange, (bot as any).pair, creds as any);
+      await ingestRecentTradesFromExchange(client, (bot as any).user_id, (bot as any).exchange, (bot as any).pair, creds as any, env);
+      return res.json({ success: true, message: 'Synced orders and trades from exchange' });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Sync failed';
+      console.error('DCA bot sync error:', msg);
+      return res.status(500).json({ error: 'Sync failed', message: msg });
     }
   }
 );

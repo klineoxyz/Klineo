@@ -132,6 +132,22 @@ async function getSpotBalanceBybit(
 }
 
 /**
+ * Spot: get current base and quote balances (free + locked) from exchange.
+ * Exported for admin debug and reconciliation. Sanitize before returning to client.
+ */
+export async function getSpotBalances(
+  exchange: 'binance' | 'bybit',
+  credentials: { apiKey: string; apiSecret: string },
+  symbol: string,
+  environment: 'production' | 'testnet'
+): Promise<{ baseFree: number; quoteFree: number }> {
+  if (exchange === 'binance') {
+    return getSpotBalanceBinance(credentials, symbol, environment);
+  }
+  return getSpotBalanceBybit(credentials, symbol, environment);
+}
+
+/**
  * Spot: get current base asset balance (free + locked) from exchange.
  * Used by DCA engine to reconcile position with exchange after manual sells.
  */
@@ -141,11 +157,7 @@ export async function getSpotBaseBalance(
   symbol: string,
   environment: 'production' | 'testnet'
 ): Promise<number> {
-  if (exchange === 'binance') {
-    const { baseFree } = await getSpotBalanceBinance(credentials, symbol, environment);
-    return baseFree;
-  }
-  const { baseFree } = await getSpotBalanceBybit(credentials, symbol, environment);
+  const { baseFree } = await getSpotBalances(exchange, credentials, symbol, environment);
   return baseFree;
 }
 

@@ -549,7 +549,9 @@ export interface TopBot {
 }
 
 export const dcaBots = {
-  list: async (): Promise<{ bots: DcaBot[] }> => api.get('/api/dca-bots'),
+  list: async (): Promise<{ bots: DcaBot[]; runnerActive?: boolean }> => api.get('/api/dca-bots'),
+  sync: async (id: string): Promise<{ success: boolean; message?: string }> =>
+    api.post(`/api/dca-bots/${id}/sync`),
   featured: async (): Promise<{ featured: DcaBotFeatured[] }> => api.get('/api/dca-bots/featured'),
   getTopBots: async (): Promise<{ topBots: TopBot[] }> => api.get('/api/public/top-bots'),
   create: async (data: CreateDcaBotRequest): Promise<{ bot: DcaBot }> =>
