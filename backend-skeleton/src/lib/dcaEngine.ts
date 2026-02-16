@@ -584,7 +584,7 @@ export async function processOneBot(
     /* use defaults */
   }
 
-  // Reconcile position with exchange: if user sold manually, our state may show more than they have
+  // Reconcile position with exchange (source of truth): if user sold manually, our state may show more than they have
   if (positionSize > 0) {
     let actualBase: number;
     try {
@@ -807,10 +807,22 @@ export async function processOneBot(
   const hasTpOrders = openTpRows && openTpRows.length > 0 && !shouldReplaceTp;
   if (!hasTpOrders && positionSize > 0) {
     let actualBaseForSell: number;
+    let balanceFetchOk = false;
     try {
       actualBaseForSell = await getSpotBaseBalance(bot.exchange as 'binance' | 'bybit', creds, sym, env as 'production' | 'testnet');
+      balanceFetchOk = true;
     } catch {
-      actualBaseForSell = positionSize;
+      actualBaseForSell = 0;
+    }
+    if (!balanceFetchOk) {
+      await releaseDcaLock(client, bot.id, {
+        last_tick_at: now.toISOString(),
+        last_tick_status: 'skipped',
+        last_tick_error: 'Could not verify exchange balance; skipping TP. Run tick again.',
+        next_tick_at: nextTickAt,
+        is_locked: false,
+      });
+      return { botId: bot.id, status: 'skipped', reason: 'Balance check unavailable' };
     }
     const sellQtyNum = Math.min(positionSize, actualBaseForSell);
     const sellQty = roundToStep(sellQtyNum, filters.stepSize);
