@@ -213,7 +213,7 @@ dcaBotsRouter.get('/:id/overview', validate([uuidParam('id')]), async (req: Auth
           const tpId = state?.last_tp_order_id;
           if (tpId) {
             const found = openOrders.find((o: any) => String(o.orderId ?? o.orderLinkId) === String(tpId));
-            if (found) openTpOrder = { id: String(found.orderId ?? found.orderLinkId), price: found.price ?? '', qty: found.qty ?? found.orderQty ?? '', status: found.orderStatus ?? 'open' };
+            if (found) openTpOrder = { id: String(found.orderId ?? found.orderLinkId), price: found.price ?? '', qty: found.qty ?? '', status: found.orderStatus ?? 'open' };
           }
         }
       } catch (e) {
